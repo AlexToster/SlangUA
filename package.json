@@ -1,0 +1,40 @@
+{
+  "name": "slangua-backend",
+  "version": "1.0.0",
+  "description": "SlangUA Backend - Fastify API for Telegram Mini App",
+  "main": "dist/app.js",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^5.22.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "fastify-type-provider-zod": "^1.2.0",
+    "ioredis": "^5.4.1",
+    "jose": "^6.2.8",
+    "jsonwebtoken": "^9.0.2",
+    "ollama": "^0.6.3",
+    "openai": "^7.4.0",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^22.5.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.17.0",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

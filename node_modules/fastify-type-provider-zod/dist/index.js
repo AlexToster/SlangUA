@@ -1,0 +1,104 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.serializerCompiler = exports.ResponseValidationError = exports.validatorCompiler = exports.jsonSchemaTransform = exports.createJsonSchemaTransform = void 0;
+const zod_to_json_schema_1 = require("zod-to-json-schema");
+const defaultSkipList = [
+    '/documentation/',
+    '/documentation/initOAuth',
+    '/documentation/json',
+    '/documentation/uiConfig',
+    '/documentation/yaml',
+    '/documentation/*',
+    '/documentation/static/*',
+];
+const zodToJsonSchemaOptions = {
+    target: 'openApi3',
+    $refStrategy: 'none',
+};
+const createJsonSchemaTransform = ({ skipList }) => {
+    return ({ schema, url }) => {
+        if (!schema) {
+            return {
+                schema,
+                url,
+            };
+        }
+        const { response, headers, querystring, body, params, hide, ...rest } = schema;
+        const transformed = {};
+        if (skipList.includes(url) || hide) {
+            transformed.hide = true;
+            return { schema: transformed, url };
+        }
+        const zodSchemas = { headers, querystring, body, params };
+        for (const prop in zodSchemas) {
+            const zodSchema = zodSchemas[prop];
+            if (zodSchema) {
+                transformed[prop] = (0, zod_to_json_schema_1.zodToJsonSchema)(zodSchema, zodToJsonSchemaOptions);
+            }
+        }
+        if (response) {
+            transformed.response = {};
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            for (const prop in response) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const schema = resolveSchema(response[prop]);
+                const transformedResponse = (0, zod_to_json_schema_1.zodToJsonSchema)(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                schema, zodToJsonSchemaOptions);
+                transformed.response[prop] = transformedResponse;
+            }
+        }
+        for (const prop in rest) {
+            const meta = rest[prop];
+            if (meta) {
+                transformed[prop] = meta;
+            }
+        }
+        return { schema: transformed, url };
+    };
+};
+exports.createJsonSchemaTransform = createJsonSchemaTransform;
+exports.jsonSchemaTransform = (0, exports.createJsonSchemaTransform)({
+    skipList: defaultSkipList,
+});
+const validatorCompiler = ({ schema }) => 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(data) => {
+    try {
+        return { value: schema.parse(data) };
+    }
+    catch (error) {
+        return { error };
+    }
+};
+exports.validatorCompiler = validatorCompiler;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasOwnProperty(obj, prop) {
+    return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+function resolveSchema(maybeSchema) {
+    if (hasOwnProperty(maybeSchema, 'safeParse')) {
+        return maybeSchema;
+    }
+    if (hasOwnProperty(maybeSchema, 'properties')) {
+        return maybeSchema.properties;
+    }
+    throw new Error(`Invalid schema passed: ${JSON.stringify(maybeSchema)}`);
+}
+class ResponseValidationError extends Error {
+    constructor(validationResult) {
+        super("Response doesn't match the schema");
+        this.name = 'ResponseValidationError';
+        this.details = validationResult.error;
+    }
+}
+exports.ResponseValidationError = ResponseValidationError;
+const serializerCompiler = ({ schema: maybeSchema }) => (data) => {
+    const schema = resolveSchema(maybeSchema);
+    const result = schema.safeParse(data);
+    if (result.success) {
+        return JSON.stringify(result.data);
+    }
+    throw new ResponseValidationError(result);
+};
+exports.serializerCompiler = serializerCompiler;

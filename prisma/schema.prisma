@@ -8,15 +8,17 @@ generator client {
 }
 
 model User {
-  id           Int            @id @default(autoincrement())
-  telegramId   String         @unique
-  username     String?
-  firstName    String?
-  lastName     String?
-  languageCode String?
-  createdAt    DateTime       @default(now())
-  translations Translation[]
-  refreshTokens RefreshToken[]
+  id                Int            @id @default(autoincrement())
+  telegramId        String         @unique
+  username          String?
+  firstName         String?
+  lastName          String?
+  languageCode      String?
+  defaultSlangStyle SlangStyle?
+  notificationsEnabled Boolean     @default(true)
+  createdAt         DateTime       @default(now())
+  translations      Translation[]
+  refreshTokens     RefreshToken[]
 }
 
 model Translation {
@@ -32,6 +34,9 @@ model Translation {
 
   @@index([userId])
   @@index([createdAt])
+  // pg_trgm GIN indexes for full-text search are created via raw SQL migration
+  // @@index([originalText], map: "Translation_originalText_trgm_idx", type: Gin)
+  // @@index([translatedText], map: "Translation_translatedText_trgm_idx", type: Gin)
 }
 
 model RefreshToken {
@@ -50,6 +55,7 @@ enum SlangStyle {
   GEN_Z
   STREET
   IT_SLANG
+  POFENI
 }
 
 enum AIProvider {
