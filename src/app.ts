@@ -38,8 +38,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  // Connect to Redis
-  await connectRedis();
+  // Connect to Redis (fail-open: if Redis is unavailable, log warning and continue without rate limiting)
+  try {
+    await connectRedis();
+  } catch (err) {
+    app.log.warn({ err }, 'Redis connection failed, starting in degraded mode (rate limiting disabled)');
+  }
 
   // Register rate limit plugin with default config
   await app.register(rateLimitPlugin, {

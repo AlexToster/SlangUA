@@ -13,7 +13,7 @@ import { config } from '../../config';
 
 export class ClaudeAdapter extends BaseAdapter {
   readonly provider = AIProvider.ANTHROPIC;
-  readonly model = 'claude-3-haiku-20240307';
+  readonly model = config.AI_MODEL_ANTHROPIC;
 
   private client: Anthropic | null = null;
 

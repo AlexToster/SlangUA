@@ -12,7 +12,7 @@ import { config } from '../../config';
 
 export class GeminiAdapter extends BaseAdapter {
   readonly provider = AIProvider.GEMINI;
-  readonly model = 'gemini-1.5-flash';
+  readonly model = config.AI_MODEL_GEMINI;
 
   private client: GoogleGenerativeAI | null = null;
   private modelInstance: GenerativeModel | null = null;

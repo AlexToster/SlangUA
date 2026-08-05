@@ -5,6 +5,7 @@ import { createRateLimiter } from '../plugins/rate-limit.js';
 import { authService } from '../services/auth.service.js';
 import { translationService } from '../services/translation.service.js';
 import { SlangStyle } from '@prisma/client';
+import { SLANG_STYLE_VALUES } from '../constants/index.js';
 
 export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Create rate limiter for translate endpoint
@@ -44,14 +45,14 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
     schema: {
       body: z.object({
         text: z.string().min(1).max(5000),
-        style: z.enum(['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI']),
+        style: z.enum(SLANG_STYLE_VALUES),
       }),
       response: {
         200: z.object({
           id: z.number(),
           originalText: z.string(),
           translatedText: z.string(),
-          slangStyle: z.enum(['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI']),
+          slangStyle: z.enum(SLANG_STYLE_VALUES),
           aiProvider: z.enum(['OPENAI', 'ANTHROPIC', 'GEMINI', 'OLLAMA']),
           favorite: z.boolean(),
           createdAt: z.string().datetime(),

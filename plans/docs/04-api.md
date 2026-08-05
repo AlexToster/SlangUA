@@ -67,7 +67,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   | Field | Type | Required | Constraints |
   |-------|------|----------|-------------|
   | `text` | `string` | Yes | Length-validated per [Security](06-security.md#input-validation--sanitization); sanitized for prompt injection |
-  | `style` | `SlangStyle` | Yes | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI` (see [Database Design](03-database.md#enum-slangstyle)) |
+  | `style` | `SlangStyle` | Yes | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER` (see [Database Design](03-database.md#enum-slangstyle)) |
 
 - **Success response (200)** — `Translation` record:
   | Field | Type | Description |
@@ -151,7 +151,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
 - **Request body**:
   | Field | Type | Required | Constraints |
   |-------|------|----------|-------------|
-  | `defaultSlangStyle` | `SlangStyle` | No | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI` (see [Database Design](03-database.md#enum-slangstyle)) |
+  | `defaultSlangStyle` | `SlangStyle` | No | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER` (see [Database Design](03-database.md#enum-slangstyle)) |
   | `notificationsEnabled` | `boolean` | No | |
   **Excludes**: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` (Telegram-sourced identity fields are immutable via API)
 - **Success response (200)**: Updated `User` profile (same shape as `GET /user/me`)

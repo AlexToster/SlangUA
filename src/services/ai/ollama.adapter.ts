@@ -13,10 +13,9 @@ import { config } from '../../config';
 
 export class OllamaAdapter extends BaseAdapter {
   readonly provider = AIProvider.OLLAMA;
-  readonly model = 'llama3.1:8b';
+  readonly model = config.AI_MODEL_OLLAMA;
 
   private client: Ollama | null = null;
-  private baseUrl: string;
 
   constructor(providerConfig: Partial<ProviderConfig> = {}) {
     super({
@@ -27,8 +26,7 @@ export class OllamaAdapter extends BaseAdapter {
       priority: providerConfig.priority ?? 3,
     });
 
-    this.baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-    this.client = new Ollama({ host: this.baseUrl });
+    this.client = new Ollama({ host: config.OLLAMA_BASE_URL });
   }
 
   isAvailable(): boolean {

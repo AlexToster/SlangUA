@@ -132,6 +132,7 @@ The following entities represent the persistent state of the SlangUA system, man
 - **STREET**: Urban/street style.
 - **IT_SLANG**: Professional/tech-oriented slang.
 - **POFENI**: Ukrainian prison/criminal slang ("зеківська/бандитська розмовна мова").
+- **KANCLER**: Ukrainian bureaucratic/official register ("канцелярський").
 
 ### Enum: AIProvider
 - **OPENAI**: OpenAI models.

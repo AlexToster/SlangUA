@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify/types/instance';
 import { authService } from '../services/auth.service.js';
 import { userService } from '../services/user.service.js';
 import { createRateLimiter } from '../plugins/rate-limit.js';
+import { SLANG_STYLE_VALUES } from '../constants/index.js';
 
 export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Rate limiters for user endpoints (30 requests/minute)
@@ -48,7 +49,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           firstName: z.string().nullable(),
           lastName: z.string().nullable(),
           languageCode: z.string().nullable(),
-          defaultSlangStyle: z.enum(['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI']).nullable(),
+          defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable(),
           notificationsEnabled: z.boolean(),
           createdAt: z.string().datetime(),
         }),
@@ -94,7 +95,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
   app.patch('/user/me', {
     schema: {
       body: z.object({
-        defaultSlangStyle: z.enum(['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI']).optional(),
+        defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).optional(),
         notificationsEnabled: z.boolean().optional(),
       }).passthrough(),
       response: {
@@ -104,7 +105,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           firstName: z.string().nullable(),
           lastName: z.string().nullable(),
           languageCode: z.string().nullable(),
-          defaultSlangStyle: z.enum(['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI']).nullable(),
+          defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable(),
           notificationsEnabled: z.boolean(),
           createdAt: z.string().datetime(),
         }),
@@ -128,7 +129,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
     preHandler: [authenticate, userRateLimiter],
   }, async (request, reply) => {
     const userId = request.user!.id;
-    const body = request.body as { defaultSlangStyle?: 'GEN_Z' | 'STREET' | 'IT_SLANG' | 'POFENI'; notificationsEnabled?: boolean };
+    const body = request.body as { defaultSlangStyle?: (typeof SLANG_STYLE_VALUES)[number]; notificationsEnabled?: boolean };
 
     try {
       const updatedProfile = await userService.updatePreferences(userId, body);

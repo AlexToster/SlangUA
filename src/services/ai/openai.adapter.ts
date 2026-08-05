@@ -12,7 +12,7 @@ import { config } from '../../config';
 
 export class OpenAIAdapter extends BaseAdapter {
   readonly provider = AIProvider.OPENAI;
-  readonly model = 'gpt-4o-mini';
+  readonly model = config.AI_MODEL_OPENAI;
 
   private client: OpenAI | null = null;
 

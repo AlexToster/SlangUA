@@ -29,6 +29,12 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
 
+  // AI Provider Model Names
+  AI_MODEL_OPENAI: z.string().default('gpt-4o-mini'),
+  AI_MODEL_ANTHROPIC: z.string().default('claude-3-haiku-20240307'),
+  AI_MODEL_GEMINI: z.string().default('gemini-1.5-flash'),
+  AI_MODEL_OLLAMA: z.string().default('llama3.1:8b'),
+
   // AI Provider Priority (comma-separated)
   AI_PROVIDER_PRIORITY: z.string().default('openai,anthropic,gemini,ollama'),
 
@@ -42,6 +48,9 @@ const envSchema = z.object({
   AI_MAX_RETRIES: z.coerce.number().default(2),
   AI_RETRY_DELAY_MS: z.coerce.number().default(1000),
   AI_MAX_FALLBACK_ATTEMPTS: z.coerce.number().optional(),
+
+  // Ollama
+  OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
 
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),

@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files (secrets)
+.env
+.env.*.local
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+
+# OS/Editor junk
+.DS_Store
+.idea/
+.vscode/
