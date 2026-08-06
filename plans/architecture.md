@@ -93,5 +93,6 @@ Detailed documentation has been moved to the `plans/docs/` directory.
 - [API Design](docs/04-api.md)
 - [Architectural Decisions](docs/05-decisions.md)
 - [Security](docs/06-security.md)
+- [Styles](docs/07-styles.md)
 - [Project Roadmap](ROADMAP.md)
 - [Prisma Schema](../prisma/schema.prisma)

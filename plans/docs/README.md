@@ -1,17 +1,25 @@
-# SlangUA Architecture Documentation
+# SlangUA Documentation
 
-## Documentation Index
+Архітектурна документація проєкту SlangUA: backend, frontend, база даних, API, архітектурні рішення, безпека та специфікація Style Engine.
 
-Detailed documentation is split into the following files:
+---
 
-1. [Backend Architecture](01-backend.md) – Node.js/Fastify backend, modules, communication flow, AI provider configuration.
-2. [Frontend Architecture](02-frontend.md) – React/Vite frontend, Telegram integration.
-3. [Database Design](03-database.md) – Conceptual database model, Prisma schema.
-4. [API Design](04-api.md) – API contracts, routes, DTOs, validation.
-5. [Architectural Decisions](05-decisions.md) – Rationale behind technology choices and design patterns.
-6. [Security](06-security.md) – Authentication, authorization, rate limiting, data protection.
+## Документи
 
-## Related Resources
+| Файл | Опис |
+| ---- | ---- |
+| **01-backend.md** | Backend Architecture — Node.js/Fastify backend, modules, communication flow, AI Provider configuration. |
+| **02-frontend.md** | Frontend Architecture — структура клієнта, Telegram Mini App, UI. |
+| **03-database.md** | Database Design — концептуальна модель БД та Prisma Schema. |
+| **04-api.md** | API Design — маршрути, DTO, контракти API та валідація. |
+| **05-decisions.md** | Architectural Decisions — прийняті архітектурні рішення та їх обґрунтування. |
+| **06-security.md** | Security — автентифікація, авторизація, rate limiting, захист даних. |
+| **07-styles.md** | Style Engine Specification — архітектура системи стилів, структура Style Engine та специфікація стилів. |
 
-- [Project Roadmap](../ROADMAP.md)
-- [Prisma Schema](../../prisma/schema.prisma)
+---
+
+## Посилання
+
+- [ROADMAP.md](../ROADMAP.md) — поетапний план технічної реалізації для Roo Code.
+- [architecture.md](../architecture.md) — архітектурний дизайн проекту, веб-застосунку Telegram.
+- [prisma/schema.prisma](../../prisma/schema.prisma) — схема бази даних.

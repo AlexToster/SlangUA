@@ -93,7 +93,7 @@ Implement the backend logic.
 - Redis for rate limiting
 - AI Adapter (OpenAI, Gemini, etc.)
 - Authentication (Telegram HMAC validation)
-- Translation logic (Prompt engineering)
+- Translation logic (Prompt engineering,Style Engine)
 - History management
 - User profile management
 - Background jobs (if required for logging/cleanup)

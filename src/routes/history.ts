@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify/types/instance';
 import { historyService } from '../services/history.service.js';
 import { authService } from '../services/auth.service.js';
 import { createRateLimiter } from '../plugins/rate-limit.js';
+import { SLANG_STYLE_VALUES } from '../constants/index.js';
 
 export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Rate limiters for history endpoints (60 requests/minute)
@@ -53,7 +54,7 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
             id: z.number(),
             originalText: z.string(),
             translatedText: z.string(),
-            slangStyle: z.enum(['GEN_Z', 'STREET', 'IT_SLANG']),
+            slangStyle: z.enum(SLANG_STYLE_VALUES),
             aiProvider: z.enum(['OPENAI', 'ANTHROPIC', 'GEMINI', 'OLLAMA']),
             favorite: z.boolean(),
             createdAt: z.string().datetime(),
@@ -107,7 +108,7 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
           id: z.number(),
           originalText: z.string(),
           translatedText: z.string(),
-          slangStyle: z.enum(['GEN_Z', 'STREET', 'IT_SLANG']),
+          slangStyle: z.enum(SLANG_STYLE_VALUES),
           aiProvider: z.enum(['OPENAI', 'ANTHROPIC', 'GEMINI', 'OLLAMA']),
           favorite: z.boolean(),
           createdAt: z.string().datetime(),
