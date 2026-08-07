@@ -40,7 +40,7 @@ export class OpenAIAdapter extends BaseAdapter {
       throw new Error('OpenAI client not initialized - missing API key');
     }
 
-    const systemPrompt = this.buildSystemPrompt(request.style);
+    const systemPrompt = await this.buildSystemPrompt(request.style);
 
     const response = await this.withRetry(async () => {
       return this.withTimeout(

@@ -7,6 +7,7 @@ import { authService } from '../services/auth.service.js';
 export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Create rate limiter for auth endpoint
   const authRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 10, keyPrefix: 'ratelimit:auth' });
+  const refreshRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 10, keyPrefix: 'ratelimit:refresh' });
 
   // POST /api/v1/auth/telegram - Exchange Telegram initData for JWT tokens
   app.post('/auth/telegram', {
@@ -107,6 +108,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
         }),
       },
     },
+    preHandler: refreshRateLimiter,
   }, async (request, reply) => {
     const { refreshToken } = request.body as { refreshToken: string };
     

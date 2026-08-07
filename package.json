@@ -5,8 +5,10 @@
   "main": "dist/app.js",
   "scripts": {
     "dev": "tsx watch src/app.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-style-assets.mjs",
     "start": "node dist/app.js",
+    "test": "npm run build && node test/verify-style-engine.mjs",
+    "test:style-engine": "npm run build && node test/verify-style-engine.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

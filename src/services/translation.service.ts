@@ -1,6 +1,8 @@
 import { PrismaClient, SlangStyle, AIProvider, Translation } from '@prisma/client';
 import { aiService } from './ai/ai.service.js';
 import { prisma } from '../lib/prisma.js';
+import { getStyleMetadata } from '../style-engine/loader.js';
+import { userService } from './user.service.js';
 
 export interface TranslateInput {
   text: string;
@@ -75,9 +77,30 @@ export class TranslationService {
    * Performs sanitization, AI translation, and persistence
    * Basic validation (length, style enum) is handled by Zod schema at route level (400)
    * Prompt injection detection is the only semantic validation here (422)
+   * Age restriction check for age-restricted styles (403)
    */
   async translate(userId: number, input: TranslateInput): Promise<TranslationResult> {
     const { text, style } = input;
+
+    // 0. Age restriction check - before any AI call
+    let styleMetadata;
+    try {
+      styleMetadata = await getStyleMetadata(style);
+    } catch {
+      const error = new Error('Selected style is unavailable.') as Error & { code: string; statusCode: number };
+      error.code = 'STYLE_UNAVAILABLE';
+      error.statusCode = 400;
+      throw error;
+    }
+    if (styleMetadata.ageRestricted) {
+      const profile = await userService.getProfile(userId);
+      if (!profile || !profile.ageConfirmedAdult) {
+        const error = new Error('This style requires age confirmation.') as Error & { code: string; statusCode: number };
+        error.code = 'AGE_RESTRICTED_STYLE';
+        error.statusCode = 403;
+        throw error;
+      }
+    }
 
     // 1. Sanitize for prompt injection (only semantic validation at service layer)
     const { sanitized: sanitizedText, suspicious } = this.sanitizeForPromptInjection(text);

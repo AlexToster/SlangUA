@@ -40,7 +40,7 @@ export class GeminiAdapter extends BaseAdapter {
       throw new Error('Gemini model not initialized - missing API key');
     }
 
-    const systemPrompt = this.buildSystemPrompt(request.style);
+    const systemPrompt = await this.buildSystemPrompt(request.style);
     const fullPrompt = `${systemPrompt}\n\nUser: ${request.text}\n\nTranslation:`;
 
     const response = await this.withRetry(async () => {

@@ -40,7 +40,7 @@ export class OllamaAdapter extends BaseAdapter {
       throw new Error('Ollama client not initialized');
     }
 
-    const systemPrompt = this.buildSystemPrompt(request.style);
+    const systemPrompt = await this.buildSystemPrompt(request.style);
 
     const response = await this.withRetry(async () => {
       return this.withTimeout(

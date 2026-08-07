@@ -86,6 +86,8 @@ The `AIService` uses a central configuration defining provider priority, enable/
 
 Detailed documentation has been moved to the `plans/docs/` directory.
 
+Навігація — hub-and-spoke: цей документ і plans/docs/README.md лінкують одне на одного навмисно.
+
 - [Documentation Index](docs/README.md)
 - [Backend Architecture](docs/01-backend.md)
 - [Frontend Architecture](docs/02-frontend.md)

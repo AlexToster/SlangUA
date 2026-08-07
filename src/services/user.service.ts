@@ -9,12 +9,14 @@ export interface UserProfile {
   languageCode: string | null;
   defaultSlangStyle: SlangStyle | null;
   notificationsEnabled: boolean;
+  ageConfirmedAdult: boolean;
   createdAt: Date;
 }
 
 export interface UpdatePreferencesInput {
   defaultSlangStyle?: SlangStyle;
   notificationsEnabled?: boolean;
+  ageConfirmedAdult?: boolean;
 }
 
 export class UserService {
@@ -47,6 +49,7 @@ export class UserService {
         languageCode: true,
         defaultSlangStyle: true,
         notificationsEnabled: true,
+        ageConfirmedAdult: true,
         createdAt: true,
       },
     });
@@ -63,13 +66,14 @@ export class UserService {
       languageCode: user.languageCode,
       defaultSlangStyle: user.defaultSlangStyle,
       notificationsEnabled: user.notificationsEnabled,
+      ageConfirmedAdult: user.ageConfirmedAdult,
       createdAt: user.createdAt,
     };
   }
 
   /**
    * Update user's application-level preferences
-   * Only mutable fields (defaultSlangStyle, notificationsEnabled) can be updated
+   * Only mutable fields (defaultSlangStyle, notificationsEnabled, ageConfirmedAdult) can be updated
    * Attempting to update immutable fields throws an error
    */
   async updatePreferences(
@@ -102,6 +106,10 @@ export class UserService {
       updateData.notificationsEnabled = input.notificationsEnabled;
     }
 
+    if (input.ageConfirmedAdult !== undefined) {
+      updateData.ageConfirmedAdult = input.ageConfirmedAdult;
+    }
+
     // If no valid fields to update, return current profile
     if (Object.keys(updateData).length === 0) {
       const profile = await this.getProfile(userId);
@@ -125,6 +133,7 @@ export class UserService {
         languageCode: true,
         defaultSlangStyle: true,
         notificationsEnabled: true,
+        ageConfirmedAdult: true,
         createdAt: true,
       },
     });
@@ -137,6 +146,7 @@ export class UserService {
       languageCode: updatedUser.languageCode,
       defaultSlangStyle: updatedUser.defaultSlangStyle,
       notificationsEnabled: updatedUser.notificationsEnabled,
+      ageConfirmedAdult: updatedUser.ageConfirmedAdult,
       createdAt: updatedUser.createdAt,
     };
   }

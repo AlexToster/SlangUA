@@ -16,6 +16,7 @@ model User {
   languageCode      String?
   defaultSlangStyle SlangStyle?
   notificationsEnabled Boolean     @default(true)
+  ageConfirmedAdult  Boolean       @default(false)
   createdAt         DateTime       @default(now())
   translations      Translation[]
   refreshTokens     RefreshToken[]
@@ -34,6 +35,7 @@ model Translation {
 
   @@index([userId])
   @@index([createdAt])
+  @@index([userId, createdAt, id])
   // pg_trgm GIN indexes for full-text search are created via raw SQL migration
   // @@index([originalText], map: "Translation_originalText_trgm_idx", type: Gin)
   // @@index([translatedText], map: "Translation_translatedText_trgm_idx", type: Gin)

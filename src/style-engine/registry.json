@@ -1,0 +1,37 @@
+{
+  "gen_z": {
+    "id": "gen_z",
+    "title": "Gen Z",
+    "enabled": true,
+    "version": "1.0",
+    "ageRestricted": false
+  },
+  "street": {
+    "id": "street",
+    "title": "Street",
+    "enabled": true,
+    "version": "1.0",
+    "ageRestricted": false
+  },
+  "it_slang": {
+    "id": "it_slang",
+    "title": "IT Slang",
+    "enabled": true,
+    "version": "1.0",
+    "ageRestricted": false
+  },
+  "pofeni": {
+    "id": "pofeni",
+    "title": "Pofeni",
+    "enabled": true,
+    "version": "1.0",
+    "ageRestricted": true
+  },
+  "kancler": {
+    "id": "kancler",
+    "title": "Kancler",
+    "enabled": true,
+    "version": "1.0",
+    "ageRestricted": false
+  }
+}

@@ -1,4 +1,4 @@
-import { PrismaClient, SlangStyle, AIProvider, Translation } from '@prisma/client';
+import { PrismaClient, SlangStyle, AIProvider, Translation, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 
 export interface HistoryListParams {
@@ -25,6 +25,36 @@ export interface ToggleFavoriteResult {
   createdAt: Date;
 }
 
+interface HistoryCursor {
+  createdAt: string;
+  id: number;
+}
+
+function encodeCursor(translation: Pick<Translation, 'createdAt' | 'id'>): string {
+  return Buffer.from(JSON.stringify({
+    createdAt: translation.createdAt.toISOString(),
+    id: translation.id,
+  })).toString('base64url');
+}
+
+function decodeCursor(cursor: string): HistoryCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as HistoryCursor;
+    const createdAt = new Date(parsed.createdAt);
+
+    if (!Number.isSafeInteger(parsed.id) || parsed.id < 1 || Number.isNaN(createdAt.getTime())) {
+      throw new Error('Invalid cursor payload');
+    }
+
+    return { createdAt: createdAt.toISOString(), id: parsed.id };
+  } catch {
+    const error = new Error('Invalid history cursor') as Error & { code: string; statusCode: number };
+    error.code = 'INVALID_CURSOR';
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 export class HistoryService {
   private prisma: PrismaClient;
   private readonly DEFAULT_LIMIT = 20;
@@ -41,37 +71,45 @@ export class HistoryService {
     const { userId, cursor, limit = this.DEFAULT_LIMIT, favorite, search } = params;
     const safeLimit = Math.min(limit, this.MAX_LIMIT);
 
-    // Build where clause
-    const where: any = { userId };
+    const filters: Prisma.TranslationWhereInput[] = [{ userId }];
 
     if (favorite !== undefined) {
-      where.favorite = favorite;
+      filters.push({ favorite });
     }
 
     if (search && search.trim().length > 0) {
       const searchTerm = search.trim();
-      where.OR = [
+      filters.push({ OR: [
         { originalText: { contains: searchTerm, mode: 'insensitive' } },
         { translatedText: { contains: searchTerm, mode: 'insensitive' } },
-      ];
+      ] });
     }
 
-    // Handle cursor-based pagination
-    // Cursor is the createdAt timestamp of the last item in the previous page
+    const baseWhere: Prisma.TranslationWhereInput = { AND: filters };
+    const pageFilters = [...filters];
+
+    // Handle keyset pagination. createdAt + id keeps the ordering stable when
+    // multiple translations share the same timestamp.
     if (cursor) {
-      const cursorDate = new Date(cursor);
-      if (!isNaN(cursorDate.getTime())) {
-        where.createdAt = { lt: cursorDate };
-      }
+      const decodedCursor = decodeCursor(cursor);
+      const cursorDate = new Date(decodedCursor.createdAt);
+      pageFilters.push({
+        OR: [
+          { createdAt: { lt: cursorDate } },
+          { createdAt: cursorDate, id: { lt: decodedCursor.id } },
+        ],
+      });
     }
 
-    // Get total count for UI hints
-    const totalCount = await this.prisma.translation.count({ where });
+    const pageWhere: Prisma.TranslationWhereInput = { AND: pageFilters };
+
+    // totalCount describes all matching records, not only records after cursor.
+    const totalCount = await this.prisma.translation.count({ where: baseWhere });
 
     // Fetch translations (newest first)
     const translations = await this.prisma.translation.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
+      where: pageWhere,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: safeLimit + 1, // Take one extra to determine if there's a next page
     });
 
@@ -79,9 +117,9 @@ export class HistoryService {
     const hasNextPage = translations.length > safeLimit;
     const data = hasNextPage ? translations.slice(0, safeLimit) : translations;
 
-    // Next cursor is the createdAt of the last item in the current page
+    // Next cursor contains the full keyset ordering tuple.
     const nextCursor = hasNextPage && data.length > 0
-      ? data[data.length - 1].createdAt.toISOString()
+      ? encodeCursor(data[data.length - 1])
       : null;
 
     return { data, nextCursor, totalCount };

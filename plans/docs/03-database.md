@@ -69,6 +69,12 @@ The following entities represent the persistent state of the SlangUA system, man
   - Conceptual Type: Boolean.
   - Required: Yes.
   - Default: True.
+- **ageConfirmedAdult**:
+  - Purpose: Records the user's self-attestation that they are an adult before accessing an age-restricted style.
+  - Conceptual Type: Boolean.
+  - Required: Yes.
+  - Default: False.
+  - Business Rule: This is a product-level age gate, not identity or age verification.
 
 ### Entity: Translation
 - **userId**:
@@ -175,7 +181,7 @@ The following entities represent the persistent state of the SlangUA system, man
 ### Entity: User
 - **Creation**: Occurs during the first `/auth/telegram` handshake if the `telegramId` does not exist.
 - **Read**: Frequent; performed during every authentication or session validation to retrieve user profile/preferences.
-- **Update**: Occurs when a user changes application settings (e.g., default style).
+- **Update**: Occurs when a user changes application settings (e.g., default style, notification preference, or adult self-attestation).
 - **Delete**: Performed upon explicit request for account deletion or system cleanup.
 - **Retention**: Permanent until manual deletion.
 

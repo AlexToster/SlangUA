@@ -18,7 +18,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   - `422` — semantic validation failure (e.g., business rule violation)
   - `429` — rate limit exceeded (see [Security](06-security.md#rate-limiting--abuse-prevention))
   - `503` — AI provider unavailable (all fallback providers exhausted)
-- **Pagination**: cursor-based pagination for all list endpoints. Response includes `data`, `nextCursor` (null if no more pages), and `totalCount` (optional, for UI hints). Clients pass `cursor` and `limit` query parameters.
+- **Pagination**: cursor-based pagination for all list endpoints. `nextCursor` is an opaque, stable keyset cursor derived from `createdAt` and `id`; clients pass it unchanged as `cursor`. Response includes `data`, `nextCursor` (null if no more pages), and `totalCount` for all records matching the active filters.
 
 ## 2. Auth routes
 
@@ -83,11 +83,32 @@ This document defines the backend API contracts, routes, request/response DTOs, 
 - **Error codes**:
   - `400` — validation error (missing/invalid `text` or `style`)
   - `401` — missing/invalid JWT
+  - `403` — AGE_RESTRICTED_STYLE (attempted to use an age-restricted style without confirmed adult status)
   - `422` — semantic validation failure (content rejected as potential prompt injection)
   - `429` — rate limit exceeded
   - `503` — all AI providers failed (fallback exhausted)
 
-## 4. History routes
+## 4. Styles routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/styles` | Yes (JWT) | List available slang styles filtered by user age confirmation |
+
+### `GET /styles`
+- **Auth**: JWT required
+- **Behavior**: Returns only styles where `enabled: true` AND (`ageRestricted: false` OR user has `ageConfirmedAdult: true`)
+- **Success response (200)**:
+  ```json
+  [
+    { "id": "string", "title": "string" },
+    ...
+  ]
+  ```
+  - `id` — identifier matching `SlangStyle` enum value (uppercase, e.g., `GEN_Z`); it can be sent unchanged as `style` to `POST /translate`
+  - `title` — human-readable display name
+- **Error codes**: `401` — missing/invalid JWT
+
+## 5. History routes
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -99,7 +120,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
 - **Query parameters**:
   | Param | Type | Required | Description |
   |-------|------|----------|-------------|
-  | `cursor` | `string` | No | Opaque cursor for pagination |
+  | `cursor` | `string` | No | Opaque keyset cursor returned as `nextCursor`; clients must not construct or modify it |
   | `limit` | `integer` | No | Page size (default: 20, max: 100) |
   | `favorite` | `boolean` | No | Filter to only favorited translations |
   | `search` | `string` | No | Case-insensitive, partial-match text search over `originalText` and `translatedText` |
@@ -115,6 +136,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   }
   ```
   - `Translation` fields per [Database Design](03-database.md#entity-translation)
+  - `totalCount` counts all records matching `favorite` and `search`, independent of the current cursor
 
 ### `PATCH /history/:id/favorite`
 - **Path parameter**: `id` — Translation primary key
@@ -145,6 +167,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   | `languageCode` | `string \| null` | Preferred language from Telegram |
   | `defaultSlangStyle` | `SlangStyle \| null` | User's preferred slang style |
   | `notificationsEnabled` | `boolean` | Whether notifications are enabled |
+  | `ageConfirmedAdult` | `boolean` | User has confirmed they are an adult (mutable preference) |
   | `createdAt` | `datetime` | Registration timestamp |
 
 ### `PATCH /user/me`
@@ -153,7 +176,10 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   |-------|------|----------|-------------|
   | `defaultSlangStyle` | `SlangStyle` | No | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER` (see [Database Design](03-database.md#enum-slangstyle)) |
   | `notificationsEnabled` | `boolean` | No | |
+  | `ageConfirmedAdult` | `boolean` | No | Mutable preference field (not immutable like Telegram-sourced fields) |
   **Excludes**: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` (Telegram-sourced identity fields are immutable via API)
+- Unknown request fields are rejected with `400`.
+- `ageConfirmedAdult` is self-attestation for the product age gate; it is not external identity or age verification.
 - **Success response (200)**: Updated `User` profile (same shape as `GET /user/me`)
 - **Error codes**: `400` — validation error (including attempts to modify immutable fields), `422` — semantic business-rule violation
 

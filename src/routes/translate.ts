@@ -67,6 +67,11 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
           code: z.string(),
           message: z.string(),
         }),
+        403: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
         422: z.object({
           error: z.string(),
           code: z.string(),
@@ -92,7 +97,10 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
 
     try {
       const result = await translationService.translate(userId, { text, style });
-      return reply.send(result);
+      return reply.send({
+        ...result,
+        createdAt: result.createdAt.toISOString(),
+      });
     } catch (error) {
       const err = error as any;
       const statusCode = err.statusCode || 500;

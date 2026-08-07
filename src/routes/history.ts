@@ -67,6 +67,11 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
           code: z.string(),
           message: z.string(),
         }),
+        400: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     preHandler: [authenticate, historyRateLimiter],
@@ -74,13 +79,26 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
     const userId = request.user!.id;
     const { cursor, limit, favorite, search } = request.query as { cursor?: string; limit?: number; favorite?: boolean; search?: string };
 
-    const result = await historyService.getHistory({
-      userId,
-      cursor,
-      limit,
-      favorite,
-      search,
-    });
+    let result;
+    try {
+      result = await historyService.getHistory({
+        userId,
+        cursor,
+        limit,
+        favorite,
+        search,
+      });
+    } catch (error) {
+      const err = error as Error & { code?: string; statusCode?: number };
+      if (err.code === 'INVALID_CURSOR') {
+        return reply.status(400).send({
+          error: 'Bad Request',
+          code: 'INVALID_CURSOR',
+          message: err.message,
+        });
+      }
+      throw error;
+    }
 
     return {
       data: result.data.map(t => ({

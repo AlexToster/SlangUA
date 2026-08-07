@@ -6,6 +6,7 @@ import { authRoutes } from './routes/auth.js';
 import { translateRoutes } from './routes/translate.js';
 import { historyRoutes } from './routes/history.js';
 import { userRoutes } from './routes/user.js';
+import { stylesRoutes } from './routes/styles.js';
 import { connectRedis, disconnectRedis } from './lib/redis.js';
 import { rateLimitPlugin } from './plugins/rate-limit.js';
 
@@ -146,6 +147,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(translateRoutes, { prefix: '/api/v1' });
   await app.register(historyRoutes, { prefix: '/api/v1' });
   await app.register(userRoutes, { prefix: '/api/v1' });
+  await app.register(stylesRoutes, { prefix: '/api/v1' });
 
   // Graceful shutdown
   const close = async () => {

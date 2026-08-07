@@ -53,6 +53,7 @@ Translation Service
    Style Engine (loadStyle(style))   ← НОВЕ, викликається звідси, і тільки звідси
         │
         ├── Registry
+        ├── base-rules.md
         ├── prompt.md
         ├── examples.json
         └── lexicon.json
@@ -71,6 +72,16 @@ Style Engine відповідає **лише** за:
 
 Style Engine **не** відповідає за: виклик LLM, кеш перекладів, БД, публічний API, історію перекладів, будь-яку бізнес-логіку `TranslationService`. Порушення цих меж під час реалізації (наприклад, якщо loader.ts почне звертатись до Prisma) — сигнал зупинитись і повернутись до цієї специфікації, а не продовжувати.
 
+### 2.2 Age-restricted styles — dual enforcement
+
+**Важливо:** Перевірка вікових обмежень відбувається в **ДВОХ** місцях:
+
+1. **GET /styles** — фільтрує список стилів, які показуються користувачеві в UI. Повертає лише стилі, де `enabled: true` І (`ageRestricted: false` АБО `user.ageConfirmedAdult === true`).
+
+2. **TranslationService** (перед викликом AI провайдера) — **незалежно перевіряє** `ageRestricted` обраного стилю проти `user.ageConfirmedAdult`. Якщо стиль обмежений, а користувач не підтвердив повноліття — повертає `403 AGE_RESTRICTED_STYLE`.
+
+Друга перевірка обов'язкова, бо клієнт може викликати `POST /translate` безпосередньо з `id` обмеженого стилю, навіть якщо UI його не показує (наприклад, через маніпуляцію запитом). Тільки фільтрація в `GET /styles` **недостатня** для безпеки.
+
 ---
 
 ## 3. Структура директорій
@@ -79,7 +90,8 @@ Style Engine **не** відповідає за: виклик LLM, кеш пер
 src/
   style-engine/
     registry.json
-    loader.ts              ← loadStyle(style): Promise<LoadedStyle> (єдина точка читання FS)
+    base-rules.md          ← спільний базовий блок, читається loader.ts РІВНО ОДИН РАЗ
+    loader.ts              ← loadStyle(styleId): Promise<LoadedStyle> (єдина точка читання FS)
     styles/
       gen_z/
         prompt.md
@@ -103,28 +115,25 @@ src/
         lexicon.json
 ```
 
+`base-rules.md` містить поточний текст `basePrompt` з `buildSystemPrompt()` у `base.adapter.ts` ("You are a slang translator... Rules: 1. Only return... 5. Handle any language input..."). Він читається `loader.ts` **рівно один раз, незалежно від стилю**, і ставиться **першим блоком** перед стиль-специфічним `systemPrompt`. Він **не дублюється** в `prompt.md` кожного стилю.
+
 ---
 
 ## 3.1 Контракт `loader.ts`
-
-```ts
 interface LoadedStyle {
   systemPrompt: string;
-  // місце для metadata/version/tokenEstimate — додаються без зміни сигнатури
 }
-
 function loadStyle(styleId: string): Promise<LoadedStyle>;
-```
-
-Дві навмисні відмінності від початкового чорнового варіанту (`loadStyle(style): string`):
-
-1. **Об'єкт замість рядка** — дозволяє додати `metadata`/`version`/`tokenEstimate` пізніше без зміни сигнатури функції.
-2. **`Promise`, а не синхронний виклик** — файлова система зараз синхронна, але це рішення явно готує ґрунт під п. 8 (майбутнє джерело — БД/адмін-панель, де читання вже не буде синхронним). `BaseAdapter.buildSystemPrompt()` і так викликається всередині `async translate()`, тож ціна цього рішення зараз — нульова; відкладання означало б другу ламну зміну сигнатури пізніше.
-
-**Єдина точка читання файлової системи:** лише `loader.ts` читає `registry.json`, `prompt.md`, `examples.json`, `lexicon.json`. Жоден інший модуль (включно з `base.adapter.ts`) не звертається до цих файлів напряму.
-
-**Без дублювання інформації між файлами:** `prompt.md` — тільки правила стилю; `examples.json` — тільки приклади; `lexicon.json` — тільки словник. Той самий факт (наприклад, список preferred-слів) не повторюється текстом всередині `prompt.md`.
-
+**Порядок збірки systemPrompt всередині loadStyle (фіксований, не вигадувати інший):**
+0. Прочитати `base-rules.md` — це **перший блок**.
+1. Нормалізувати `styleId`: привести до нижнього регістру перед пошуком у `registry.json` (значення enum в API/Prisma — ВЕЛИКИМИ літерами: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER`; ключі `registry.json` — малими: `gen_z`, `street`, `it_slang`, `pofeni`, `kancler`).
+2. Прочитати `registry.json`, знайти запис за нормалізованим `styleId`. Якщо `enabled: false` або запису немає — кинути `Error`, повідомлення якого містить **і сирий, і нормалізований** `styleId`.
+3. Прочитати `styles/<styleId>/prompt.md` — це основа `systemPrompt`.
+4. Прочитати `styles/<styleId>/lexicon.json`, взяти лише масив `preferred`. Додати до промпту рядком: `Використовуй слова: ${preferred.join(', ')}`.
+5. Прочитати `styles/<styleId>/lexicon.json`, масив `forbidden`. Додати рядком: `Уникай слів: ${forbidden.join(', ')}`.
+6. Прочитати `styles/<styleId>/examples.json`. Додати кожен приклад у форматі: `Приклад: "${before}" → "${after}"`.
+7. З'єднати всі частини (1 порожній рядок між блоками) і повернути `{ systemPrompt }`.
+Жодних інших джерел тексту, жодного зчитування файлів поза цим списком (фіксований набір: `base-rules.md`, `registry.json`, `styles/<styleId>/prompt.md`, `styles/<styleId>/lexicon.json`, `styles/<styleId>/examples.json`).
 ---
 
 ## 4. Формат файлів
@@ -133,15 +142,20 @@ function loadStyle(styleId: string): Promise<LoadedStyle>;
 
 ```json
 {
-  "gen_z":    { "id": "gen_z",    "title": "Gen Z",     "enabled": true, "version": "1.0" },
-  "street":   { "id": "street",   "title": "Street",    "enabled": true, "version": "1.0" },
-  "it_slang": { "id": "it_slang", "title": "IT Slang",  "enabled": true, "version": "1.0" },
-  "pofeni":   { "id": "pofeni",   "title": "Pofeni",    "enabled": true, "version": "1.0" },
-  "kancler":  { "id": "kancler",  "title": "Kancler",   "enabled": true, "version": "1.0" }
+  "gen_z":    { "id": "gen_z",    "title": "Gen Z",     "enabled": true, "ageRestricted": false, "version": "1.0" },
+  "street":   { "id": "street",   "title": "Street",    "enabled": true, "ageRestricted": false, "version": "1.0" },
+  "it_slang": { "id": "it_slang", "title": "IT Slang",  "enabled": true, "ageRestricted": false, "version": "1.0" },
+  "pofeni":   { "id": "pofeni",   "title": "Pofeni",    "enabled": true, "ageRestricted": true,  "version": "1.0" },
+  "kancler":  { "id": "kancler",  "title": "Kancler",   "enabled": true, "ageRestricted": false, "version": "1.0" }
 }
 ```
 
 `id` дублює ключ об'єкта навмисно — при переході на БД записи матимуть стабільний первинний ідентифікатор незалежно від структури, що його зберігає.
+
+**`ageRestricted` (обов'язкове поле, boolean)** — вказує, чи є стиль віковим обмеженим (18+).
+- `true` — стиль доступний лише користувачам, які підтвердили повноліття через `ageConfirmedAdult: true` у профілі.
+- `false` — стиль доступний всім користувачам.
+- Це поле **має бути явно вказане для кожного стилю** (ніколи не вилучати, не залежати від значення за замовчуванням). Відсутність поля вважається помилкою конфігурації.
 
 Використання в майбутньому (не зараз): вимкнення стилю, beta/premium-позначки — без зміни коду.
 
@@ -174,7 +188,7 @@ function loadStyle(styleId: string): Promise<LoadedStyle>;
 
 Один файл замість окремих `vocabulary.json`/`forbidden.json` — preferred і forbidden тісно пов'язані, і перевірка "слово не входить одночасно в обидва списки" природньо робиться в межах одного файлу.
 
-**Жорсткий guardrail:** `preferred` — **20–40 найхарактерніших слів**, не звалище. Поточний хардкод-словник `POFENI` (~80 слів) при міграції має бути **звужений** до найхарактерніших 20–40, а не перенесений як є.
+**Жорсткий guardrail:** `preferred` — **20–40 найхарактерніших слів**, не звалище. Поточні хардкод-списки вже перевищують 20–40 слів для `GEN_Z` (~70), `STREET` (~85), `IT_SLANG` (~130), `POFENI` (~80) — не лише `POFENI`. Звуження до 20–40 найхарактерніших слів застосовується до **ВСІХ 5 стилів** під час Кроку 2б, а не лише до `POFENI`.
 
 ---
 
@@ -201,34 +215,69 @@ function loadStyle(styleId: string): Promise<LoadedStyle>;
 ---
 
 ## 6. Гарантії сумісності
-
-- Жодних змін у Prisma-схемі — стилі й далі живуть у файловій системі, `SlangStyle` enum у БД не змінюється.
-- Жодних змін у публічному API — контракт `POST /translate` (`style` як enum-string) незмінний.
-- Жодних змін у `TranslationService` — виклик `aiService.translate()` той самий.
-- Жоден наявний тест не повинен зламатись.
-- `base.adapter.ts`'s fallback-поведінка (`stylePrompts[style] || stylePrompts.GEN_Z` — тихий fallback на GEN_Z при невідомому стилі) переноситься в `loadStyle()` без змін логіки в межах цього рефакторингу; переглянути окремо, чи такий silent fallback — бажана поведінка, чи краще explicit-помилка.
-
+- Стилі й далі живуть у файловій системі; `SlangStyle` enum у БД не змінюється.
+- Контракт `POST /translate` (`style` як enum-string) незмінний.
+- Сам refactor Style Engine не змінює наведені нижче файли:
+  - `src/services/translation.service.ts`
+  - `src/services/ai/ai.service.ts`
+  - `src/services/ai/provider.factory.ts`
+  - `src/routes/*.ts`
+  - `prisma/schema.prisma`
+- **Документований виняток — age-restricted styles:** для `POFENI` додано продуктову self-attestation `User.ageConfirmedAdult`, міграцію та server-side enforcement у `TranslationService` і маршрутах User/Styles. Це не змінює enum або формат `POST /translate`, але є необхідною інтеграцією age gate, а не частиною file-based loader refactor.
+- **Fallback (рішення зафіксовано, не переглядати в межах цього рефакторингу):** `loadStyle()` **НІКОЛИ** не робить мовчазного fallback на `GEN_Z`; невідомий або вимкнений стиль **завжди кидає помилку**, яку викликач у `BaseAdapter` ловить і перетворює на відповідь `400` зі списком доступних стилів. Це **свідома зміна поведінки** порівняно з поточним кодом (`stylePrompts[style] || stylePrompts.GEN_Z`), а не перенесення як є.
 ---
 
 ## 7. Порядок міграції (для виконавчого промпту)
+Виконувати строго послідовно. Після кожного кроку — виконати "Перевірку" перед переходом далі.
+**Крок 1. Створити структуру директорій і `registry.json`.**
+Створити `src/style-engine/registry.json` (вміст — з розділу 4), `src/style-engine/base-rules.md` (вміст — поточний `basePrompt` з `buildSystemPrompt()` у `base.adapter.ts`) і порожні файли-заглушки `src/style-engine/styles/<id>/{prompt.md,examples.json,lexicon.json}` для всіх 5 стилів (`gen_z, street, it_slang, pofeni, kancler`).
+*Перевірка:* `find src/style-engine -type f | wc -l` → має бути 17 (1 registry.json + 1 base-rules.md + 5×3).
+**Крок 2а. Механічно перенести текст 5 стилів (без редагування змісту).**
+Скопіювати текст кожного стилю з `stylePrompts` у `base.adapter.ts` у відповідний `prompt.md` (описова частина) і `lexicon.json.preferred` (перелік слів), рівно як є, без скорочень.
+*Перевірка:* кожен `lexicon.json` не порожній; `prompt.md` не порожній для всіх 5 стилів.
+**Крок 2б. Звузити словники для всіх 5 стилів (окремо від 2а, після нього).**
+У `lexicon.json.preferred` кожного з 5 стилів залишити лише 20–40 найхарактерніших слів. Приклад достатнього набору для POFENI (можна використати як є):
+`шконка, параша, зона, кича, шизо, пахан, авторитет, малява, общак, кум, вертухай, стукач, фраєр, лох, понятія, по понятіям, пред'ява, рамси, наїзд, розборка, кидала, заточка, ґрєв, пайка, лаве, зелень, капуста, зашквар, фуфло`.
+Приклади для решти стилів (за аналогією з POFENI):
+- `GEN_Z`: `крінж, вайб, база, рофл, краш, сигма, скул, агріться, чилити, флекс, хайп, лол, кек, токсик, душніла, ізі, катка, шеймити, крашнути, збс`.
+- `STREET`: `хата, бабло, базар, розклад, стрілка, кент, кореш, шухер, метушня, розрулити, нарисуватись, по-братськи, земляк, свояк, розводка, наїзд, розборка, кидала, фуфло, зашквар`.
+- `IT_SLANG`: `деплой, комміт, мердж, фіча, баг, хотфікс, рефакторинг, легасі, прод, дев, стейдж, локально, задеплоїти, закоммітити, змерджити, роадмап, спринт, беклог, код-рев'ю, пайплайн`.
+- `KANCLER`: `згідно, відповідно, у зв'язку, беручи до уваги, вищевикладене, чинний, порядок, розгляд, звернення, термін, надати, забезпечити, здійснити, вжити, заходів, у визначений, на підставі, керуючись, повідомляємо, просимо`.
+*Перевірка:* `preferred.length` для **кожного** з 5 стилів між 20 і 40.
+**Крок 3. Розвести перетин STREET↔POFENI за таблицею (фіксована, не вигадувати іншу):**
+| Слово | Preferred у | Forbidden у |
+|---|---|---|
+| хата | street | pofeni |
+| братва | pofeni | street |
+| бабло | street | pofeni |
+| базар, базарити | pofeni | street |
+| авторитет | pofeni | street |
+Для кожного рядка: прибрати слово з `preferred` "programного" стилю (якщо там є) і додати в `forbidden` того стилю, де стоїть "Forbidden у".
+*Перевірка:* жодне слово з лівої колонки не входить у `preferred` обох стилів одночасно.
+**Крок 4. Додати приклади в `examples.json` (мінімум 3 на стиль).**
+Еталонний приклад для KANCLER (щоб зафіксувати рівень і формат — інші стилі за аналогією):
+```json
+[{ "before": "Дай мені відповідь.", "after": "Прошу надати вичерпну відповідь у визначений термін, беручи до уваги вищевикладені обставини та відповідно до чинного порядку розгляду звернень." }]
 
-1. Створити структуру директорій і `registry.json` (порожні заглушки файлів).
-2. Перенести 5 наявних стилів з хардкоду `base.adapter.ts` у відповідні `prompt.md`/`lexicon.json` — **з одночасним звуженням `POFENI`-словника до 20–40 слів** (не механічне копіювання).
-3. Прибрати з перенесених `lexicon.json` для `STREET` і `POFENI` слова, що зараз перетинаються (`хата`, `братва`, `бабло`, `базар`/`базарити`, `авторитет`) — розподілити кожне слово в forbidden того стилю, якому воно не належить.
-4. Додати мінімум 3 `examples.json`-приклади на стиль.
-5. Реалізувати `loader.ts` (`loadStyle(style): string`) — читає `registry.json` + збирає `prompt.md`+`examples`+`lexicon.preferred` у фінальний текст промпту.
-6. Замінити виклик у `BaseAdapter.buildSystemPrompt()` на `loadStyle(style)`, видалити хардкод-об'єкт.
-7. Ручна перевірка: усі 5 стилів дають ідентичний за формою результат до і після рефакторингу (щоб підтвердити "жодних змін для клієнта").
+Перевірка: кожен examples.json містить масив довжиною ≥ 3, кожен елемент має непорожні before і after.
 
+Крок 5. Реалізувати loader.ts за порядком збірки з §3.1. Перевірка: await loadStyle('GEN_Z') повертає { systemPrompt: string }, systemPrompt.length > 0; await loadStyle('gen_z') також працює (регістронезалежно завдяки нормалізації з кроку 1).
+
+Крок 6. Замінити виклик у BaseAdapter.buildSystemPrompt() на loadStyle(style), видалити хардкод-об'єкт stylePrompts. Перевірка: grep -c "GEN_Z:" src/services/ai/base.adapter.ts → 0.
+
+Крок 7. Спочатку запустити `npm test`: він перевіряє production build, packaging Style Engine assets, усі 5 стилів, регістронезалежність і disabled-гілку. Після цього вручну запустити backend (`npm run dev`) і для кожного з 5 стилів виконати POST /api/v1/translate (curl або файли з test/translate-request.json як шаблон запиту, підставляючи кожен style). Перевірка: усі 5 запитів повертають 200 з непорожнім translatedText.
 ---
 
 ## 8. Definition of Done
-
-- [ ] `base.adapter.ts` більше не містить жодного тексту промптів (весь хардкод-об'єкт видалено)
-- [ ] Усі 5 стилів винесені в `src/style-engine/styles/`
-- [ ] Використовується `registry.json`
-- [ ] `buildSystemPrompt()` викликає `loadStyle()` і нічого більше не знає про конкретні стилі
-- [ ] `loadStyle()` — єдина точка входу; жоден інший модуль не читає файли style-engine напряму
-- [ ] Перетин словників `STREET`↔`POFENI` (розділ 0) усунуто — перевірено явно, не припущено
-- [ ] Усі наявні тести проходять без змін
-- [ ] Усі 5 стилів дають переклад без зміни публічного API (`POST /translate` контракт незмінний)
+ 
+  - [x] grep -c "GEN_Z:" src/services/ai/base.adapter.ts → 0
+  - [x] find src/style-engine/styles -mindepth 1 -maxdepth 1 -type d | wc -l → 5
+  - [x] registry.json існує і містить усі 5 id
+  - [x] loadStyle() — єдина функція, що читає файли style-engine (перевірено вручну: жоден інший файл не імпортує fs/path для style-engine/)
+  - [x] Жодне слово з таблиці Кроку 3 не входить у preferred обох стилів одночасно
+  - [x] Кожен examples.json має ≥ 3 приклади з непорожніми before/after
+  - [ ] Ручна перевірка Кроку 7 пройдена для всіх 5 стилів (200, непорожній результат) — не перевірено (backend не запускався)
+  - [x] Зміни поза loader refactor обмежені документованим age-gate винятком у §6
+  - [x] Production build містить усі Style Engine assets; усі 5 стилів, case-insensitive lookup, unknown style та disabled `pofeni` перевіряються `npm test` через `test/verify-style-engine.mjs`
+  - [x] base-rules.md існує, не порожній, і його вміст присутній на початку кожного зібраного systemPrompt — перевіряється `npm test` через `test/verify-style-engine.mjs`
+  - [x] preferred.length між 20 і 40 для КОЖНОГО з 5 стилів, не лише pofeni (gen_z:39, street:38, it_slang:40, pofeni:39, kancler:32)
