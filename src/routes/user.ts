@@ -64,6 +64,11 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           code: z.string(),
           message: z.string(),
         }),
+        503: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     preHandler: [authenticate, userRateLimiter],
@@ -97,7 +102,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
   app.patch('/user/me', {
     schema: {
       body: z.object({
-        defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).optional(),
+        defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable().optional(),
         notificationsEnabled: z.boolean().optional(),
         ageConfirmedAdult: z.boolean().optional(),
       }).strict(),
@@ -128,12 +133,17 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           code: z.string(),
           message: z.string(),
         }),
+        503: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     preHandler: [authenticate, userRateLimiter],
   }, async (request, reply) => {
     const userId = request.user!.id;
-    const body = request.body as { defaultSlangStyle?: (typeof SLANG_STYLE_VALUES)[number]; notificationsEnabled?: boolean; ageConfirmedAdult?: boolean };
+    const body = request.body as { defaultSlangStyle?: (typeof SLANG_STYLE_VALUES)[number] | null; notificationsEnabled?: boolean; ageConfirmedAdult?: boolean };
 
     try {
       const updatedProfile = await userService.updatePreferences(userId, body);

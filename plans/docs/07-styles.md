@@ -115,7 +115,7 @@ src/
         lexicon.json
 ```
 
-`base-rules.md` містить поточний текст `basePrompt` з `buildSystemPrompt()` у `base.adapter.ts` ("You are a slang translator... Rules: 1. Only return... 5. Handle any language input..."). Він читається `loader.ts` **рівно один раз, незалежно від стилю**, і ставиться **першим блоком** перед стиль-специфічним `systemPrompt`. Він **не дублюється** в `prompt.md` кожного стилю.
+`base-rules.md` contains the English base prompt for Ukrainian input and Ukrainian slang output. It is validated and loaded once into the immutable Style Engine snapshot, then placed as the first block before every style-specific `systemPrompt`. It is not duplicated in any style `prompt.md`.
 
 ---
 
@@ -281,3 +281,5 @@ function loadStyle(styleId: string): Promise<LoadedStyle>;
   - [x] Production build містить усі Style Engine assets; усі 5 стилів, case-insensitive lookup, unknown style та disabled `pofeni` перевіряються `npm test` через `test/verify-style-engine.mjs`
   - [x] base-rules.md існує, не порожній, і його вміст присутній на початку кожного зібраного systemPrompt — перевіряється `npm test` через `test/verify-style-engine.mjs`
   - [x] preferred.length між 20 і 40 для КОЖНОГО з 5 стилів, не лише pofeni (gen_z:39, street:38, it_slang:40, pofeni:39, kancler:32)
+  - [x] `npm test` тепер перевіряє: production build + runtime Style Engine behavior (test:smoke) + детерміновані HTTP інтеграційні тести (test:integration) через Vitest + Testcontainers + локальний mock Ollama
+  - [x] Реальні AI-провайдери (OpenAI, Anthropic, Gemini, Ollama) **не викликаються** в тестах; якість реальних провайдерів не тестувалася

@@ -7,8 +7,10 @@ import { translateRoutes } from './routes/translate.js';
 import { historyRoutes } from './routes/history.js';
 import { userRoutes } from './routes/user.js';
 import { stylesRoutes } from './routes/styles.js';
+import { shareRoutes } from './routes/share.js';
 import { connectRedis, disconnectRedis } from './lib/redis.js';
-import { rateLimitPlugin } from './plugins/rate-limit.js';
+import { createRateLimiter } from './plugins/rate-limit.js';
+import { initializeStyleEngine } from './style-engine/loader.js';
 
 // Import types from fastify submodules
 import type { FastifyInstance } from 'fastify/types/instance';
@@ -39,17 +41,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  // Connect to Redis (fail-open: if Redis is unavailable, log warning and continue without rate limiting)
-  try {
-    await connectRedis();
-  } catch (err) {
-    app.log.warn({ err }, 'Redis connection failed, starting in degraded mode (rate limiting disabled)');
-  }
+  // Redis is required: the API must not accept LLM-capable requests without rate limiting.
+  await connectRedis();
 
-  // Register rate limit plugin with default config
-  await app.register(rateLimitPlugin, {
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
+  // Validate and preload immutable Style Engine assets before accepting traffic.
+  await initializeStyleEngine();
+
+  const globalRateLimiter = createRateLimiter({
+    windowMs: config.GLOBAL_RATE_LIMIT_WINDOW_MS,
+    maxRequests: config.GLOBAL_RATE_LIMIT_MAX_REQUESTS,
+    keyPrefix: 'ratelimit:global',
+  });
+
+  // A coarse IP limit covers every public route, including future routes and the
+  // Telegram webhook. Authenticated endpoints retain their stricter per-user limits.
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.url.split('?')[0] === '/health') return;
+    await globalRateLimiter(request, reply);
   });
 
   // Global error handler
@@ -89,6 +97,15 @@ export async function buildApp(): Promise<FastifyInstance> {
         error: 'Too Many Requests',
         code: 'RATE_LIMIT_EXCEEDED',
         message: 'Rate limit exceeded. Please try again later.',
+      });
+    }
+
+    // Rate limiter unavailable (fail-closed)
+    if (error.code === 'RATE_LIMITER_UNAVAILABLE') {
+      return reply.status(503).send({
+        error: 'Service Unavailable',
+        code: 'RATE_LIMITER_UNAVAILABLE',
+        message: 'Rate limiting temporarily unavailable. Please try again later.',
       });
     }
 
@@ -148,6 +165,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(historyRoutes, { prefix: '/api/v1' });
   await app.register(userRoutes, { prefix: '/api/v1' });
   await app.register(stylesRoutes, { prefix: '/api/v1' });
+  await app.register(shareRoutes, { prefix: '/api/v1' });
 
   // Graceful shutdown
   const close = async () => {

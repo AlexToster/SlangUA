@@ -3,6 +3,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { config } from '../config/index.js';
 import { prisma } from '../lib/prisma.js';
+import { getRedisClient } from '../lib/redis.js';
 
 export interface TelegramUser {
   id: number;
@@ -126,8 +127,23 @@ export class AuthService {
       const now = Math.floor(Date.now() / 1000);
       const authDate = parsed.auth_date;
       
-      if (now - authDate > this.authDateTtl) {
+      // Check for NaN, non-finite, or non-positive auth_date
+      if (!Number.isFinite(authDate) || authDate <= 0) {
+        return { valid: false, error: 'Invalid auth_date' };
+      }
+      
+      const skewSeconds = now - authDate;
+      
+      // Check if auth_date is too old (expired)
+      if (skewSeconds > this.authDateTtl) {
         return { valid: false, error: 'Expired auth_date' };
+      }
+      
+      // Check if auth_date is too far in the future (clock manipulation)
+      // Allow small clock-skew tolerance for legitimate near-future timestamps
+      const MAX_FUTURE_SKEW_SECONDS = 300; // 5 minutes
+      if (skewSeconds < -MAX_FUTURE_SKEW_SECONDS) {
+        return { valid: false, error: 'auth_date is too far in the future' };
       }
 
       return { valid: true, data: parsed };
@@ -172,12 +188,42 @@ export class AuthService {
   }
 
   /**
+   * Redis key for revoked JTI denylist
+   */
+  private revokedJtiKey(jti: string): string {
+    return `revoked_jti:${jti}`;
+  }
+
+  /**
    * Verify JWT access token and return payload
+   * Checks Redis denylist for revoked tokens (logout revocation).
+   * Fail-closed: if Redis is unavailable, treat token as invalid (return null)
+   * to prevent use of revoked tokens during Redis outages.
+   * This adds one Redis round-trip per authenticated request — acceptable
+   * since the rate limiter already does a Redis call per request.
    */
   async verifyAccessToken(token: string): Promise<JWTPayloadWithJTI | null> {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
-      return payload as unknown as JWTPayloadWithJTI;
+      const typedPayload = payload as unknown as JWTPayloadWithJTI;
+
+      // Check Redis denylist for revoked JTI
+      try {
+        const redis = getRedisClient();
+        const isRevoked = await redis.exists(this.revokedJtiKey(typedPayload.jti as string));
+        if (isRevoked) {
+          return null; // Token has been revoked (logout)
+        }
+      } catch (redisError) {
+        // Fail-closed: if Redis is unavailable, treat token as invalid
+        // This degrades to "everyone gets logged out" rather than
+        // "logout stops working" — safe failure direction for auth check.
+        // Log at warn level since this is expected during Redis outages.
+        console.warn('Redis unavailable during JTI denylist check, failing closed:', redisError);
+        return null;
+      }
+
+      return typedPayload;
     } catch {
       return null;
     }
@@ -285,43 +331,56 @@ export class AuthService {
 
   /**
    * Refresh access token using refresh token
-   * Rotates refresh token (invalidates old, creates new)
+   * Rotates refresh token (invalidates old, creates new) atomically in a transaction
    */
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
     const hashedToken = this.hashRefreshToken(refreshToken);
-    
-    // Find refresh token record
-    const tokenRecord = await this.findRefreshToken(hashedToken);
-    if (!tokenRecord) {
-      throw new Error('Invalid refresh token');
-    }
 
-    // Check expiration
-    if (tokenRecord.expiresAt < new Date()) {
-      // Clean up expired token
-      await this.invalidateRefreshToken(hashedToken);
-      throw new Error('Refresh token expired');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const tokenRecord = await tx.refreshToken.findUnique({
+        where: { hashedToken },
+        include: { user: true },
+      });
+      if (!tokenRecord) {
+        throw new Error('Invalid refresh token');
+      }
+      if (tokenRecord.expiresAt < new Date()) {
+        // delete separately is fine here, token is expired either way
+        await tx.refreshToken.delete({ where: { hashedToken } }).catch(() => {});
+        throw new Error('Refresh token expired');
+      }
 
-    // Invalidate old refresh token
-    await this.invalidateRefreshToken(hashedToken);
+      // This delete is the concurrency guard: if another concurrent
+      // request already rotated this exact token, this throws P2025
+      // and we treat that as "Invalid refresh token" — do NOT swallow
+      // it here, let it fail the transaction.
+      await tx.refreshToken.delete({ where: { hashedToken } });
 
-    // Create new refresh token
-    const newRefreshToken = this.generateRefreshToken();
-    const newTokenRecord = await this.createRefreshToken(tokenRecord.userId, newRefreshToken, tokenRecord.deviceInfo as Record<string, unknown> | undefined);
+      const newRefreshToken = this.generateRefreshToken();
+      const newTokenRecord = await tx.refreshToken.create({
+        data: {
+          userId: tokenRecord.userId,
+          hashedToken: this.hashRefreshToken(newRefreshToken),
+          expiresAt: new Date(Date.now() + this.parseTtlToMs(this.refreshTokenTtl)),
+          deviceInfo: tokenRecord.deviceInfo as any,
+        },
+      });
 
-    // Generate new access token
-    const accessToken = await this.generateAccessToken(
-      tokenRecord.userId, 
-      tokenRecord.user.telegramId, 
-      newTokenRecord.id
-    );
+      const accessToken = await this.generateAccessToken(
+        tokenRecord.userId,
+        tokenRecord.user.telegramId,
+        newTokenRecord.id,
+      );
 
-    return { accessToken, refreshToken: newRefreshToken };
+      return { accessToken, refreshToken: newRefreshToken };
+    });
   }
 
   /**
    * Logout - invalidate refresh token referenced by access token's jti
+   * Also adds the access token's JTI to a Redis denylist with TTL equal
+   * to the remaining lifetime of the access token, so the token is
+   * immediately rejected on subsequent requests even before its natural expiry.
    */
   async logout(accessToken: string): Promise<void> {
     const payload = await this.verifyAccessToken(accessToken);
@@ -342,6 +401,22 @@ export class AuthService {
 
     // Invalidate only this specific refresh token
     await this.invalidateRefreshTokenById(refreshTokenId);
+
+    // Add JTI to Redis denylist with TTL = remaining access token lifetime
+    // This ensures the revoked token is rejected immediately on subsequent requests
+    try {
+      const redis = getRedisClient();
+      const now = Math.floor(Date.now() / 1000);
+      const exp = (payload as any).exp ?? 0;
+      const remainingSeconds = Math.max(1, exp - now);
+      await redis.set(this.revokedJtiKey(payload.jti as string), '1', 'EX', remainingSeconds);
+    } catch (redisError) {
+      // If Redis is unavailable, we still invalidated the refresh token.
+      // The access token will remain valid until natural expiry, but
+      // this is acceptable — the refresh token rotation is the primary
+      // security boundary. Log at warn level.
+      console.warn('Redis unavailable during JTI denylist add, refresh token still invalidated:', redisError);
+    }
   }
 
   /**

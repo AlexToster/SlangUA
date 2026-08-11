@@ -58,6 +58,11 @@ export const stylesRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) 
           code: z.string(),
           message: z.string(),
         }),
+        503: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     preHandler: [authenticate, stylesRateLimiter],

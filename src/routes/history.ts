@@ -5,10 +5,15 @@ import { historyService } from '../services/history.service.js';
 import { authService } from '../services/auth.service.js';
 import { createRateLimiter } from '../plugins/rate-limit.js';
 import { SLANG_STYLE_VALUES } from '../constants/index.js';
+import { config } from '../config/index.js';
 
 export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
-  // Rate limiters for history endpoints (60 requests/minute)
-  const historyRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 60, keyPrefix: 'ratelimit:history' });
+  // Rate limiters for history endpoints
+  const historyRateLimiter = createRateLimiter({
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
+    keyPrefix: 'ratelimit:history'
+  });
 
   // JWT authentication middleware
   const authenticate = async (request: any, reply: any) => {
@@ -68,6 +73,11 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
           message: z.string(),
         }),
         400: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
+        503: z.object({
           error: z.string(),
           code: z.string(),
           message: z.string(),
@@ -141,6 +151,11 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
           code: z.string(),
           message: z.string(),
         }),
+        503: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     preHandler: [authenticate, historyRateLimiter],
@@ -183,6 +198,11 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
           message: z.string(),
         }),
         404: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
+        503: z.object({
           error: z.string(),
           code: z.string(),
           message: z.string(),

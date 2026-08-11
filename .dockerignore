@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+frontend/node_modules
+dist
+frontend/dist
+SlangUA.zip
+test
+*.log

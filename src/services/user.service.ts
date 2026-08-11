@@ -14,7 +14,7 @@ export interface UserProfile {
 }
 
 export interface UpdatePreferencesInput {
-  defaultSlangStyle?: SlangStyle;
+  defaultSlangStyle?: SlangStyle | null;
   notificationsEnabled?: boolean;
   ageConfirmedAdult?: boolean;
 }

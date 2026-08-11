@@ -1,0 +1,188 @@
+/* TextInput Component Styles */
+.text-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.text-input-container {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  border: 2px solid var(--tg-border-color, var(--color-border));
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.text-input-container:focus-within {
+  border-color: var(--tg-link-color, var(--color-primary));
+  box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20));
+}
+
+.text-input-wrapper.over-limit .text-input-container {
+  border-color: var(--tg-destructive-color, var(--color-error));
+}
+
+.text-input-wrapper.over-limit .text-input-container:focus-within {
+  box-shadow: 0 0 0 3px var(--tg-destructive-color-alpha-20, var(--color-error-alpha-20));
+}
+
+.text-input-wrapper.warning-zone .text-input-container {
+  border-color: var(--tg-warning-color, var(--color-warning));
+}
+
+.text-input-wrapper.warning-zone .text-input-container:focus-within {
+  box-shadow: 0 0 0 3px var(--tg-warning-color-alpha-20, var(--color-warning-alpha-20));
+}
+
+.text-input {
+  width: 100%;
+  min-height: 120px;
+  max-height: 200px;
+  padding: var(--spacing-md);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+  color: var(--tg-text-color, var(--color-text));
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.text-input::placeholder {
+  color: var(--tg-hint-color, var(--color-text-muted));
+}
+
+.text-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.text-input-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-xs);
+}
+
+.text-input-paste-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--tg-link-color, var(--color-primary));
+  background: transparent;
+  border: 1px solid var(--tg-link-color, var(--color-primary));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.text-input-paste-btn:hover:not(:disabled) {
+  background: var(--tg-link-color, var(--color-primary));
+  color: var(--tg-button-text-color, var(--color-on-primary));
+}
+
+.text-input-paste-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.text-input-paste-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.text-input-paste-btn:focus-visible {
+  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline-offset: 2px;
+}
+
+.char-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tg-hint-color, var(--color-text-muted));
+  transition: color var(--transition-fast);
+}
+
+.char-counter.warning {
+  color: var(--tg-warning-color, var(--color-warning));
+}
+
+.char-counter.error {
+  color: var(--tg-destructive-color, var(--color-error));
+}
+
+.char-counter svg {
+  flex-shrink: 0;
+}
+
+.text-input-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--tg-hint-color, var(--color-text-muted));
+  background: transparent;
+  border: 1px solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.text-input-clear-btn:hover {
+  color: var(--tg-text-color, var(--color-text));
+  border-color: var(--tg-text-color, var(--color-text));
+  background: var(--tg-secondary-bg-color, var(--color-surface-hover));
+}
+
+.text-input-clear-btn:active {
+  transform: scale(0.95);
+}
+
+.text-input-clear-btn:focus-visible {
+  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline-offset: 2px;
+}
+
+/* Visually hidden utility */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .text-input {
+    min-height: 100px;
+    font-size: var(--font-size-sm);
+  }
+  
+  .text-input-paste-btn span {
+    display: none;
+  }
+  
+  .text-input-paste-btn {
+    padding: var(--spacing-xs);
+  }
+  
+  .char-counter {
+    font-size: 11px;
+  }
+}

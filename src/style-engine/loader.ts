@@ -1,115 +1,148 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { z } from 'zod';
+import { SLANG_STYLE_VALUES } from '../constants/index.js';
 
 export interface LoadedStyle {
   systemPrompt: string;
 }
 
-/**
- * Вибір способу читання JSON-файлів:
- * Використовуємо fs.readFile + JSON.parse замість прямого імпорту
- * (`import data from './registry.json' with { type: 'json' }`).
- *
- * Причина: прямий імпорт JSON у NodeNext/ESM вимагає атрибута
- * `with { type: 'json' }`, який по-різному підтримується в tsx (dev)
- * і в tsc + node (build), а також залежить від версії Node. Крім того,
- * tsc копіює імпортовані .json у dist лише якщо вони включені в
- * компіляцію, що робить поведінку менш передбачуваною. fs.readFile
- * працює ідентично в dev і в build, і тримає loader.ts єдиною точкою
- * читання файлів style-engine (відповідає Definition of Done §8).
- *
- * .md-файли (base-rules.md, prompt.md) у будь-якому разі читаються
- * через fs.readFile, оскільки tsconfig не резолвить .md.
- */
-
 const STYLE_DIR = join(__dirname, 'styles');
 const BASE_RULES_PATH = join(__dirname, 'base-rules.md');
 const REGISTRY_PATH = join(__dirname, 'registry.json');
 
-export interface RegistryEntry {
-  id: string;
-  title: string;
-  enabled: boolean;
-  version: string;
-  ageRestricted: boolean;
+const registryEntrySchema = z.object({
+  id: z.string().regex(/^[a-z0-9_]+$/),
+  title: z.string().min(1),
+  enabled: z.boolean(),
+  version: z.string().min(1),
+  ageRestricted: z.boolean(),
+}).strict();
+
+const registrySchema = z.record(registryEntrySchema).superRefine((registry, ctx) => {
+  const expected = new Set(SLANG_STYLE_VALUES.map((style) => style.toLowerCase()));
+  const received = new Set(Object.keys(registry));
+
+  for (const [key, entry] of Object.entries(registry)) {
+    if (key !== entry.id) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key, 'id'], message: 'Registry key must match entry.id' });
+    }
+    if (!expected.has(key)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `Unknown Prisma SlangStyle: ${key}` });
+    }
+  }
+  for (const style of expected) {
+    if (!received.has(style)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Missing Prisma SlangStyle in registry: ${style}` });
+    }
+  }
+});
+
+const lexiconSchema = z.object({
+  preferred: z.array(z.string().min(1)),
+  forbidden: z.array(z.string().min(1)),
+}).strict();
+
+const examplesSchema = z.array(z.object({
+  before: z.string().min(1),
+  after: z.string().min(1),
+}).strict());
+
+export type RegistryEntry = z.infer<typeof registryEntrySchema>;
+
+interface StyleEngineSnapshot {
+  registry: Readonly<Record<string, RegistryEntry>>;
+  styles: Readonly<Record<string, LoadedStyle>>;
 }
 
-interface Lexicon {
-  preferred: string[];
-  forbidden: string[];
-}
+let snapshotPromise: Promise<StyleEngineSnapshot> | undefined;
 
-interface Example {
-  before: string;
-  after: string;
-}
-
-async function readJson<T>(path: string): Promise<T> {
-  const raw = await readFile(path, 'utf-8');
-  return JSON.parse(raw) as T;
-}
-
-export async function loadRegistry(): Promise<Record<string, RegistryEntry>> {
-  return readJson<Record<string, RegistryEntry>>(REGISTRY_PATH);
-}
-
-function assertStyleEnabled(
-  styleId: string,
-  normalizedId: string,
-  entry: RegistryEntry | undefined,
-  registry: Record<string, RegistryEntry>,
-): asserts entry is RegistryEntry {
-  if (!entry || !entry.enabled) {
-    throw new Error(
-      `Unknown or disabled style: "${styleId}" (normalized: "${normalizedId}"). Available: ${Object.keys(registry).join(', ')}`,
-    );
+async function readJson(path: string): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(path, 'utf-8'));
+  } catch (error) {
+    throw new Error(`Invalid JSON in Style Engine file ${path}`, { cause: error });
   }
 }
 
+async function readNonEmptyFile(path: string): Promise<string> {
+  const content = await readFile(path, 'utf-8');
+  if (!content.trim()) throw new Error(`Style Engine file is empty: ${path}`);
+  return content;
+}
+
+async function buildSnapshot(): Promise<StyleEngineSnapshot> {
+  const baseRules = await readNonEmptyFile(BASE_RULES_PATH);
+  const registry = registrySchema.parse(await readJson(REGISTRY_PATH));
+  const styles: Record<string, LoadedStyle> = {};
+
+  for (const [styleId, entry] of Object.entries(registry)) {
+    const styleDir = join(STYLE_DIR, styleId);
+    const [prompt, rawLexicon, rawExamples] = await Promise.all([
+      readNonEmptyFile(join(styleDir, 'prompt.md')),
+      readJson(join(styleDir, 'lexicon.json')),
+      readJson(join(styleDir, 'examples.json')),
+    ]);
+    const lexicon = lexiconSchema.parse(rawLexicon);
+    const examples = examplesSchema.parse(rawExamples);
+    const blocks = [
+      baseRules,
+      prompt,
+      `Use these words where natural: ${lexicon.preferred.join(', ')}`,
+      `Avoid these words: ${lexicon.forbidden.join(', ')}`,
+      ...examples.map((example) => `Example: "${example.before}" → "${example.after}"`),
+    ];
+    styles[styleId] = { systemPrompt: blocks.join('\n\n') };
+  }
+
+  return {
+    registry: Object.freeze(registry),
+    styles: Object.freeze(styles),
+  };
+}
+
+/** Preload all static Style Engine assets. Call during application startup. */
+export async function initializeStyleEngine(): Promise<void> {
+  if (!snapshotPromise) snapshotPromise = buildSnapshot();
+  try {
+    await snapshotPromise;
+  } catch (error) {
+    snapshotPromise = undefined;
+    throw error;
+  }
+}
+
+/** Test-only / controlled-reload cache reset. Normal request handling never reloads files. */
+export function clearStyleEngineCache(): void {
+  snapshotPromise = undefined;
+}
+
+async function getSnapshot(): Promise<StyleEngineSnapshot> {
+  await initializeStyleEngine();
+  return snapshotPromise!;
+}
+
+function assertStyleEnabled(styleId: string, normalizedId: string, entry: RegistryEntry | undefined, registry: Readonly<Record<string, RegistryEntry>>): asserts entry is RegistryEntry {
+  if (!entry || !entry.enabled) {
+    throw new Error(`Unknown or disabled style: "${styleId}" (normalized: "${normalizedId}"). Available: ${Object.keys(registry).join(', ')}`);
+  }
+}
+
+export async function loadRegistry(): Promise<Readonly<Record<string, RegistryEntry>>> {
+  return (await getSnapshot()).registry;
+}
+
 export async function loadStyle(styleId: string): Promise<LoadedStyle> {
-  // Крок 0: base-rules.md — перший блок.
-  const baseRules = await readFile(BASE_RULES_PATH, 'utf-8');
-
-  // Крок 1: нормалізація styleId до нижнього регістру.
   const normalizedId = styleId.toLowerCase();
-
-  // Крок 2: registry.json — пошук запису за нормалізованим id.
-  const registry = await loadRegistry();
+  const { registry, styles } = await getSnapshot();
   const entry = registry[normalizedId];
   assertStyleEnabled(styleId, normalizedId, entry, registry);
-
-  const styleDir = join(STYLE_DIR, normalizedId);
-
-  // Крок 3: prompt.md — основа systemPrompt.
-  const prompt = await readFile(join(styleDir, 'prompt.md'), 'utf-8');
-
-  // Кроки 4–5: lexicon.json — preferred і forbidden.
-  const lexicon = await readJson<Lexicon>(join(styleDir, 'lexicon.json'));
-  const preferredLine = `Використовуй слова: ${lexicon.preferred.join(', ')}`;
-  const forbiddenLine = `Уникай слів: ${lexicon.forbidden.join(', ')}`;
-
-  // Крок 6: examples.json — кожен приклад окремим рядком.
-  const examples = await readJson<Example[]>(join(styleDir, 'examples.json'));
-  const exampleLines = examples.map(
-    (example) => `Приклад: "${example.before}" → "${example.after}"`,
-  );
-
-  // Крок 7: з'єднання блоків (1 порожній рядок між блоками).
-  const blocks = [
-    baseRules,
-    prompt,
-    preferredLine,
-    forbiddenLine,
-    ...exampleLines,
-  ];
-  const systemPrompt = blocks.join('\n\n');
-
-  return { systemPrompt };
+  return styles[normalizedId]!;
 }
 
 export async function getStyleMetadata(styleId: string): Promise<RegistryEntry> {
   const normalizedId = styleId.toLowerCase();
-  const registry = await loadRegistry();
+  const { registry } = await getSnapshot();
   const entry = registry[normalizedId];
   assertStyleEnabled(styleId, normalizedId, entry, registry);
   return entry;

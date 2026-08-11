@@ -77,6 +77,12 @@ export function createRateLimiter(options: RateLimitOptions = {}) {
       // results[1] is the zcard count (before adding current request)
       const currentCount = (results[1] as [Error | null, number])[1] ?? 0;
 
+      // Set rate limit headers (always set, even when limit exceeded)
+      const remaining = Math.max(0, maxRequests - currentCount - 1);
+      reply.header('X-RateLimit-Limit', maxRequests.toString());
+      reply.header('X-RateLimit-Remaining', remaining.toString());
+      reply.header('X-RateLimit-Reset', Math.ceil((now + windowMs) / 1000).toString());
+
       // Check if limit exceeded
       if (currentCount >= maxRequests) {
         // Get the oldest entry to calculate retry-after
@@ -93,20 +99,21 @@ export function createRateLimiter(options: RateLimitOptions = {}) {
         error.retryAfter = Math.ceil(retryAfterMs / 1000);
         throw error;
       }
-
-      // Set rate limit headers
-      const remaining = Math.max(0, maxRequests - currentCount - 1);
-      reply.header('X-RateLimit-Limit', maxRequests.toString());
-      reply.header('X-RateLimit-Remaining', remaining.toString());
-      reply.header('X-RateLimit-Reset', Math.ceil((now + windowMs) / 1000).toString());
     } catch (err) {
-      // If Redis is unavailable, we fail open (allow request) but log the error
+      // Redis is a required dependency for request admission. Never allow a request
+      // without a working limiter: this API can trigger paid LLM work.
       if (err instanceof Error && 'code' in err && (err as RateLimitError).code === 'RATE_LIMIT_EXCEEDED') {
         const rateLimitErr = err as RateLimitError;
         reply.header('Retry-After', rateLimitErr.retryAfter.toString());
         throw err;
       }
-      req.log?.warn({ err }, 'Rate limiter error, failing open');
+      
+      req.log?.error({ err }, 'Rate limiter unavailable, failing closed');
+      const unavailableError = new Error('Rate limiting temporarily unavailable') as RateLimitError;
+      unavailableError.code = 'RATE_LIMITER_UNAVAILABLE';
+      unavailableError.statusCode = 503;
+      unavailableError.retryAfter = 5;
+      throw unavailableError;
     }
   };
 }

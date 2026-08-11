@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const loaderPath = resolve(rootDir, 'dist', 'style-engine', 'loader.js');
 const registryPath = resolve(rootDir, 'dist', 'style-engine', 'registry.json');
-const { loadStyle } = await import(pathToFileURL(loaderPath).href);
+const { loadStyle, clearStyleEngineCache } = await import(pathToFileURL(loaderPath).href);
 
 const styles = ['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI', 'KANCLER'];
 
@@ -25,9 +25,11 @@ try {
   const disabledRegistry = JSON.parse(originalRegistry);
   disabledRegistry.pofeni.enabled = false;
   await writeFile(registryPath, `${JSON.stringify(disabledRegistry, null, 2)}\n`, 'utf8');
+  clearStyleEngineCache();
   await assert.rejects(() => loadStyle('pofeni'), /Unknown or disabled style/);
 } finally {
   await writeFile(registryPath, originalRegistry, 'utf8');
+  clearStyleEngineCache();
 }
 
 console.log('Style Engine build and runtime checks passed');

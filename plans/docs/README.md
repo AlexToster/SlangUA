@@ -4,7 +4,7 @@
 
 ---
 
-Навігація — hub-and-spoke між трьома рівнями (README.md → цей індекс → architecture.md/01-07); посилання в обидва боки між сусідніми рівнями є навмисними, не дублюванням.
+Навігація — hub-and-spoke між трьома рівнями (README.md → цей індекс → architecture.md/01-08); посилання в обидва боки між сусідніми рівнями є навмисними, не дублюванням.
 
 ## Документи
 
@@ -17,6 +17,9 @@
 | **05-decisions.md** | Architectural Decisions — прийняті архітектурні рішення та їх обґрунтування. |
 | **06-security.md** | Security — автентифікація, авторизація, rate limiting, захист даних. |
 | **07-styles.md** | Style Engine Specification — архітектура системи стилів, структура Style Engine та специфікація стилів. |
+| **08-frontend-design.md** | Frontend Design Specification (Stage 6) — UX, стани, Telegram behavior, API gaps та acceptance criteria для Mini App. |
+| **09-telegram-sharing.md** | Telegram-native Sharing Architecture — explicit share flow, privacy model, inline bot contract and rollout criteria. |
+| **10-repository-hygiene.md** | Repository hygiene audit and separately reviewable cleanup plan for tracked secrets and dependencies. |
 
 ---
 

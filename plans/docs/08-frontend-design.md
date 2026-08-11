@@ -1,0 +1,300 @@
+# Frontend Design Specification — Stage 6
+
+## 1. Призначення й межі
+
+Цей документ є затвердженим дизайном Telegram Mini App для SlangUA та джерелом вимог для Stage 7. Застосунок стилізує введений текст у вибраний український стиль; це не чат, редактор документів чи адміністраторська консоль.
+
+У Stage 6 проєктується UX, стани, контракти клієнта й критерії приймання. Реалізація React/Vite та Telegram SDK належить до Stage 7.
+
+### 1.1. У scope
+
+- екран **Translate** як кореневий і стартовий екран;
+- **History**: тільки збережені користувачем результати;
+- **Settings**: профільні та локальні налаштування;
+- Telegram bootstrap, тема, safe area, haptic feedback, clipboard, відновлення сесії та помилки мережі;
+- mobile-first UI для Telegram Mini App.
+
+### 1.2. Поза scope
+
+- окремий Home-екран або Home-вкладка — технічний маршрут `/` одразу рендерить Translate;
+- адмінка, статистика, модерація та керування стилями;
+- окрема веб/PWA-версія;
+- голосовий ввід, OCR, підписки та аналітика;
+- будь-яка реалізація фронтенду в межах Stage 6.
+
+## 2. Інформаційна архітектура
+
+Нижня навігація містить тільки три пункти: **Translate**, **History**, **Settings**. Translate вибраний за замовчуванням. На малих екранах навігація не повинна перекривати поле результату або Telegram safe area.
+
+```text
+/
+└── Translate (root)
+    ├── selector стилю (bottom sheet)
+    ├── поле вводу
+    └── результат
+
+/history
+└── список → деталі перекладу
+
+/settings
+├── вигляд і взаємодія
+├── переклад і 18+ доступ
+└── підтримка й інформація
+```
+
+### 2.1. Принцип перекладу
+
+На Translate немає кнопки «Перекласти». Переклад виконується автоматично після паузи у введенні. Це головна взаємодія продукту, тому індикатор стану має бути зрозумілим і не блокувати редагування тексту.
+
+1. Користувач вводить або вставляє текст.
+2. Після 700 мс без змін, якщо текст містить щонайменше 3 непробільні символи, клієнт запитує preview-переклад.
+3. Поки відповідь очікується, попередній результат залишається видимим, але має ненав'язливий стан «Оновлюємо…».
+4. Відповідь замінює результат лише якщо вона відповідає останній версії тексту й стилю.
+5. При зміні стилю поточний непорожній текст перекладається одразу, без 700 мс затримки. Якщо тексту немає, змінюється тільки вибір стилю.
+
+Кнопка «Повторити» з'являється лише у стані помилки; вона не є основною дією екрана.
+
+## 3. Екран Translate
+
+### 3.1. Верхня частина і вибір стилю
+
+У верхній частині екрана знаходиться компактна кнопка з поточною назвою стилю, наприклад `Gen Z ▾`. Вона не є додатковою навігацією й завжди доступна до вводу тексту.
+
+Натискання відкриває bottom sheet:
+
+- назва й короткий опис кожного стилю з `GET /styles`;
+- активний стиль позначений візуально й доступно для screen reader;
+- недоступні 18+ стилі **не показуються в селекторі**, бо `GET /styles` **відфільтровує їх на сервері** залежно від `ageConfirmedAdult` користувача;
+- **підтвердження 18+ (self-attestation) є лише в Settings** — там користувач може ввімкнути `ageConfirmedAdult`, після чого список стилів refetch-иться;
+- **403 AGE_RESTRICTED_STYLE на Translate — лише recoverable fallback для застарілого локального вибору**: якщо користувач мав вибраний обмежений стиль у локальному стані (наприклад, після зміни `ageConfirmedAdult` на false), показуємо повідомлення і пропонуємо перехід у Settings;
+- якщо користувач обирає стиль, вибір одразу стає поточним і асинхронно зберігається як `defaultSlangStyle` через `PATCH /user/me`;
+- якщо збереження дефолту не вдалося, переклад продовжується з новим стилем у поточній сесії, а UI показує ненав'язливе повідомлення, що вибір не вдалося запам'ятати.
+
+Перший стиль після bootstrap — `defaultSlangStyle` з профілю, якщо він дозволений (сервер вже відфільтрував); інакше перший елемент відповіді `GET /styles`.
+
+### 3.2. Поле вводу
+
+Поле займає основний фокус екрана й містить:
+
+- багаторядковий textarea з коротким placeholder на кшталт «Напиши щось українською…»;
+- кнопку **Вставити** біля поля, видиму за наявності місця; у вузькому вигляді — доступну іконку з текстовим `aria-label`;
+- кнопку очищення, коли текст непорожній;
+- лічильник Unicode grapheme clusters у форматі `123 / 1 000`;
+- попереджувальний тон від 850 символів.
+
+Максимум — **1 000 символів**. Це достатньо для одного-двох коротких абзаців, зберігає швидку відповідь і зменшує витрати на часті автоматичні запити дешевих моделей. Клієнт не обрізає вставлений текст непомітно: над лімітом він не запускає переклад, показує пояснення та дає користувачу самостійно скоротити текст.
+
+Кнопка «Вставити» звертається до Clipboard API тільки після явного натискання. У разі відмови у дозволі або недоступності API показується короткий toast «Встав текст вручну»; поле лишається сфокусованим. Буфер не читається під час відкриття екрана або в background.
+
+### 3.3. Результат
+
+Блок результату міститься відразу під полем. Він має стабільну висоту або skeleton під час першого запиту, щоб не спричиняти стрибків layout.
+
+- Порожній стан: коротка підказка, що переклад з'явиться автоматично.
+- Завантаження: «Перекладаємо…» для першого результату; «Оновлюємо…» поверх попереднього результату для наступних.
+- Успіх: перекладений текст, назва використаного стилю, кнопка **Копіювати** та, коли Telegram inline sharing готовий і результат eligible, кнопка **Надіслати в Telegram**.
+- Копіювання записує лише текст результату в буфер, показує toast «Скопійовано» і, якщо увімкнено, Telegram haptic feedback.
+- Надсилання є явною дією й запускає Telegram inline flow; воно не створює публічний URL, не надсилає оригінальний текст за замовчуванням і не створює запису в History. Повний privacy, age-gate, API та fallback contract визначено у [09-telegram-sharing.md](09-telegram-sharing.md).
+- Помилка: зрозуміле повідомлення та дія «Повторити»; введений текст і вибраний стиль не втрачаються.
+
+Копіювання не створює запису в History і не змінює його. Збереження в History — явна другорядна дія `Зберегти`, доступна в overflow-меню результату. Після успіху воно змінюється на «Збережено». Така модель не створює історію з кожної паузи під час набору й не маскує витрати AI під фонову поведінку.
+
+## 4. Автоматичний переклад: стан, конкуренція й вартість
+
+### 4.1. Ключ запиту
+
+Ключ preview-запиту — нормалізована пара `{ text, style }`. Клієнт не повторює ідентичний успішний або активний запит у межах однієї сесії екрана. Нормалізація для ключа не змінює текст, що згодом буде показано чи збережено; вона служить лише дедуплікації.
+
+### 4.2. Застарілі відповіді
+
+- Будь-яке редагування тексту скасовує активний запит через `AbortController`, якщо транспорт це підтримує.
+- Поряд із скасуванням клієнт зберігає зростаючий `requestVersion`. Відповідь застосовується тільки якщо її версія та `{ text, style }` збігаються з актуальними.
+- Зміна стилю негайно створює нову версію; стара відповідь не може перезаписати результат навіть якщо сервер уже завершив її.
+
+### 4.3. Історія й API gap
+
+Поточний `POST /translate` одночасно генерує текст і створює `Translation` у базі. Його не можна викликати для автоматичного preview: кожна пауза у вводі засмітить History.
+
+Stage 7 uses the implemented authenticated `POST /translate/preview` with these properties:
+
+| Поле | Вимога |
+| --- | --- |
+| Запит | `{ text, style }`, з тією самою перевіркою стилю, age gate і захистом від prompt injection, що й звичайний переклад. |
+| Ліміт `text` | від 1 до 1 000 Unicode grapheme clusters після trim (Intl.Segmenter); whitespace-only відхиляється; однаковий ліміт у UI та сервері. |
+| Відповідь | `{ originalText, translatedText, slangStyle, aiProvider, previewId }`; без `id`, `favorite`, `createdAt`. `previewId` — криптографічно випадковий opaque UUID. |
+| Побічні ефекти | не створює і не оновлює `Translation` у базі. Сервер короткочасно зберігає exact preview result (зашифрований) у Redis, прив'язаний до userId: originalText, translatedText, style, styleVersion, aiProvider, expiry (10 хв). |
+| Помилки | зберігає семантику 400, 401, 403, 422, 429 і 503 чинного `/translate`. |
+
+Для явного збереження результату потрібен `POST /translate/save` з body `{ previewId }`. Він має:
+- перевірити власника й TTL preview;
+- створити `Translation` з рівно тим текстом, який користувач бачив у preview (WYSIWYG persistence);
+- не викликати LLM повторно;
+- бути ідемпотентним: повторення того самого save після network timeout повертає 409 PREVIEW_ALREADY_SAVED, а не дублює запис;
+- не приймати `originalText` або `translatedText` від клієнта.
+
+Для зменшення витрат додано server-side cache preview за HMAC-хешем `userId + normalized text + style + styleVersion`. Текст НЕ зберігається у Redis key. Дані preview/cache з текстом зашифровані на рівні застосунку (AES-256-GCM), мають TTL 10 хвилин, не логуються і видаляються після успішного save, окрім короткого idempotency marker.
+
+Окремі rate limits:
+- preview: 12 запитів/хвилину на користувача (configurable via `PREVIEW_RATE_LIMIT_MAX_REQUESTS`, `PREVIEW_RATE_LIMIT_WINDOW_MS`, prefix `ratelimit:preview`)
+- save: 10 запитів/хвилину на користувача (configurable via `SAVE_RATE_LIMIT_MAX_REQUESTS`, `SAVE_RATE_LIMIT_WINDOW_MS`, prefix `ratelimit:save`)
+- persistent translate: залишається незалежним лімітом
+
+The server enforces 1,000 Unicode grapheme clusters with `Intl.Segmenter` for both preview and direct translation. The UI mirrors this limit; it is not the security boundary.
+
+## 5. History
+
+History відображає лише явно збережені переклади, від найновіших до найстаріших.
+
+- пошук за оригіналом і результатом;
+- фільтр «Обрані»;
+- cursor pagination: `nextCursor` передається серверу без модифікації;
+- картка показує оригінал, стилізований результат, стиль, дату та статус обраного;
+- натискання відкриває деталі з копіюванням, перемиканням favorite і видаленням;
+- видалення потребує явного підтвердження та оптимістично прибирає запис із можливим rollback;
+- порожній стан відрізняє «ще нічого не збережено» від «за вашим пошуком нічого немає».
+
+Після успішного збереження з Translate кеш першої сторінки History інвалідовується або отримує оптимістичне доповнення. Preview-відповіді не інвалідовують History.
+
+## 6. Settings
+
+Налаштування групуються за наміром, а не за технічною реалізацією.
+
+### 6.1. Appearance
+
+- **Тема:** `Як у Telegram` (default), `Світла`, `Темна`.
+- Тема `Як у Telegram` використовує поточні Telegram theme tokens і оновлюється при зміні теми host-застосунку.
+- Явний вибір світлої або темної теми перекриває host theme, але зберігає його semantic colors там, де це можливо.
+
+### 6.2. Interaction
+
+- **Тактильний відгук:** toggle, увімкнений за замовчуванням. Застосовується лише до успішного копіювання, збереження, зміни стилю та підтверджених destructive actions; не спрацьовує на кожному символі чи loading.
+- **Звуки подій:** toggle, вимкнений за замовчуванням. Якщо середовище не дозволяє безпечне відтворення звуку або користувач обрав тихий режим, звуки не програються; haptic не є їхньою обов'язковою заміною.
+- **Сповіщення:** наявний серверний `notificationsEnabled`; пояснити, який саме канал буде підтриманий, до появи push/бот-повідомлень. Не називати toggle «push», доки це не реалізовано.
+
+### 6.3. Translation and age gate
+
+- стиль за замовчуванням повторює selector стилів і зберігається як `defaultSlangStyle`;
+- self-attestation 18+ показується перед отриманням/використанням обмеженого стилю, пояснює мету й не удає собою перевірку особи;
+- у діалозі є чіткі дії «Підтверджую, що мені 18+» та «Скасувати»;
+- після зміни `ageConfirmedAdult` список стилів refetch-иться.
+
+### 6.4. Support and about
+
+- **Зворотний зв'язок:** відкриває зовнішнє посилання на підтримку або форму, задану конфігурацією середовища. У першій версії не передавати автоматично текст перекладу, Telegram ID або токени.
+- **Про програму:** назва SlangUA, версія клієнта, посилання на правила використання й політику приватності.
+- **Вийти:** викликає `POST /auth/logout`, очищає локальні токени та показує Translate у re-auth стані. Telegram identity не намагаються «вийти» з самого Telegram.
+
+### 6.5. Зберігання налаштувань
+
+| Налаштування | Джерело правди | Синхронізація |
+| --- | --- | --- |
+| `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult` | `GET/PATCH /user/me` | React Query mutation з rollback при помилці |
+| **theme override, sound, haptic feedback** | **localStorage цього Mini App** (не Telegram CloudStorage) | **застосовується до першого paint, коли можливо** |
+| Support/Privacy/Terms URLs, версія | build-time environment/config | read-only для користувача |
+
+## 7. Bootstrap, сесія і мережева поведінка
+
+1. Ініціалізувати Telegram WebApp, повідомити host про готовність і прочитати theme/safe-area дані.
+2. Надіслати raw `initData` до `POST /auth/telegram`.
+3. Зберегти access token лише в пам'яті клієнта; refresh token живе тільки в HttpOnly cookie, а coordinated refresh надсилає CSRF header відповідно до політики безпеки Stage 5.
+4. Паралельно завантажити `GET /user/me` і `GET /styles`.
+5. Показати Translate, щойно доступні необхідні стиль і профіль; не створювати окремий auth-екран.
+
+При 401 клієнт виконує один координований refresh для всіх паралельних запитів. Якщо refresh неуспішний, очищає сесію та показує recoverable state «Відкрий застосунок у Telegram ще раз». Повторні 401 не запускають циклічний refresh.
+
+Offline стан не очищає чернетку, результат чи вибраний стиль. Автопереклад відновлюється тільки після нового debounce або явного `Повторити`, а не масово одразу після повернення мережі.
+
+## 8. Матриця станів і помилок
+
+| Сценарій | UI-реакція | Відновлення |
+| --- | --- | --- |
+| Порожній текст | Підказка у блоці результату | Почати вводити текст |
+| Менше 3 символів | Переклад не запускається | Продовжити введення |
+| 3–1 000 символів, debounce | Легкий індикатор очікування | Автоматично надіслати один preview |
+| Preview loading | Skeleton або «Перекладаємо…» | Нове редагування скасовує/застарює запит |
+| 400 | Пояснення невалідного тексту чи стилю | Виправити текст/перевідкрити selector |
+| 401 | Спроба одного refresh, потім re-auth | Відкрити Mini App у Telegram повторно |
+| **403 `AGE_RESTRICTED_STYLE` (на Translate)** | **Toast: «Цей стиль доступний лише 18+. Підтвердь вік у Settings.» + кнопка «Відкрити Settings»** | **Перехід у Settings → ввімкнути 18+ → refetch стилів** |
+| 422 | «Не вдалося обробити цей текст» без деталей захисту | Відредагувати текст |
+| 429 | Зберегти текст і показати час/пораду зачекати | Ручний retry після cooldown |
+| 503 | «Сервіс перекладу тимчасово недоступний» | Ручний retry |
+| Clipboard denied | Toast без помилки форми | Вставити/скопіювати вручну |
+| Перевищено 1 000 | Лічильник error, preview не викликається | Скоротити текст |
+| Збереження History не вдалося | Результат лишається на екрані, «Зберегти» доступне знову | Повторити збереження |
+| **Offline** | **Banner/Toast: «Немає з'єднання. Автопереклад відновиться після повернення мережі.»** | **Автоматичний retry після debounce або явний «Повторити»** |
+
+## 9. State management і query contracts
+
+### 9.1. React Query server state
+
+- `['profile']` → `GET /user/me`;
+- `['styles', profile.ageConfirmedAdult]` → `GET /styles`;
+- `['history', { search, favorite }]` → нескінченні сторінки `GET /history`;
+- mutation `previewTranslation({ text, style })` → implemented `POST /translate/preview`;
+- mutations профілю, favorite, delete і save history мають адресну інвалідацію відповідних query keys.
+
+### 9.2. Local state
+
+- `draftText`, `selectedStyle`, `requestVersion`, debounce timer і active abort controller;
+- поточний preview-результат і його ключ;
+- видимість style sheet, age-gate діалогу, delete-confirmation і toast;
+- тема, звук і haptic preference після гідрації локального сховища.
+
+Усі мутації, що змінюють улюблені або профільні налаштування, мають optimistic update та точний rollback попереднього значення. Preview не оптимістично змінює History або профіль.
+
+## 10. Візуальний дизайн і доступність
+
+- mobile-first; робоча ширина від 320 px;
+- використовувати семантичні Telegram theme tokens, не жорстко задані кольори;
+- врахувати `safeAreaInset` / viewport host-застосунку і клавіатуру;
+- результат, стани завантаження й toast мають оголошуватися через коректні live regions, але не на кожен keystroke;
+- усі іконкові кнопки мають видимий tooltip або `aria-label`, touch target не менше 44×44 px;
+- контраст, focus state та порядок tab/focus обов'язкові; bottom sheet повертає фокус на кнопку стилю після закриття;
+- текст не передається у clipboard, haptic чи зовнішній feedback без явної дії користувача.
+
+Telegram Main Button не є кнопкою перекладу й не дублює автоматичну основну взаємодію. Її можна використати лише для контекстної дії підтвердження у модальному 18+ сценарії, якщо це не погіршує доступність і не дублює діалогову кнопку.
+
+## 11. API traceability і передумови Stage 7
+
+| UI-функція | Наявний маршрут | Статус для Stage 7 |
+| --- | --- | --- |
+| Bootstrap | `POST /auth/telegram`, `POST /auth/refresh`, `POST /auth/logout` | Готово, потрібен клієнтський coordinator refresh |
+| Профіль і серверні preferences | `GET/PATCH /user/me` | Готово для стилю, notifications і 18+ |
+| Стилі | `GET /styles` | Готово; використовувати тільки відповідь сервера |
+| Автоматичний переклад | `POST /translate/preview` | Готово: non-persistent preview з cache/TTL та abort/request-version захистом у UI |
+| Ліміт тексту | `/translate` і `/translate/preview` | Готово: 1 000 Unicode grapheme clusters на сервері та в UI |
+| Явне збереження | `POST /translate/save` | Готово: server-side WYSIWYG save за `previewId` |
+| Telegram-native sharing | `POST /share/inline` + encrypted Redis payload + webhook handler | Готово у backend і Mini App для live previews та saved History; потребує production inline-bot/BotFather configuration і ручної перевірки в Telegram; див. [09-telegram-sharing.md](09-telegram-sharing.md) |
+| History | `GET /history`, `PATCH/DELETE /history/:id` | Готово після узгодження джерела створення записів |
+| Theme, sound, haptic | немає API | Локальна client preference, backend не потрібен |
+| Feedback/About URLs | немає API | Build-time config, backend не потрібен для першої версії |
+
+## 12. Критерії приймання Stage 7
+
+- `/` відкриває Translate; UI не має Home-вкладки, Home-екрана чи адмінських функцій.
+- Текст від 3 до 1 000 символів автоматично створює не більше одного preview-запиту для незмінної пари `{ text, style }` після 700 мс паузи.
+- Старі відповіді ніколи не замінюють результат для новішого тексту або стилю.
+- Зміна стилю з непорожнім текстом оновлює переклад; без тексту не викликає API.
+- Вставлення й копіювання працюють після явної дії, коректно обробляють відмову Clipboard API та не читають буфер у background.
+- `Надіслати в Telegram` з'являється лише в клієнтах із `Telegram.WebApp.switchInlineQuery` для shareable preview або History result. Share є explicit, не створює публічний URL чи History-запис, зберігає Copy fallback і застосовує server-side age/content/ownership checks за [09-telegram-sharing.md](09-telegram-sharing.md).
+- UI і сервер однаково відхиляють текст понад 1 000 символів.
+- Автоматичний preview не створює записів у History. Збереження є явною дією й не довіряє згенерованому тексту з клієнта.
+- Settings містить тему, haptic, звуки, сповіщення, стиль, **18+ self-attestation (єдине місце підтвердження віку)**, feedback, about і logout; кожне налаштування має визначене джерело правди.
+- **`GET /styles` відфільтровує restricted styles серверно залежно від `ageConfirmedAdult`; Translate selector не показує locked POFENI. 403 AGE_RESTRICTED_STYLE на Translate — лише recoverable fallback для застарілого локального вибору: toast + кнопка «Відкрити Settings».**
+- **theme override, sound, haptic feedback зберігаються у localStorage цього Mini App (не Telegram CloudStorage). Server-side лишаються лише `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult`.**
+- Для 400, 401, 403, 422, 429, 503, offline та clipboard-denied є окремі стани й зрозумілі шляхи відновлення.
+- Інтерфейс проходить ручну перевірку у світлій і темній Telegram темі, з відкритою клавіатурою та на ширині 320 px.
+
+## 13. Промпт для інтеграції у Stage 7
+
+```text
+Complete the remaining Stage 7 Telegram Mini App acceptance checks in plans/docs/08-frontend-design.md.
+
+Treat plans/docs/04-api.md as the API contract. Keep `/` as the Translate screen; do not add a Home or admin screen. Preserve the implemented preview/save/share flow: debounce preview after 700 ms and 3 characters, cancel stale requests, enforce the 1,000-grapheme UI limit, and never send client-generated translated text to persistence endpoints.
+
+Use only server-filtered styles. Age confirmation remains in Settings, and AGE_RESTRICTED_STYLE is a recoverable stale-selection fallback. Keep theme, sound, and haptic preferences in this Mini App's localStorage; server-side preferences remain defaultSlangStyle, notificationsEnabled, and ageConfirmedAdult.
+
+For Telegram sharing, show the explicit action only when switchInlineQuery is available and the result is eligible. Send only a previewId or translationId to POST /share/inline, then pass only the returned opaque query to Telegram. Retain Copy fallback for every share error.
+
+Finish only after all remaining Section 12 criteria are verified and plans/docs/04-api.md is updated for any intentional API change.
+```

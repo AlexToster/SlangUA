@@ -1,0 +1,388 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import axios from 'axios';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { apiService } from '../services/api';
+import { canUseTelegramInlineSharing, openTelegramInlineQuery, triggerHapticFeedback } from '../services/telegram';
+import { countGraphemes } from '../utils/text';
+import { StyleSelector } from '../components/StyleSelector';
+import { TextInput } from '../components/TextInput';
+import { PreviewResult } from '../components/PreviewResult';
+import { Toast } from '../components/Toast';
+import type { PreviewResult as PreviewResultType, ShareSource, SlangStyle } from '../types/api';
+import './TranslatePage.css';
+
+const DEBOUNCE_MS = 700;
+const MIN_CHARS_FOR_PREVIEW = 3;
+const MAX_GRAPHEMES = 1000;
+
+export function TranslatePage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [selectedStyle, setSelectedStyle] = useState<SlangStyle | null>(null);
+  const [draftText, setDraftText] = useState('');
+  const [showStyleSheet, setShowStyleSheet] = useState(false);
+  const [showAgeGateToast, setShowAgeGateToast] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [currentPreview, setCurrentPreview] = useState<PreviewResultType | null>(null);
+  const [savedTranslationId, setSavedTranslationId] = useState<number | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastPreviewKeyRef = useRef<string | null>(null);
+  const previousStyleRef = useRef<SlangStyle | null>(null);
+  const previousInputKeyRef = useRef<string | null>(null);
+
+  // Fetch styles and profile
+  const {
+    data: styles = [],
+    isLoading: stylesLoading,
+    isError: stylesError,
+    refetch: refetchStyles,
+  } = useQuery({
+    queryKey: ['styles'],
+    queryFn: () => apiService.getStyles(),
+    enabled: apiService.isAuthenticated(),
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => apiService.getProfile(),
+    enabled: apiService.isAuthenticated(),
+  });
+
+  // Initialize selected style from profile or first available style
+  useEffect(() => {
+    if (styles && styles.length > 0 && !selectedStyle) {
+      const defaultStyle = profile?.defaultSlangStyle;
+      if (defaultStyle && styles.some(s => s.id === defaultStyle)) {
+        setSelectedStyle(defaultStyle);
+      } else {
+        setSelectedStyle(styles[0].id);
+      }
+    }
+  }, [styles, profile, selectedStyle]);
+
+  // Save default style when changed
+  const updateDefaultStyleMutation = useMutation({
+    mutationFn: (style: SlangStyle) => apiService.updateProfile({ defaultSlangStyle: style }),
+    onError: () => {
+      setToast({ message: 'Не вдалося запам\'ятати вибір стилю', type: 'error' });
+    },
+  });
+
+  const handleApiError = useCallback((error: any) => {
+    const status = error?.response?.status;
+    const code = error?.response?.data?.code;
+    const message = error?.response?.data?.message || error?.message;
+
+    switch (status) {
+      case 400:
+        setErrorBanner({ message: `Невалідний запит: ${message}`, code: 'BAD_REQUEST' });
+        break;
+      case 401:
+        break;
+      case 403:
+        if (code === 'AGE_RESTRICTED_STYLE') setShowAgeGateToast(true);
+        else setErrorBanner({ message: 'Доступ заборонено', code: 'FORBIDDEN' });
+        break;
+      case 422:
+        setErrorBanner({ message: 'Не вдалося обробити цей текст', code: 'UNPROCESSABLE' });
+        break;
+      case 429:
+        setErrorBanner({ message: 'Забагато запитів. Зачекайте перед повторною спробою.', code: 'RATE_LIMITED' });
+        break;
+      case 503:
+        setErrorBanner({ message: 'Сервіс перекладу тимчасово недоступний', code: 'SERVICE_UNAVAILABLE' });
+        break;
+      default:
+        setErrorBanner(!navigator.onLine
+          ? { message: 'Немає з\'єднання. Автопереклад відновиться після повернення мережі.', code: 'OFFLINE' }
+          : { message: 'Сталася помилка. Спробуйте ще раз.', code: 'UNKNOWN' });
+    }
+  }, []);
+
+  // Preview translation mutation
+  const previewMutation = useMutation({
+    mutationFn: ({ text, style, signal }: { text: string; style: SlangStyle; signal: AbortSignal }) =>
+      apiService.translatePreview(text, style, signal),
+    onSuccess: (data, variables) => {
+      const currentKey = `${variables.text}|${variables.style}`;
+      if (currentKey === lastPreviewKeyRef.current) {
+        setCurrentPreview(data);
+        setSavedTranslationId(null);
+        queryClient.setQueryData(['preview', currentKey], data);
+      }
+    },
+    onError: (error: any) => {
+      if (!axios.isCancel(error) && error?.code !== 'ERR_CANCELED') handleApiError(error);
+    },
+  });
+
+  // Save translation mutation
+  const saveMutation = useMutation({
+    mutationFn: (previewId: string) => apiService.saveFromPreview(previewId),
+    onSuccess: (translation) => {
+      setSavedTranslationId(translation.id);
+      setToast({ message: 'Збережено в історію', type: 'success' });
+      triggerHapticFeedback('notification');
+      queryClient.invalidateQueries({ queryKey: ['history'] });
+    },
+    onError: (error: any) => {
+      handleApiError(error);
+    },
+  });
+
+  const shareMutation = useMutation({
+    mutationFn: (source: ShareSource) => apiService.createInlineShare(source),
+    onSuccess: ({ inlineQuery }) => {
+      try {
+        openTelegramInlineQuery(inlineQuery);
+        triggerHapticFeedback('notification');
+      } catch {
+        setToast({ message: 'Telegram не підтримує надсилання inline у цьому клієнті. Скопіюй результат.', type: 'error' });
+      }
+    },
+    onError: (error: any) => {
+      const status = error?.response?.status;
+      const code = error?.response?.data?.code;
+      if (code === 'AGE_RESTRICTED_SHARE') {
+        setToast({ message: 'Результати 18+ не можна надіслати в Telegram. Скопіюй текст.', type: 'info' });
+      } else if (code === 'SHARE_TEXT_TOO_LONG') {
+        setToast({ message: 'Цей результат задовгий для Telegram. Скопіюй текст.', type: 'error' });
+      } else if (code === 'SHARE_SOURCE_NOT_FOUND' || status === 410) {
+        setToast({ message: 'Результат більше недоступний для надсилання. Скопіюй або створи новий preview.', type: 'error' });
+      } else if (status === 429) {
+        setToast({ message: 'Забагато спроб надсилання. Зачекай і повтори.', type: 'error' });
+      } else if (code === 'TELEGRAM_INLINE_UNAVAILABLE' || status === 503) {
+        setToast({ message: 'Надсилання в Telegram тимчасово недоступне. Скопіюй результат.', type: 'error' });
+      } else {
+        setToast({ message: 'Не вдалося підготувати надсилання. Скопіюй результат.', type: 'error' });
+      }
+    },
+  });
+
+  // Handle online/offline
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    setIsOnline(navigator.onLine);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Cancel a previous preview immediately when its input or style changes.
+  useEffect(() => {
+    const inputKey = `${draftText}|${selectedStyle ?? ''}`;
+    if (previousInputKeyRef.current !== null && previousInputKeyRef.current !== inputKey) {
+      abortControllerRef.current?.abort();
+    }
+    previousInputKeyRef.current = inputKey;
+  }, [draftText, selectedStyle]);
+
+  // Debounced preview. A style change is the one exception: it refreshes immediately.
+  useEffect(() => {
+    const normalizedDraft = draftText.trim();
+    const graphemeCount = countGraphemes(normalizedDraft);
+    if (!selectedStyle || graphemeCount < MIN_CHARS_FOR_PREVIEW) {
+      abortControllerRef.current?.abort();
+      setCurrentPreview(null);
+      return;
+    }
+
+    if (graphemeCount > MAX_GRAPHEMES) {
+      abortControllerRef.current?.abort();
+      return;
+    }
+
+    const styleChanged = previousStyleRef.current !== null && previousStyleRef.current !== selectedStyle;
+    previousStyleRef.current = selectedStyle;
+
+    const runPreview = () => {
+      if (!isOnline) {
+        setErrorBanner({ message: 'Немає з\'єднання. Автопереклад відновиться після повернення мережі.', code: 'OFFLINE' });
+        return;
+      }
+
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const previewKey = `${draftText}|${selectedStyle}`;
+      lastPreviewKeyRef.current = previewKey;
+
+      const cached = queryClient.getQueryData<PreviewResultType>(['preview', previewKey]);
+      if (cached) {
+        setCurrentPreview(cached);
+        return;
+      }
+
+      previewMutation.mutate({ text: draftText, style: selectedStyle, signal: controller.signal });
+    };
+
+    if (styleChanged) {
+      runPreview();
+      return;
+    }
+
+    const timer = window.setTimeout(runPreview, DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [draftText, selectedStyle, isOnline, retryNonce, queryClient, previewMutation]);
+
+  // Handle style change
+  const handleStyleChange = useCallback((style: SlangStyle) => {
+    setSelectedStyle(style);
+    setSavedTranslationId(null);
+    setShowStyleSheet(false);
+    updateDefaultStyleMutation.mutate(style);
+    triggerHapticFeedback('selection');
+  }, [updateDefaultStyleMutation]);
+
+  // Handle text change
+  const handleTextChange = useCallback((text: string) => {
+    setDraftText(text);
+    setSavedTranslationId(null);
+    setErrorBanner(null);
+  }, []);
+
+  // Handle paste
+  const handlePaste = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const graphemeCount = countGraphemes(text);
+      if (graphemeCount > MAX_GRAPHEMES) {
+        setToast({ message: `Текст занадто довгий (макс. ${MAX_GRAPHEMES} символів)`, type: 'error' });
+        return;
+      }
+      setDraftText(text);
+      triggerHapticFeedback('impact');
+    } catch {
+      setToast({ message: 'Встав текст вручну', type: 'error' });
+    }
+  }, []);
+
+  // Handle copy result
+  const handleCopy = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setToast({ message: 'Скопійовано', type: 'success' });
+      triggerHapticFeedback('impact');
+    } catch {
+      setToast({ message: 'Не вдалося скопіювати', type: 'error' });
+    }
+  }, []);
+
+  // Handle save
+  const handleSave = useCallback(() => {
+    if (currentPreview?.previewId) {
+      saveMutation.mutate(currentPreview.previewId);
+    }
+  }, [currentPreview, saveMutation]);
+
+  const handleShare = useCallback(() => {
+    if (!currentPreview || !canUseTelegramInlineSharing()) return;
+    const source: ShareSource = savedTranslationId !== null
+      ? { translationId: savedTranslationId }
+      : { previewId: currentPreview.previewId };
+    shareMutation.mutate(source);
+  }, [currentPreview, savedTranslationId, shareMutation]);
+
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    if (selectedStyle && draftText.length >= MIN_CHARS_FOR_PREVIEW) {
+      setErrorBanner(null);
+      setRetryNonce(v => v + 1);
+    }
+  }, [selectedStyle, draftText]);
+
+  // Handle age gate toast action
+  const handleOpenSettings = useCallback(() => {
+    setShowAgeGateToast(false);
+    navigate('/settings');
+  }, [navigate]);
+
+  // Clear toast
+  const clearToast = useCallback(() => setToast(null), []);
+
+  // Compute grapheme count
+  const graphemeCount = countGraphemes(draftText);
+  const isOverLimit = graphemeCount > MAX_GRAPHEMES;
+  const isWarningZone = graphemeCount >= 850 && !isOverLimit;
+
+  if (stylesLoading) {
+    return (
+      <div className="translate-page loading" role="status" aria-label="Завантаження стилів">
+        <div className="loading-spinner" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="translate-page">
+      <header className="translate-header">
+        <StyleSelector
+          styles={styles}
+          selectedStyle={selectedStyle}
+          onSelect={handleStyleChange}
+          isOpen={showStyleSheet}
+          onToggle={setShowStyleSheet}
+          isLoading={stylesLoading}
+          isError={stylesError}
+          isAuthenticated={apiService.isAuthenticated()}
+          onRetry={() => void refetchStyles()}
+        />
+      </header>
+
+      <main className="translate-main">
+        <TextInput
+          value={draftText}
+          onChange={handleTextChange}
+          onPaste={handlePaste}
+          graphemeCount={graphemeCount}
+          maxGraphemes={MAX_GRAPHEMES}
+          isWarningZone={isWarningZone}
+          isOverLimit={isOverLimit}
+          placeholder="Напиши щось українською…"
+        />
+
+        <PreviewResult
+          preview={currentPreview}
+          isLoading={previewMutation.isPending}
+          isError={previewMutation.isError}
+          errorBanner={errorBanner}
+          onRetry={handleRetry}
+          draftText={draftText}
+          onCopy={handleCopy}
+          onSave={handleSave}
+          canSave={!!currentPreview?.previewId && !saveMutation.isPending}
+          isSaving={saveMutation.isPending}
+          onShare={handleShare}
+          canShare={canUseTelegramInlineSharing() && currentPreview?.slangStyle !== 'POFENI'}
+          isSharing={shareMutation.isPending}
+        />
+      </main>
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={clearToast} />
+      )}
+
+      {showAgeGateToast && (
+        <Toast
+          message="Цей стиль доступний лише 18+. Підтвердь вік у Settings."
+          type="info"
+          action={{ label: 'Відкрити Settings', onClick: handleOpenSettings }}
+          onClose={() => setShowAgeGateToast(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+export default TranslatePage;

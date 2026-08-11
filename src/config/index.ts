@@ -22,6 +22,8 @@ const envSchema = z.object({
 
   // Telegram
   TELEGRAM_BOT_TOKEN: z.string().min(1),
+  TELEGRAM_INLINE_ENABLED: z.enum(['true', 'false']).transform(v => v === 'true').default('false'),
+  TELEGRAM_WEBHOOK_SECRET: z.string().min(1).optional(),
   AUTH_DATE_TTL: z.coerce.number().default(86400), // 24 hours in seconds
 
   // AI Provider API Keys
@@ -53,11 +55,38 @@ const envSchema = z.object({
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
 
   // Rate Limiting
+  GLOBAL_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  GLOBAL_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+  
+  // Preview Rate Limiting (separate from persistent translate)
+  PREVIEW_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  PREVIEW_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(12),
+  PREVIEW_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:preview'),
+  
+  // Save Rate Limiting (separate from preview and persistent translate)
+  SAVE_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  SAVE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(10),
+  SAVE_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:save'),
+  
+  // Preview Cache
+  PREVIEW_CACHE_TTL_SECONDS: z.coerce.number().default(600), // 10 minutes
+  // A 32-byte random key, encoded as base64. Domain-specific keys are derived with HKDF.
+  PREVIEW_ROOT_KEY: z.string().refine(
+    (value) => /^[A-Za-z0-9+/]+={0,2}$/.test(value) && Buffer.from(value, 'base64').length === 32,
+    'PREVIEW_ROOT_KEY must be a base64-encoded 32-byte key',
+  ),
+  PREVIEW_KEY_VERSION: z.string().regex(/^[A-Za-z0-9._-]{1,32}$/).default('v1'),
+
+  // Telegram share payloads
+  SHARE_CACHE_TTL_SECONDS: z.coerce.number().default(600),
+  SHARE_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  SHARE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(10),
+  SHARE_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:share'),
 
   // Trust Proxy (for correct IP detection behind reverse proxy)
-  TRUST_PROXY: z.coerce.boolean().default(false),
+  TRUST_PROXY: z.enum(['true', 'false']).transform(v => v === 'true').default('false'),
 
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

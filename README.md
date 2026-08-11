@@ -225,4 +225,52 @@ Style Engine відповідає лише за побудову системн�
 
 | Файл | Опис |
 | ---- | ---- |
-| **plans/docs/README.md** | Індекс архітектурної документації: огляд усіх документів у `plans/docs/` (01–07). |
+| **plans/docs/README.md** | Індекс архітектурної документації: огляд усіх документів у `plans/docs/` (01–08). |
+| **plans/docs/08-frontend-design.md** | Затверджена Stage 6 специфікація UX для Telegram Mini App і критерії реалізації Stage 7. |
+
+---
+
+# Тестування
+
+## Залежності для інтеграційних тестів
+
+**Docker Desktop** є обов'язковим для запуску інтеграційних тестів, оскільки вони використовують Testcontainers для створення тимчасових контейнерів PostgreSQL та Redis.
+
+## Команди для запуску тестів
+
+```bash
+# Повний набір тестів (typecheck + smoke + integration)
+npm test
+
+# Тільки перевірка типів
+npm run test:typecheck
+
+# Smoke-тест: production build + перевірка Style Engine
+npm run test:smoke
+
+# Інтеграційні тести (потрібен Docker)
+npm run test:integration
+```
+
+## Особливості інтеграційних тестів
+
+- Використовують **тимчасові контейнери** PostgreSQL та Redis (створюються автоматично через Testcontainers)
+- Використовують **локальний мок Ollama-сумісний сервер** (детермінований, без зовнішніх мережевих викликів)
+- **Нікаких зовнішніх викликів** до Telegram, OpenAI, Anthropic, Gemini, реального Ollama або інших сервісів
+- Тести запускаються **послідовно** (серіально), оскільки конфігурація додатка та синглтони сервісів є глобальними для процесу
+- Перед кожним тестом очищаються дані у Redis та PostgreSQL
+- Усі секрети (JWT_SECRET, REFRESH_TOKEN_HMAC_SECRET, TELEGRAM_BOT_TOKEN) — детерміновані тестові значення
+
+## Структура інтеграційних тестів
+
+```
+test/integration/
+├── auth.integration.test.ts        # Автентифікація (Telegram, refresh, logout, rate limit)
+├── translate.integration.test.ts   # Переклад (всі стилі, age gate, prompt injection, AI failure)
+├── history.integration.test.ts     # Історія (пагінація, фільтри, власність записів, user/me)
+├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429 shape)
+├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
+└── helpers/
+    ├── mock-ollama-server.ts       # Детермінований Ollama-сумісний мок
+    └── telegram-initdata.ts        # Генератор підписаних initData
+```

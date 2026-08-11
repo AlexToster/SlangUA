@@ -1,13 +1,70 @@
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify/types/instance';
+import { Prisma } from '@prisma/client';
 import { createRateLimiter } from '../plugins/rate-limit.js';
 import { authService } from '../services/auth.service.js';
+import { config } from '../config/index.js';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+
+const REFRESH_COOKIE = 'slangua_refresh';
+const CSRF_COOKIE = 'slangua_csrf';
+
+function refreshTtlSeconds(): number {
+  const match = /^(\d+)([smhd])$/.exec(config.JWT_REFRESH_TTL);
+  if (!match) throw new Error('JWT_REFRESH_TTL must use s, m, h, or d units');
+  const multipliers = { s: 1, m: 60, h: 3600, d: 86400 } as const;
+  return Number(match[1]) * multipliers[match[2] as keyof typeof multipliers];
+}
+
+function serializeCookie(name: string, value: string, httpOnly: boolean, maxAge = refreshTtlSeconds()): string {
+  const attributes = [`${name}=${encodeURIComponent(value)}`, 'Path=/api/v1/auth', `Max-Age=${maxAge}`, 'SameSite=Lax'];
+  if (config.NODE_ENV === 'production') attributes.push('Secure');
+  if (httpOnly) attributes.push('HttpOnly');
+  return attributes.join('; ');
+}
+
+function readCookie(header: string | undefined, name: string): string | undefined {
+  const cookie = header?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : undefined;
+}
+
+function validCsrf(request: any): boolean {
+  const cookie = readCookie(request.headers.cookie, CSRF_COOKIE);
+  const header = request.headers['x-csrf-token'];
+  if (!cookie || typeof header !== 'string') return false;
+  const left = Buffer.from(cookie);
+  const right = Buffer.from(header);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function setSessionCookies(reply: any, refreshToken: string): void {
+  const csrfToken = randomBytes(32).toString('base64url');
+  reply.header('Set-Cookie', [
+    serializeCookie(REFRESH_COOKIE, refreshToken, true),
+    serializeCookie(CSRF_COOKIE, csrfToken, false),
+  ]);
+}
+
+function clearSessionCookies(reply: any): void {
+  reply.header('Set-Cookie', [
+    serializeCookie(REFRESH_COOKIE, '', true, 0),
+    serializeCookie(CSRF_COOKIE, '', false, 0),
+  ]);
+}
 
 export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
-  // Create rate limiter for auth endpoint
-  const authRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 10, keyPrefix: 'ratelimit:auth' });
-  const refreshRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 10, keyPrefix: 'ratelimit:refresh' });
+  // Create rate limiter for auth endpoint - use config defaults (can be overridden in tests)
+  const authRateLimiter = createRateLimiter({
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
+    keyPrefix: 'ratelimit:auth'
+  });
+  const refreshRateLimiter = createRateLimiter({
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
+    keyPrefix: 'ratelimit:refresh'
+  });
 
   // POST /api/v1/auth/telegram - Exchange Telegram initData for JWT tokens
   app.post('/auth/telegram', {
@@ -18,7 +75,6 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
       response: {
         200: z.object({
           accessToken: z.string(),
-          refreshToken: z.string(),
         }),
         400: z.object({
           error: z.string(),
@@ -35,6 +91,11 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           code: z.string(),
           message: z.string(),
         }),
+        503: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     // Apply rate limiting: stricter limit for auth endpoint
@@ -44,7 +105,8 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
     
     try {
       const tokens = await authService.authenticateWithTelegram(initData);
-      return reply.send(tokens);
+      setSessionCookies(reply, tokens.refreshToken);
+      return reply.send({ accessToken: tokens.accessToken });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Telegram authentication failed';
       
@@ -53,6 +115,22 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           error: 'Unauthorized',
           code: 'AUTH_DATE_EXPIRED',
           message: 'Authentication data has expired',
+        });
+      }
+      
+      if (message === 'Invalid auth_date') {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          code: 'AUTH_DATE_INVALID',
+          message: 'Invalid authentication date',
+        });
+      }
+      
+      if (message === 'auth_date is too far in the future') {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          code: 'AUTH_DATE_FUTURE',
+          message: 'Authentication date is too far in the future',
         });
       }
       
@@ -83,13 +161,10 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
   // POST /api/v1/auth/refresh - Rotate refresh token, issue new JWT access token
   app.post('/auth/refresh', {
     schema: {
-      body: z.object({
-        refreshToken: z.string(),
-      }),
+      body: z.object({}).strict(),
       response: {
         200: z.object({
           accessToken: z.string(),
-          refreshToken: z.string(),
         }),
         400: z.object({
           error: z.string(),
@@ -101,7 +176,17 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           code: z.string(),
           message: z.string(),
         }),
+        403: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
         429: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
+        503: z.object({
           error: z.string(),
           code: z.string(),
           message: z.string(),
@@ -110,20 +195,40 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
     },
     preHandler: refreshRateLimiter,
   }, async (request, reply) => {
-    const { refreshToken } = request.body as { refreshToken: string };
+    const refreshToken = readCookie(request.headers.cookie, REFRESH_COOKIE);
     
     if (!refreshToken) {
       return reply.status(400).send({
         error: 'Bad Request',
         code: 'MISSING_REFRESH_TOKEN',
-        message: 'Refresh token is required',
+        message: 'Refresh token cookie is required',
+      });
+    }
+    if (!validCsrf(request)) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        code: 'CSRF_VALIDATION_FAILED',
+        message: 'A valid CSRF token is required',
       });
     }
     
     try {
       const tokens = await authService.refreshTokens(refreshToken);
-      return reply.send(tokens);
+      setSessionCookies(reply, tokens.refreshToken);
+      return reply.send({ accessToken: tokens.accessToken });
     } catch (error) {
+      // Prisma P2025 = "Record to delete does not exist" — happens when
+      // concurrent request already rotated this refresh token.
+      // Treat it the same as "Invalid refresh token" so callers can't
+      // distinguish "never existed" from "already used".
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          code: 'INVALID_REFRESH_TOKEN',
+          message: 'Invalid or revoked refresh token',
+        });
+      }
+
       const message = error instanceof Error ? error.message : 'Token refresh failed';
       
       if (message === 'Invalid refresh token') {
@@ -187,6 +292,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
     
     try {
       await authService.logout(accessToken);
+      clearSessionCookies(reply);
       return reply.status(204).send();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Logout failed';
