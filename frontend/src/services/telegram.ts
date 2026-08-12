@@ -45,49 +45,44 @@ export async function initTelegramApp(): Promise<LaunchParams | null> {
     return null;
   }
 
-  try {
-    // Initialize Telegram Web App SDK
-    initTelegram();
+  // Initialize Telegram Web App SDK
+  initTelegram();
 
-    // Retrieve launch parameters
-    const launchParams = retrieveLaunchParams() as RawLaunchParams;
-    
-    // Restore initData for authentication
-    restoreInitData();
-    const initData = window.Telegram?.WebApp?.initData || '';
-    
-    if (!initData) {
-      console.error('No initData found');
-      return null;
-    }
-
-    // Authenticate with backend
-    await apiService.authenticateWithTelegram(initData);
-
-    // Signal to Telegram that the app is ready
-    if (window.Telegram?.WebApp?.ready) {
-      window.Telegram.WebApp.ready();
-    }
-
-    // Expand to full height
-    if (window.Telegram?.WebApp?.expand) {
-      window.Telegram.WebApp.expand();
-    }
-
-    return {
-      initData,
-      initDataRaw: initData,
-      themeParams: launchParams.themeParams || {},
-      tgWebAppPlatform: launchParams.tgWebAppPlatform || 'unknown',
-      tgWebAppVersion: launchParams.tgWebAppVersion || 'unknown',
-      version: launchParams.version || 'unknown',
-      user: launchParams.user,
-      startParam: launchParams.startParam,
-    };
-  } catch (error) {
-    console.error('Failed to initialize Telegram app:', error);
+  // Retrieve launch parameters
+  const launchParams = retrieveLaunchParams() as RawLaunchParams;
+  
+  // Restore initData for authentication
+  restoreInitData();
+  const initData = window.Telegram?.WebApp?.initData || '';
+  
+  if (!initData) {
+    console.error('No initData found');
     return null;
   }
+
+  // Authenticate with backend - let errors propagate
+  await apiService.authenticateWithTelegram(initData);
+
+  // Signal to Telegram that the app is ready
+  if (window.Telegram?.WebApp?.ready) {
+    window.Telegram.WebApp.ready();
+  }
+
+  // Expand to full height
+  if (window.Telegram?.WebApp?.expand) {
+    window.Telegram.WebApp.expand();
+  }
+
+  return {
+    initData,
+    initDataRaw: initData,
+    themeParams: launchParams.themeParams || {},
+    tgWebAppPlatform: launchParams.tgWebAppPlatform || 'unknown',
+    tgWebAppVersion: launchParams.tgWebAppVersion || 'unknown',
+    version: launchParams.version || 'unknown',
+    user: launchParams.user,
+    startParam: launchParams.startParam,
+  };
 }
 
 export function applyTelegramTheme(themeParams: Record<string, string>) {
