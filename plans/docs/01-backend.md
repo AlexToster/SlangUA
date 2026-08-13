@@ -16,7 +16,8 @@ Service (Business Logic)
                 ├── OpenAI
                 ├── Anthropic
                 ├── Gemini
-                └── Ollama
+                ├── Ollama
+                └── OpenRouter
         ↓
 PostgreSQL
 ```
@@ -61,7 +62,7 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
 - **`AI Service & Adapters`**:
     - **`IAIProvider`**: Interface defining `translate(text, style)` method.
     - **`AIService`**: Implements provider fallback strategy, timeout handling, and retry policy.
-    - **`OpenAIAdapter`**, **`ClaudeAdapter`**, **`GeminiAdapter`**, **`OllamaAdapter`**: Implementation details for each provider.
+    - **`OpenAIAdapter`**, **`ClaudeAdapter`**, **`GeminiAdapter`**, **`OllamaAdapter`**, **`OpenRouterAdapter`**: Implementation details for each provider.
     - **`ProviderFactory`**: Resolves implementation based on priority and availability.
 - **`History Module`**:
     - Provides paginated access to user-specific translations.

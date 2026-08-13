@@ -5,7 +5,7 @@ import { createRateLimiter } from '../plugins/rate-limit.js';
 import { authService } from '../services/auth.service.js';
 import { translationService } from '../services/translation.service.js';
 import { SlangStyle } from '@prisma/client';
-import { SLANG_STYLE_VALUES } from '../constants/index.js';
+import { SLANG_STYLE_VALUES, AI_PROVIDER_VALUES } from '../constants/index.js';
 import { config } from '../config/index.js';
 
 export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
@@ -129,7 +129,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
           originalText: z.string(),
           translatedText: z.string(),
           slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(['OPENAI', 'ANTHROPIC', 'GEMINI', 'OLLAMA']),
+          aiProvider: z.enum(AI_PROVIDER_VALUES),
           previewId: z.string().uuid(),
         }),
         ...errorResponses,
@@ -178,7 +178,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
           originalText: z.string(),
           translatedText: z.string(),
           slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(['OPENAI', 'ANTHROPIC', 'GEMINI', 'OLLAMA']),
+          aiProvider: z.enum(AI_PROVIDER_VALUES),
           favorite: z.boolean(),
           createdAt: z.string().datetime(),
         }),
@@ -228,7 +228,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
           originalText: z.string(),
           translatedText: z.string(),
           slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(['OPENAI', 'ANTHROPIC', 'GEMINI', 'OLLAMA']),
+          aiProvider: z.enum(AI_PROVIDER_VALUES),
           favorite: z.boolean(),
           createdAt: z.string().datetime(),
         }),

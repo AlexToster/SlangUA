@@ -9,6 +9,7 @@ import { uk } from 'date-fns/locale';
 import { Toast } from '../components/Toast';
 import { ErrorBanner } from '../components/ErrorBanner';
 import type { Translation } from '../types/api';
+import { getStyleLabel } from '../utils/styleLabels';
 import './HistoryPage.css';
 
 const PAGE_SIZE = 20;
@@ -221,7 +222,7 @@ export function HistoryPage() {
             <article className="history-entry">
               <div className="history-entry-header">
                 <span className={`history-style-badge history-style-${translation.slangStyle.toLowerCase()}`}>
-                  {translation.slangStyle}
+                  {getStyleLabel(translation.slangStyle)}
                 </span>
                 <time className="history-time" dateTime={translation.createdAt}>
                   {formatDistanceToNow(new Date(translation.createdAt), { addSuffix: true, locale: uk })}

@@ -1,4 +1,4 @@
-import { SlangStyle } from '@prisma/client';
+import { SlangStyle, AIProvider } from '@prisma/client';
 
 /**
  * Shared constant for all valid SlangStyle enum values.
@@ -23,3 +23,21 @@ export type SlangStyleValue = (typeof SLANG_STYLE_VALUES)[number];
  * Use this in validation schemas instead of inline string arrays.
  */
 export const slangStyleEnum = SLANG_STYLE_VALUES;
+
+/**
+ * Shared constant for all valid AIProvider enum values.
+ * Derived from the Prisma AIProvider enum to prevent drift across routes.
+ */
+export const AI_PROVIDER_VALUES = [
+  'OPENAI',
+  'ANTHROPIC',
+  'GEMINI',
+  'OLLAMA',
+  'OPENROUTER',
+] as const satisfies readonly AIProvider[];
+
+/**
+ * TypeScript union type derived from AI_PROVIDER_VALUES.
+ * Use this type for type-safe AI provider handling.
+ */
+export type AIProviderValue = (typeof AI_PROVIDER_VALUES)[number];

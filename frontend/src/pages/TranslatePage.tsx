@@ -3,18 +3,21 @@ import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { canUseTelegramInlineSharing, openTelegramInlineQuery, triggerHapticFeedback } from '../services/telegram';
+import { canUseTelegramInlineSharing, openTelegramInlineQuery, readTextFromClipboard, triggerHapticFeedback } from '../services/telegram';
 import { countGraphemes } from '../utils/text';
+import { consumePreviewAttempt, MAX_AUTOMATIC_PREVIEW_ATTEMPTS } from '../utils/previewAttempts';
 import { StyleSelector } from '../components/StyleSelector';
 import { TextInput } from '../components/TextInput';
 import { PreviewResult } from '../components/PreviewResult';
 import { Toast } from '../components/Toast';
-import type { PreviewResult as PreviewResultType, ShareSource, SlangStyle } from '../types/api';
+import type { PreviewResult as PreviewResultType, ShareSource, SlangStyle, Style } from '../types/api';
+import { getStyleLabel, localizeStyles } from '../utils/styleLabels';
 import './TranslatePage.css';
 
 const DEBOUNCE_MS = 700;
 const MIN_CHARS_FOR_PREVIEW = 3;
 const MAX_GRAPHEMES = 1000;
+const POFENI_STYLE: Style = { id: 'POFENI', title: getStyleLabel('POFENI') };
 
 export function TranslatePage() {
   const navigate = useNavigate();
@@ -23,6 +26,7 @@ export function TranslatePage() {
   const [draftText, setDraftText] = useState('');
   const [showStyleSheet, setShowStyleSheet] = useState(false);
   const [showAgeGateToast, setShowAgeGateToast] = useState(false);
+  const [showPofeniAgeConfirm, setShowPofeniAgeConfirm] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -33,6 +37,8 @@ export function TranslatePage() {
   const lastPreviewKeyRef = useRef<string | null>(null);
   const previousStyleRef = useRef<SlangStyle | null>(null);
   const previousInputKeyRef = useRef<string | null>(null);
+  const previewAttemptRef = useRef({ key: '', retryNonce: 0, count: 0 });
+  const pendingRestrictedStyleRef = useRef<SlangStyle | null>(null);
 
   // Fetch styles and profile
   const {
@@ -103,6 +109,26 @@ export function TranslatePage() {
     }
   }, []);
 
+  const confirmAgeMutation = useMutation({
+    mutationFn: () => apiService.updateProfile({ ageConfirmedAdult: true }),
+    onSuccess: (updatedProfile) => {
+      queryClient.setQueryData(['profile'], updatedProfile);
+      queryClient.invalidateQueries({ queryKey: ['styles'] });
+      setShowPofeniAgeConfirm(false);
+
+      const pendingStyle = pendingRestrictedStyleRef.current;
+      pendingRestrictedStyleRef.current = null;
+      if (pendingStyle) {
+        setSelectedStyle(pendingStyle);
+        setSavedTranslationId(null);
+        setErrorBanner(null);
+        updateDefaultStyleMutation.mutate(pendingStyle);
+        triggerHapticFeedback('selection');
+      }
+    },
+    onError: handleApiError,
+  });
+
   // Preview translation mutation
   const previewMutation = useMutation({
     mutationFn: ({ text, style, signal }: { text: string; style: SlangStyle; signal: AbortSignal }) =>
@@ -116,7 +142,12 @@ export function TranslatePage() {
       }
     },
     onError: (error: any) => {
-      if (!axios.isCancel(error) && error?.code !== 'ERR_CANCELED') handleApiError(error);
+      if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') return;
+      // A rate-limited request must not spend two more automatic attempts.
+      if (error?.response?.status === 429) {
+        previewAttemptRef.current = { ...previewAttemptRef.current, count: MAX_AUTOMATIC_PREVIEW_ATTEMPTS };
+      }
+      handleApiError(error);
     },
   });
 
@@ -211,9 +242,6 @@ export function TranslatePage() {
         return;
       }
 
-      abortControllerRef.current?.abort();
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
       const previewKey = `${draftText}|${selectedStyle}`;
       lastPreviewKeyRef.current = previewKey;
 
@@ -223,6 +251,12 @@ export function TranslatePage() {
         return;
       }
 
+      const nextAttempt = consumePreviewAttempt(previewAttemptRef.current, previewKey, retryNonce);
+      if (!nextAttempt) return;
+      previewAttemptRef.current = nextAttempt;
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       previewMutation.mutate({ text: draftText, style: selectedStyle, signal: controller.signal });
     };
 
@@ -240,10 +274,22 @@ export function TranslatePage() {
   const handleStyleChange = useCallback((style: SlangStyle) => {
     setSelectedStyle(style);
     setSavedTranslationId(null);
+    setErrorBanner(null);
     setShowStyleSheet(false);
     updateDefaultStyleMutation.mutate(style);
     triggerHapticFeedback('selection');
   }, [updateDefaultStyleMutation]);
+
+  const handleLockedStyleSelect = useCallback((style: SlangStyle) => {
+    pendingRestrictedStyleRef.current = style;
+    setShowStyleSheet(false);
+    setShowPofeniAgeConfirm(true);
+  }, []);
+
+  const cancelPofeniAgeConfirm = useCallback(() => {
+    pendingRestrictedStyleRef.current = null;
+    setShowPofeniAgeConfirm(false);
+  }, []);
 
   // Handle text change
   const handleTextChange = useCallback((text: string) => {
@@ -255,7 +301,7 @@ export function TranslatePage() {
   // Handle paste
   const handlePaste = useCallback(async () => {
     try {
-      const text = await navigator.clipboard.readText();
+      const text = await readTextFromClipboard();
       const graphemeCount = countGraphemes(text);
       if (graphemeCount > MAX_GRAPHEMES) {
         setToast({ message: `Текст занадто довгий (макс. ${MAX_GRAPHEMES} символів)`, type: 'error' });
@@ -264,7 +310,11 @@ export function TranslatePage() {
       setDraftText(text);
       triggerHapticFeedback('impact');
     } catch {
-      setToast({ message: 'Встав текст вручну', type: 'error' });
+      document.getElementById('translate-input')?.focus();
+      setToast({
+        message: 'Telegram не надав доступ до буфера. Поле активне: затисніть його та оберіть «Вставити».',
+        type: 'info',
+      });
     }
   }, []);
 
@@ -315,6 +365,10 @@ export function TranslatePage() {
   const graphemeCount = countGraphemes(draftText);
   const isOverLimit = graphemeCount > MAX_GRAPHEMES;
   const isWarningZone = graphemeCount >= 850 && !isOverLimit;
+  const localizedStyles = localizeStyles(styles);
+  const selectorStyles = !profile?.ageConfirmedAdult && !localizedStyles.some((style) => style.id === 'POFENI')
+    ? [...localizedStyles, POFENI_STYLE]
+    : localizedStyles;
 
   if (stylesLoading) {
     return (
@@ -328,7 +382,7 @@ export function TranslatePage() {
     <div className="translate-page">
       <header className="translate-header">
         <StyleSelector
-          styles={styles}
+          styles={selectorStyles}
           selectedStyle={selectedStyle}
           onSelect={handleStyleChange}
           isOpen={showStyleSheet}
@@ -337,6 +391,8 @@ export function TranslatePage() {
           isError={stylesError}
           isAuthenticated={apiService.isAuthenticated()}
           onRetry={() => void refetchStyles()}
+          lockedStyleIds={profile?.ageConfirmedAdult ? [] : ['POFENI']}
+          onLockedSelect={handleLockedStyleSelect}
         />
       </header>
 
@@ -358,6 +414,7 @@ export function TranslatePage() {
           isError={previewMutation.isError}
           errorBanner={errorBanner}
           onRetry={handleRetry}
+          canRetry={previewAttemptRef.current.count >= MAX_AUTOMATIC_PREVIEW_ATTEMPTS}
           draftText={draftText}
           onCopy={handleCopy}
           onSave={handleSave}
@@ -375,11 +432,26 @@ export function TranslatePage() {
 
       {showAgeGateToast && (
         <Toast
-          message="Цей стиль доступний лише 18+. Підтвердь вік у Settings."
+          message="Цей стиль доступний лише для повнолітніх. Підтвердь вік у налаштуваннях."
           type="info"
-          action={{ label: 'Відкрити Settings', onClick: handleOpenSettings }}
+          action={{ label: 'Відкрити налаштування', onClick: handleOpenSettings }}
           onClose={() => setShowAgeGateToast(false)}
         />
+      )}
+
+      {showPofeniAgeConfirm && (
+        <div className="translate-age-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pofeni-age-confirm-title">
+          <div className="translate-age-modal">
+            <h2 id="pofeni-age-confirm-title">Підтвердження 18+</h2>
+            <p>«Зеківський жаргон» може містити лексику для повнолітніх. Підтверджуючи, ви стверджуєте, що вам є 18+.</p>
+            <div className="translate-age-modal-actions">
+              <button type="button" onClick={cancelPofeniAgeConfirm}>Скасувати</button>
+              <button type="button" className="confirm" onClick={() => confirmAgeMutation.mutate()} disabled={confirmAgeMutation.isPending}>
+                {confirmAgeMutation.isPending ? 'Підтверджуємо…' : 'Так, мені є 18+'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

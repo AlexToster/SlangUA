@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { initTelegramApp, applyTelegramTheme, setupTelegramThemeListener, setupSafeAreaInsets, isTMA } from './services/telegram';
+import { initTelegramApp, applyTelegramTheme, setupTelegramThemeListener, setupSafeAreaInsets } from './services/telegram';
 import { initThemeFromStorage } from './utils/localSettings';
 import TranslatePage from './pages/TranslatePage';
 import HistoryPage from './pages/HistoryPage';
@@ -31,11 +31,6 @@ function App() {
     
     // Initialize theme from localStorage (before Telegram theme)
     initThemeFromStorage();
-
-    if (!isTMA()) {
-      if (mountedRef.current) setInitState('not-in-telegram');
-      return;
-    }
 
     try {
       const params = await initTelegramApp();
@@ -76,17 +71,17 @@ function App() {
         {initState === 'loading' && <LoadingScreen />}
         {initState === 'not-in-telegram' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', textAlign: 'center' }}>
-            <h1>Open in Telegram</h1>
-            <p>This app works only inside Telegram Mini App.</p>
-            <p>Please open it via the Telegram link.</p>
+            <h1>Відкрийте в Telegram</h1>
+            <p>Цей застосунок працює лише в Telegram Mini App.</p>
+            <p>Відкрийте його за посиланням у Telegram.</p>
           </div>
         )}
         {initState === 'auth-failed' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', textAlign: 'center' }}>
-            <h1>Authentication Failed</h1>
-            <p>Failed to authenticate with the server. Please try again.</p>
+            <h1>Не вдалося увійти</h1>
+            <p>Не вдалося підтвердити вхід на сервері. Спробуйте ще раз.</p>
             <button onClick={handleRetry} style={{ marginTop: '16px', padding: '12px 24px', fontSize: '16px' }}>
-              Retry
+              Спробувати ще раз
             </button>
           </div>
         )}

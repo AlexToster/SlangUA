@@ -1,9 +1,18 @@
-import { init as initTelegram, retrieveLaunchParams, restoreInitData, isTMA as isTMACheck } from '@telegram-apps/sdk';
+import { init as initTelegram, retrieveLaunchParams, retrieveRawInitData, restoreInitData } from '@telegram-apps/sdk';
 import { apiService } from './api';
 import { getLocalSettings } from '../utils/localSettings';
 
 export function isTMA(): boolean {
-  return isTMACheck();
+  if (window.Telegram?.WebApp?.initData) return true;
+  return Boolean(getSdkInitData());
+}
+
+function getSdkInitData(): string {
+  try {
+    return retrieveRawInitData() || '';
+  } catch {
+    return '';
+  }
 }
 
 export interface TelegramUser {
@@ -40,20 +49,20 @@ interface RawLaunchParams {
 }
 
 export async function initTelegramApp(): Promise<LaunchParams | null> {
-  if (!isTMA()) {
-    console.warn('Not running in Telegram Mini App environment');
-    return null;
+  let launchParams: RawLaunchParams = {};
+
+  try {
+    // The SDK can recover launch parameters from Telegram's URL fragment.
+    initTelegram();
+    launchParams = retrieveLaunchParams() as RawLaunchParams;
+    restoreInitData();
+  } catch {
+    // Some Android clients expose initData only through the official WebApp bridge.
+    // The server still verifies its Telegram HMAC before issuing any token.
   }
 
-  // Initialize Telegram Web App SDK
-  initTelegram();
-
-  // Retrieve launch parameters
-  const launchParams = retrieveLaunchParams() as RawLaunchParams;
-  
-  // Restore initData for authentication
-  restoreInitData();
-  const initData = window.Telegram?.WebApp?.initData || '';
+  const webApp = window.Telegram?.WebApp;
+  const initData = webApp?.initData || getSdkInitData();
   
   if (!initData) {
     console.error('No initData found');
@@ -64,19 +73,15 @@ export async function initTelegramApp(): Promise<LaunchParams | null> {
   await apiService.authenticateWithTelegram(initData);
 
   // Signal to Telegram that the app is ready
-  if (window.Telegram?.WebApp?.ready) {
-    window.Telegram.WebApp.ready();
-  }
+  webApp?.ready();
 
   // Expand to full height
-  if (window.Telegram?.WebApp?.expand) {
-    window.Telegram.WebApp.expand();
-  }
+  webApp?.expand();
 
   return {
     initData,
     initDataRaw: initData,
-    themeParams: launchParams.themeParams || {},
+    themeParams: webApp?.themeParams || launchParams.themeParams || {},
     tgWebAppPlatform: launchParams.tgWebAppPlatform || 'unknown',
     tgWebAppVersion: launchParams.tgWebAppVersion || 'unknown',
     version: launchParams.version || 'unknown',
@@ -228,6 +233,42 @@ export function hideBackButton() {
 /** Inline sharing is available only in Telegram clients that expose this API. */
 export function canUseTelegramInlineSharing(): boolean {
   return isTMA() && typeof window.Telegram?.WebApp?.switchInlineQuery === 'function';
+}
+
+/**
+ * Reads from the browser clipboard first, while the click's user activation
+ * is still active. Telegram's bridge is the fallback for WebViews where the
+ * browser Clipboard API is unavailable.
+ */
+export async function readTextFromClipboard(): Promise<string> {
+  if (navigator.clipboard?.readText) {
+    try {
+      return await navigator.clipboard.readText();
+    } catch {
+      // Telegram's WebView commonly denies the browser Clipboard API.
+      // Try its native bridge while the originating click is still recent.
+    }
+  }
+
+  const telegramClipboard = window.Telegram?.WebApp?.readTextFromClipboard;
+
+  if (typeof telegramClipboard === 'function') {
+    try {
+      const text = await new Promise<string | null>((resolve, reject) => {
+        try {
+          telegramClipboard.call(window.Telegram.WebApp, resolve);
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      if (typeof text === 'string') return text;
+    } catch {
+      // Fall through to a single, actionable unavailable-access error.
+    }
+  }
+
+  throw new Error('Clipboard access is unavailable in this Telegram context');
 }
 
 /** Must be called directly from an explicit user-initiated share action. */

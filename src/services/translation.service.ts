@@ -37,7 +37,7 @@ export class TranslationService {
   private prisma: PrismaClient;
 
   // Style version for cache invalidation when style definitions change
-  private readonly STYLE_VERSION = '1.0.0';
+  private readonly STYLE_VERSION = '1.0.1';
 
   // Patterns that may indicate prompt injection attempts
   private readonly PROMPT_INJECTION_PATTERNS = [

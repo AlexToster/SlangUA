@@ -1,35 +1,35 @@
 {
   "gen_z": {
     "id": "gen_z",
-    "title": "Gen Z",
+    "title": "Молодіжний тікток-сленг",
     "enabled": true,
     "version": "1.0",
     "ageRestricted": false
   },
   "street": {
     "id": "street",
-    "title": "Street",
+    "title": "Вуличний базар",
     "enabled": true,
     "version": "1.0",
     "ageRestricted": false
   },
   "it_slang": {
     "id": "it_slang",
-    "title": "IT Slang",
+    "title": "АйТішний спіч",
     "enabled": true,
     "version": "1.0",
     "ageRestricted": false
   },
   "pofeni": {
     "id": "pofeni",
-    "title": "Pofeni",
+    "title": "Зеківський жаргон",
     "enabled": true,
     "version": "1.0",
     "ageRestricted": true
   },
   "kancler": {
     "id": "kancler",
-    "title": "Kancler",
+    "title": "Бюрократична радянщина",
     "enabled": true,
     "version": "1.0",
     "ageRestricted": false

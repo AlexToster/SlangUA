@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Style, SlangStyle } from '../types/api';
+import { getStyleLabel } from '../utils/styleLabels';
 import clsx from 'clsx';
 import './StyleSelector.css';
 
@@ -14,6 +15,8 @@ interface StyleSelectorProps {
   isError?: boolean;
   isAuthenticated?: boolean;
   onRetry?: () => void;
+  lockedStyleIds?: SlangStyle[];
+  onLockedSelect?: (style: SlangStyle) => void;
 }
 
 export function StyleSelector({
@@ -26,6 +29,8 @@ export function StyleSelector({
   isError = false,
   isAuthenticated = false,
   onRetry,
+  lockedStyleIds = [],
+  onLockedSelect,
 }: StyleSelectorProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -60,7 +65,8 @@ export function StyleSelector({
   const handleKeyDown = (event: React.KeyboardEvent, styleId: SlangStyle) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onSelect(styleId);
+      if (lockedStyleIds.includes(styleId)) onLockedSelect?.(styleId);
+      else onSelect(styleId);
       onToggle(false);
     } else if (event.key === 'Escape') {
       onToggle(false);
@@ -77,10 +83,10 @@ export function StyleSelector({
         onClick={() => onToggle(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        aria-label={`Вибраний стиль: ${selectedStyleObj?.title || 'не вибрано'}`}
+        aria-label={`Вибраний стиль: ${selectedStyleObj ? getStyleLabel(selectedStyleObj.id) : 'не вибрано'}`}
       >
         <span className="style-selector-label">
-          {selectedStyleObj?.title || 'Стиль'}
+          {selectedStyleObj ? getStyleLabel(selectedStyleObj.id) : 'Стиль'}
         </span>
         {isOpen ? <ChevronUp className="style-selector-icon" /> : <ChevronDown className="style-selector-icon" />}
       </button>
@@ -131,17 +137,19 @@ export function StyleSelector({
               {!isLoading && styles.map((style) => (
               <button
                 key={style.id}
-                className={clsx('style-selector-item', style.id === selectedStyle && 'selected')}
+                className={clsx('style-selector-item', style.id === selectedStyle && 'selected', lockedStyleIds.includes(style.id) && 'locked')}
                 role="option"
                 aria-selected={style.id === selectedStyle}
                 data-style-id={style.id}
                 onClick={() => {
-                  onSelect(style.id);
+                  if (lockedStyleIds.includes(style.id)) onLockedSelect?.(style.id);
+                  else onSelect(style.id);
                   onToggle(false);
                 }}
                 onKeyDown={(e) => handleKeyDown(e, style.id)}
               >
-                <span className="style-selector-item-title">{style.title}</span>
+                <span className="style-selector-item-title">{getStyleLabel(style.id)}</span>
+                {lockedStyleIds.includes(style.id) && <span className="style-selector-lock">18+</span>}
                 {style.id === selectedStyle && (
                   <span className="style-selector-check" aria-hidden="true">✓</span>
                 )}

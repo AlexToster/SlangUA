@@ -72,6 +72,7 @@
   z-index: 1;
   padding-bottom: calc(var(--safe-area-bottom) + var(--spacing-md));
   max-height: 70vh;
+  max-height: min(70dvh, 32rem);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -123,8 +124,14 @@
 }
 
 .style-selector-list {
-  flex: 1;
+  /* The sheet has only a max-height, so flex: 1 would resolve to zero height
+     on Telegram Android. Keep the list at its content height, shrinking and
+     scrolling only when it reaches the sheet limit. */
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: var(--spacing-sm) var(--spacing-md);
 }
 
@@ -182,6 +189,10 @@
   color: var(--color-primary);
 }
 
+.style-selector-item.locked {
+  color: var(--color-text-secondary);
+}
+
 .style-selector-item-title {
   flex: 1;
 }
@@ -190,6 +201,16 @@
   flex-shrink: 0;
   color: var(--color-primary);
   font-weight: bold;
+}
+
+.style-selector-lock {
+  flex-shrink: 0;
+  margin-left: var(--spacing-sm);
+  padding: 2px var(--spacing-xs);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
 }
 
 /* Style badges for history */

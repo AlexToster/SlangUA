@@ -30,21 +30,24 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
 
   // AI Provider Model Names
   AI_MODEL_OPENAI: z.string().default('gpt-4o-mini'),
   AI_MODEL_ANTHROPIC: z.string().default('claude-3-haiku-20240307'),
-  AI_MODEL_GEMINI: z.string().default('gemini-1.5-flash'),
+  AI_MODEL_GEMINI: z.string().default('gemini-3.6-flash'),
   AI_MODEL_OLLAMA: z.string().default('llama3.1:8b'),
+  AI_MODEL_OPENROUTER: z.string().default('nvidia/nemotron-3-nano-30b-a3b:free'),
 
   // AI Provider Priority (comma-separated)
-  AI_PROVIDER_PRIORITY: z.string().default('openai,anthropic,gemini,ollama'),
+  AI_PROVIDER_PRIORITY: z.string().default('openai,anthropic,gemini,ollama,openrouter'),
 
   // AI Provider Timeouts (ms)
   AI_TIMEOUT_OPENAI: z.coerce.number().default(30000),
   AI_TIMEOUT_ANTHROPIC: z.coerce.number().default(30000),
   AI_TIMEOUT_GEMINI: z.coerce.number().default(30000),
   AI_TIMEOUT_OLLAMA: z.coerce.number().default(60000),
+  AI_TIMEOUT_OPENROUTER: z.coerce.number().default(30000),
 
   // AI Provider Retry
   AI_MAX_RETRIES: z.coerce.number().default(2),

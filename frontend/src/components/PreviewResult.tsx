@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, Check, Save, Send, AlertCircle, Loader2 } from 'lucide-react';
 import type { PreviewResult as PreviewResultType } from '../types/api';
+import { getStyleLabel } from '../utils/styleLabels';
 import './PreviewResult.css';
 
 interface PreviewResultProps {
@@ -9,6 +10,7 @@ interface PreviewResultProps {
   isError: boolean;
   errorBanner: { message: string; code?: string } | null;
   onRetry: () => void;
+  canRetry?: boolean;
   draftText: string;
   onCopy: (text: string) => void;
   onSave: () => void;
@@ -25,6 +27,7 @@ export function PreviewResult({
   isError, 
   errorBanner, 
   onRetry, 
+  canRetry = true,
   draftText,
   onCopy,
   onSave,
@@ -77,7 +80,7 @@ export function PreviewResult({
         <div className="preview-content">
           <div className="preview-text">{preview.translatedText}</div>
           <div className="preview-meta">
-            <span className="preview-style">{preview.slangStyle}</span>
+            <span className="preview-style">{getStyleLabel(preview.slangStyle)}</span>
             <span className="preview-updating-indicator" aria-hidden="true">
               <Loader2 className="spinning" size={14} />
               Оновлюємо…
@@ -126,9 +129,11 @@ export function PreviewResult({
         <div className="preview-error">
           <AlertCircle size={24} />
           <p>{errorBanner?.message || 'Сталася помилка при перекладі'}</p>
-          <button className="retry-btn" onClick={onRetry}>
-            Повторити
-          </button>
+          {canRetry && (
+            <button className="retry-btn" onClick={onRetry}>
+              Оновити
+            </button>
+          )}
         </div>
       </div>
     );
@@ -141,7 +146,7 @@ export function PreviewResult({
         <div className="preview-content">
           <div className="preview-text">{preview.translatedText}</div>
           <div className="preview-meta">
-            <span className="preview-style">{preview.slangStyle}</span>
+            <span className="preview-style">{getStyleLabel(preview.slangStyle)}</span>
             <span className="preview-provider">{preview.aiProvider}</span>
           </div>
         </div>

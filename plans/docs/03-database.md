@@ -145,6 +145,7 @@ The following entities represent the persistent state of the SlangUA system, man
 - **ANTHROPIC**: Claude models.
 - **GEMINI**: Google Gemini models.
 - **OLLAMA**: Local/self-hosted models.
+- **OPENROUTER**: Router to many models via openrouter.ai; default model is free-tier (nvidia/nemotron-3-nano-30b-a3b:free).
 
 ## Relationships, Constraints & Indexes
 

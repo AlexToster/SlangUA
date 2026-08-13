@@ -64,8 +64,8 @@
 
 - назва й короткий опис кожного стилю з `GET /styles`;
 - активний стиль позначений візуально й доступно для screen reader;
-- недоступні 18+ стилі **не показуються в селекторі**, бо `GET /styles` **відфільтровує їх на сервері** залежно від `ageConfirmedAdult` користувача;
-- **підтвердження 18+ (self-attestation) є лише в Settings** — там користувач може ввімкнути `ageConfirmedAdult`, після чого список стилів refetch-иться;
+- `GET /styles` **відфільтровує restricted styles на сервері** залежно від `ageConfirmedAdult`; Mini App додає лише статичний locked пункт «Пофені 18+» без доступу до prompt або перекладу;
+- вибір locked «Пофені 18+» відкриває self-attestation 18+ прямо в selector. Лише після успішного `PATCH /user/me` із `ageConfirmedAdult: true` клієнт refetch-ить styles і вибирає POFENI; серверна перевірка лишається обов’язковою;
 - **403 AGE_RESTRICTED_STYLE на Translate — лише recoverable fallback для застарілого локального вибору**: якщо користувач мав вибраний обмежений стиль у локальному стані (наприклад, після зміни `ageConfirmedAdult` на false), показуємо повідомлення і пропонуємо перехід у Settings;
 - якщо користувач обирає стиль, вибір одразу стає поточним і асинхронно зберігається як `defaultSlangStyle` через `PATCH /user/me`;
 - якщо збереження дефолту не вдалося, переклад продовжується з новим стилем у поточній сесії, а UI показує ненав'язливе повідомлення, що вибір не вдалося запам'ятати.
@@ -279,8 +279,8 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 - `Надіслати в Telegram` з'являється лише в клієнтах із `Telegram.WebApp.switchInlineQuery` для shareable preview або History result. Share є explicit, не створює публічний URL чи History-запис, зберігає Copy fallback і застосовує server-side age/content/ownership checks за [09-telegram-sharing.md](09-telegram-sharing.md).
 - UI і сервер однаково відхиляють текст понад 1 000 символів.
 - Автоматичний preview не створює записів у History. Збереження є явною дією й не довіряє згенерованому тексту з клієнта.
-- Settings містить тему, haptic, звуки, сповіщення, стиль, **18+ self-attestation (єдине місце підтвердження віку)**, feedback, about і logout; кожне налаштування має визначене джерело правди.
-- **`GET /styles` відфільтровує restricted styles серверно залежно від `ageConfirmedAdult`; Translate selector не показує locked POFENI. 403 AGE_RESTRICTED_STYLE на Translate — лише recoverable fallback для застарілого локального вибору: toast + кнопка «Відкрити Settings».**
+- Settings містить тему, haptic, звуки, сповіщення, стиль, 18+ self-attestation, feedback, about і logout; self-attestation також доступна при виборі locked Pofeni у Translate.
+- **`GET /styles` відфільтровує restricted styles серверно залежно від `ageConfirmedAdult`; Translate selector показує locked «Пофені 18+» тільки як точку входу до self-attestation. 403 `AGE_RESTRICTED_STYLE` лишається recoverable fallback для застарілого локального вибору.**
 - **theme override, sound, haptic feedback зберігаються у localStorage цього Mini App (не Telegram CloudStorage). Server-side лишаються лише `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult`.**
 - Для 400, 401, 403, 422, 429, 503, offline та clipboard-denied є окремі стани й зрозумілі шляхи відновлення.
 - Інтерфейс проходить ручну перевірку у світлій і темній Telegram темі, з відкритою клавіатурою та на ширині 320 px.
@@ -292,7 +292,7 @@ Complete the remaining Stage 7 Telegram Mini App acceptance checks in plans/docs
 
 Treat plans/docs/04-api.md as the API contract. Keep `/` as the Translate screen; do not add a Home or admin screen. Preserve the implemented preview/save/share flow: debounce preview after 700 ms and 3 characters, cancel stale requests, enforce the 1,000-grapheme UI limit, and never send client-generated translated text to persistence endpoints.
 
-Use only server-filtered styles. Age confirmation remains in Settings, and AGE_RESTRICTED_STYLE is a recoverable stale-selection fallback. Keep theme, sound, and haptic preferences in this Mini App's localStorage; server-side preferences remain defaultSlangStyle, notificationsEnabled, and ageConfirmedAdult.
+Use only server-filtered styles for translation requests. The selector may show a static locked Pofeni entry only to start age self-attestation; it must not enable POFENI until PATCH /user/me succeeds and styles are refetched. AGE_RESTRICTED_STYLE is a recoverable stale-selection fallback. Keep theme, sound, and haptic preferences in this Mini App's localStorage; server-side preferences remain defaultSlangStyle, notificationsEnabled, and ageConfirmedAdult.
 
 For Telegram sharing, show the explicit action only when switchInlineQuery is available and the result is eligible. Send only a previewId or translationId to POST /share/inline, then pass only the returned opaque query to Telegram. Retain Copy fallback for every share error.
 

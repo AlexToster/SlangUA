@@ -109,9 +109,14 @@ describe('PreviewResult', () => {
   
   it('calls onRetry when retry button clicked in error state', () => {
     render(<PreviewResult {...defaultProps} isError={true} errorBanner={{ message: 'Error', code: 'TEST' }} />);
-    const retryButton = screen.getByText('Повторити');
+    const retryButton = screen.getByText('Оновити');
     fireEvent.click(retryButton);
     expect(defaultProps.onRetry).toHaveBeenCalled();
+  });
+
+  it('waits to show retry until automatic attempts are exhausted', () => {
+    render(<PreviewResult {...defaultProps} isError={true} canRetry={false} />);
+    expect(screen.queryByText('Оновити')).not.toBeInTheDocument();
   });
   
   it('shows minimum chars hint when text too short', () => {

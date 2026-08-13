@@ -42,6 +42,7 @@ graph TD
         ANT[Anthropic]
         GGL[Gemini]
         LCL[Ollama/Local]
+        ORT[OpenRouter]
     end
 
     Client -- HTTPS/JWT --> Auth

@@ -11,6 +11,7 @@ import { OpenAIAdapter } from './openai.adapter';
 import { ClaudeAdapter } from './claude.adapter';
 import { GeminiAdapter } from './gemini.adapter';
 import { OllamaAdapter } from './ollama.adapter';
+import { OpenRouterAdapter } from './openrouter.adapter';
 import { config } from '../../config';
 
 export class ProviderFactory implements IProviderFactory {
@@ -81,6 +82,13 @@ export class ProviderFactory implements IProviderFactory {
         priority: this.getPriority(AIProvider.OLLAMA),
         ...baseRetryConfig,
       },
+      [AIProvider.OPENROUTER]: {
+        enabled: !!config.OPENROUTER_API_KEY,
+        apiKey: config.OPENROUTER_API_KEY,
+        timeout: config.AI_TIMEOUT_OPENROUTER,
+        priority: this.getPriority(AIProvider.OPENROUTER),
+        ...baseRetryConfig,
+      },
     };
   }
 
@@ -110,6 +118,8 @@ export class ProviderFactory implements IProviderFactory {
         return new GeminiAdapter(providerConfig);
       case AIProvider.OLLAMA:
         return new OllamaAdapter(providerConfig);
+      case AIProvider.OPENROUTER:
+        return new OpenRouterAdapter(providerConfig);
       default:
         return null;
     }

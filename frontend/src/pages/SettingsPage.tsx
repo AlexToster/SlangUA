@@ -7,6 +7,7 @@ import { getLocalSettings, setLocalSettings, applyTheme } from '../utils/localSe
 import { Toast } from '../components/Toast';
 import { ErrorBanner } from '../components/ErrorBanner';
 import type { UserProfile, SlangStyle, Style } from '../types/api';
+import { getStyleLabel } from '../utils/styleLabels';
 import './SettingsPage.css';
 
 export function SettingsPage() {
@@ -173,14 +174,6 @@ export function SettingsPage() {
     setToast({ message: 'SlangUA v1.0.0\nПереклад української сленговою мовою', type: 'info' });
   }, []);
 
-  const styleLabels: Record<SlangStyle, string> = {
-    GEN_Z: 'Gen Z',
-    STREET: 'Street',
-    IT_SLANG: 'IT-сленг',
-    POFENI: 'Пофені',
-    KANCLER: 'Канцлер',
-  };
-
   if (isLoading) {
     return (
       <div className="settings-page loading" role="status" aria-label="Завантаження налаштувань">
@@ -290,7 +283,7 @@ export function SettingsPage() {
                 <option value="">Автоматично</option>
                 {styles?.map((style: Style) => (
                   <option key={style.id} value={style.id}>
-                    {styleLabels[style.id] || style.id}
+                    {getStyleLabel(style.id)}
                   </option>
                 ))}
               </select>
@@ -402,7 +395,7 @@ export function SettingsPage() {
         <div className="settings-modal-overlay" onClick={() => setShowAgeConfirm(false)} role="dialog" aria-modal="true" aria-labelledby="age-confirm-title">
           <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
             <h3 id="age-confirm-title">Підтвердження віку</h3>
-            <p>Деякі стилі перекладу (наприклад, «Пофені», «Канцлер») можуть містити лексику 18+.</p>
+            <p>Деякі стилі перекладу (наприклад, «Зеківський жаргон») можуть містити лексику 18+.</p>
             <p>Підтверджуючи, ви стверджуєте, що вам виповнилося 18 років.</p>
             <div className="settings-modal-actions">
               <button className="settings-btn settings-btn-secondary" onClick={() => setShowAgeConfirm(false)}>

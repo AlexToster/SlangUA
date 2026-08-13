@@ -67,4 +67,5 @@ enum AIProvider {
   ANTHROPIC
   GEMINI
   OLLAMA
+  OPENROUTER
 }

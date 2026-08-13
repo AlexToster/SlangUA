@@ -46,6 +46,57 @@
   overflow-y: auto;
 }
 
+.translate-age-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+  background: rgb(0 0 0 / 45%);
+}
+
+.translate-age-modal {
+  width: min(100%, 24rem);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.translate-age-modal h2 {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-lg);
+}
+
+.translate-age-modal p {
+  color: var(--color-text-secondary);
+}
+
+.translate-age-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+}
+
+.translate-age-modal-actions button {
+  min-height: 44px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+}
+
+.translate-age-modal-actions .confirm {
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+}
+
 /* Safe area for bottom navigation */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .translate-main {

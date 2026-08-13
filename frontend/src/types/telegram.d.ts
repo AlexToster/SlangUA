@@ -3,6 +3,7 @@ interface TelegramWebApp {
   expand(): void;
   switchInlineQuery(query: string, chooseChatTypes?: ('users' | 'bots' | 'groups' | 'channels')[]): void;
   close(): void;
+  readTextFromClipboard(callback: (text: string | null) => void): void;
   initData: string;
   MainButton: {
     setText(text: string): void;

@@ -147,6 +147,7 @@ Style Engine відповідає лише за побудову системн�
 * Anthropic (Claude)
 * Gemini
 * Ollama (локальні моделі)
+* OpenRouter (безкоштовна модель за замовчуванням: nvidia/nemotron-3-nano-30b-a3b:free)
 * Adapter Pattern
 
 > Список AI-провайдерів відкритий: нові провайдери можуть додаватися без зміни архітектури, завдяки Adapter Pattern.
