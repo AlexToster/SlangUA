@@ -277,10 +277,11 @@ This section describes the Service-layer responsibilities for each module, consi
   - `User` — read (lookup by `telegramId`), write (create on first login)
   - `RefreshToken` — write (create on login/refresh), read (validate on refresh), delete (invalidate on logout/refresh)
 - **Other components called**: None (pure auth logic + Prisma)
-- **Returns to Route layer**:
+- **Returns to Route layer** (internal Service → Route return values, not the HTTP response body):
   - `POST /auth/telegram` → `{ accessToken, refreshToken }`
   - `POST /auth/refresh` → `{ accessToken, refreshToken }`
   - `POST /auth/logout` → `void` (204)
+  - **Note:** The Route layer sends only `{ accessToken }` in the HTTP response body; `refreshToken` is delivered in the `slangua_refresh` HttpOnly cookie (alongside a readable `slangua_csrf` cookie), never in the body. See the endpoint contracts in [§2 Auth routes](#2-auth-routes).
 
 ### TranslationService
 - **Business logic owned**:

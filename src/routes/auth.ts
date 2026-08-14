@@ -17,8 +17,8 @@ function refreshTtlSeconds(): number {
   return Number(match[1]) * multipliers[match[2] as keyof typeof multipliers];
 }
 
-function serializeCookie(name: string, value: string, httpOnly: boolean, maxAge = refreshTtlSeconds()): string {
-  const attributes = [`${name}=${encodeURIComponent(value)}`, 'Path=/api/v1/auth', `Max-Age=${maxAge}`, 'SameSite=Lax'];
+function serializeCookie(name: string, value: string, httpOnly: boolean, maxAge = refreshTtlSeconds(), path = '/api/v1/auth'): string {
+  const attributes = [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, `Max-Age=${maxAge}`, 'SameSite=Lax'];
   if (config.NODE_ENV === 'production') attributes.push('Secure');
   if (httpOnly) attributes.push('HttpOnly');
   return attributes.join('; ');
@@ -42,14 +42,14 @@ function setSessionCookies(reply: any, refreshToken: string): void {
   const csrfToken = randomBytes(32).toString('base64url');
   reply.header('Set-Cookie', [
     serializeCookie(REFRESH_COOKIE, refreshToken, true),
-    serializeCookie(CSRF_COOKIE, csrfToken, false),
+    serializeCookie(CSRF_COOKIE, csrfToken, false, refreshTtlSeconds(), '/'),
   ]);
 }
 
 function clearSessionCookies(reply: any): void {
   reply.header('Set-Cookie', [
     serializeCookie(REFRESH_COOKIE, '', true, 0),
-    serializeCookie(CSRF_COOKIE, '', false, 0),
+    serializeCookie(CSRF_COOKIE, '', false, 0, '/'),
   ]);
 }
 

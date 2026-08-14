@@ -62,18 +62,19 @@
 .text-input-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--spacing-sm);
   padding: 0 var(--spacing-xs);
 }
 
-.text-input-paste-btn {
+.text-input-paste-btn,
+.text-input-random-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  min-height: 40px;
+  padding: var(--spacing-sm) var(--spacing-md);
   font-family: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   font-weight: 500;
   color: var(--tg-link-color, var(--color-primary));
   background: transparent;
@@ -83,21 +84,25 @@
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
-.text-input-paste-btn:hover:not(:disabled) {
+.text-input-paste-btn:hover:not(:disabled),
+.text-input-random-btn:hover:not(:disabled) {
   background: var(--tg-link-color, var(--color-primary));
   color: var(--tg-button-text-color, var(--color-on-primary));
 }
 
-.text-input-paste-btn:active:not(:disabled) {
+.text-input-paste-btn:active:not(:disabled),
+.text-input-random-btn:active:not(:disabled) {
   transform: scale(0.98);
 }
 
-.text-input-paste-btn:disabled {
+.text-input-paste-btn:disabled,
+.text-input-random-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.text-input-paste-btn:focus-visible {
+.text-input-paste-btn:focus-visible,
+.text-input-random-btn:focus-visible {
   outline: 2px solid var(--tg-link-color, var(--color-primary));
   outline-offset: 2px;
 }
@@ -110,6 +115,7 @@
   font-variant-numeric: tabular-nums;
   color: var(--tg-hint-color, var(--color-text-muted));
   transition: color var(--transition-fast);
+  margin-left: auto;
 }
 
 .char-counter.warning {
@@ -178,8 +184,14 @@
     display: none;
   }
   
-  .text-input-paste-btn {
-    padding: var(--spacing-xs);
+  .text-input-paste-btn,
+  .text-input-random-btn {
+    min-height: 40px;
+    padding: var(--spacing-sm);
+  }
+
+  .text-input-footer {
+    gap: var(--spacing-xs);
   }
   
   .char-counter {

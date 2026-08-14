@@ -36,31 +36,74 @@ export interface SaveFromPreviewResult {
 export class TranslationService {
   private prisma: PrismaClient;
 
-  // Style version for cache invalidation when style definitions change
-  private readonly STYLE_VERSION = '1.0.1';
-
   // Patterns that may indicate prompt injection attempts
+  // Includes English and Ukrainian variants; case-insensitive
   private readonly PROMPT_INJECTION_PATTERNS = [
+    // Ignore/disregard/forget previous instructions (EN + UK)
     /ignore\s+previous\s+instructions/i,
     /disregard\s+previous\s+instructions/i,
     /forget\s+previous\s+instructions/i,
-    /system\s+prompt/i,
+    /ігноруй\s+попередн(і|ьої)\s+інструкц(ії|ія)/i,
+    /проігноруй\s+попередн(і|ьої)\s+інструкц(ії|ія)/i,
+    /не\s+звертай\s+увагу\s+на\s+попередн(і|ьої)\s+інструкц(ії|ія)/i,
+    /забу(д[ьи]|ти)\s+попередн(і|ьої)\s+інструкц(ії|ія)/i,
+
+    // System prompt - narrowed: require imperative verb nearby (EN + UK)
+    // Matches: "ignore system prompt", "reveal system prompt", "show system prompt",
+    // "bypass system prompt", "override system prompt", "disregard system prompt"
+    // and Ukrainian equivalents
+    /(ignore|reveal|show|bypass|override|disregard)\s+(system\s+)?prompt/i,
+    /(ігноруй|покажи|розкрий|обійди|перевизнач)\s+(системн(ий|а|е|ою)?\s+)?промпт/i,
+
+    // Roleplay/pretend/act as (EN + UK)
     /you\s+are\s+now/i,
     /act\s+as\s+if/i,
     /pretend\s+to\s+be/i,
     /roleplay\s+as/i,
     /simulate\s+being/i,
+    /ти\s+зараз\s+(є|становся)/i,
+    /ти\s+тепер\s+(є|становся)/i,
+    /прикинься\s+що\s+ти/i,
+    /притворися\s+що\s+ти/i,
+    /притворися\s+/i,
+    /прикинься\s+/i,
+    /відіграй\s+роль\s+/i,
+    /ролплей\s+як\s+/i,
+    /симулюй\s+/i,
+    /імітуй\s+/i,
+
+    // New/override instructions (EN + UK)
     /new\s+instructions:/i,
     /override\s+instructions/i,
+    /нов(і|а)\s+інструкц(ії|ія):/i,
+    /зміни\s+інструкц(ії|ію)/i,
+    /перевизнач\s+інструкц(ії|ію)/i,
+
+    // Bypass/ignore/disable safety (EN + UK)
     /bypass\s+safety/i,
     /ignore\s+safety/i,
     /disable\s+safety/i,
+    /обійди\s+безпеку/i,
+    /обходи\s+безпеку/i,
+    /ігноруй\s+безпеку/i,
+    /вимкни\s+безпеку/i,
+    /відключи\s+безпеку/i,
+
+    // Jailbreak / DAN / developer mode (EN + UK + transliterated)
     /jailbreak/i,
+    /джайлбрейк/i,
+    /джейлбрейк/i,
     /DAN\s+mode/i,
+    /DAN\s+режим/i,
     /developer\s+mode/i,
-    /<\|.*?\|>/g, // Special tokens
-    /\[INST\].*?\[\/INST\]/gis, // Instruction tags
-    /<<SYS>>.*?<\/SYS>>/gis, // System prompt tags
+    /режим\s+розробника/i,
+    /девелопер\s+режим/i,
+    /dev\s+mode/i,
+
+    // Special tokens / instruction tags (unchanged)
+    /<\|.*?\|>/g,
+    /\[INST\].*?\[\/INST\]/gis,
+    /<<SYS>>.*?<\/SYS>>/gis,
   ];
 
   constructor(prismaClient: PrismaClient = prisma) {
@@ -208,12 +251,16 @@ export class TranslationService {
     // Validate and normalize text first
     const { normalizedText } = this.validateAndNormalizeText(text);
 
+    // Get style version from registry for cache key
+    const styleMetadata = await getStyleMetadata(style);
+    const styleVersion = styleMetadata.version;
+
     // Check cache for identical request (HMAC-based deduplication)
     const cachedPreviewId = await previewCacheService.checkCacheHit(
       userId,
       normalizedText,
       style,
-      this.STYLE_VERSION
+      styleVersion
     );
 
     if (cachedPreviewId) {
@@ -239,7 +286,7 @@ export class TranslationService {
       originalText: previewResult.originalText,
       translatedText: previewResult.translatedText,
       style: previewResult.slangStyle,
-      styleVersion: this.STYLE_VERSION,
+      styleVersion,
       aiProvider: previewResult.aiProvider,
       userId,
       createdAt: Date.now(),
@@ -266,13 +313,18 @@ export class TranslationService {
     // Check idempotency first - if already saved, return existing translation
     const alreadySaved = await previewCacheService.checkIdempotency(previewId);
     if (alreadySaved) {
-      // Find the existing translation for this preview
-      // We need to look it up by the preview data - but we don't have it anymore
-      // Instead, we can search by userId and the preview data would have been used to create it
-      // For idempotency, we check if there's a recent translation matching the preview
-      // Since we can't easily match without the preview data, we rely on the idempotency marker
-      // The client should not call save twice, but if they do, we return a generic response
-      // indicating it was already saved
+      // Look up the existing translation by previewId and userId
+      const existingTranslation = await this.prisma.translation.findFirst({
+        where: { previewId, userId },
+      });
+      if (existingTranslation) {
+        const error = new Error('This preview has already been saved') as Error & { code: string; statusCode: number; existingTranslation: Translation };
+        error.code = 'PREVIEW_ALREADY_SAVED';
+        error.statusCode = 409;
+        error.existingTranslation = existingTranslation;
+        throw error;
+      }
+      // Fallback: record not found despite idempotency marker - throw bare 409
       const error = new Error('This preview has already been saved') as Error & { code: string; statusCode: number };
       error.code = 'PREVIEW_ALREADY_SAVED';
       error.statusCode = 409;
@@ -313,6 +365,18 @@ export class TranslationService {
       });
     } catch (error: any) {
       if (error?.code === 'P2002') {
+        // Look up the existing translation by previewId and userId
+        const existingTranslation = await this.prisma.translation.findFirst({
+          where: { previewId, userId },
+        });
+        if (existingTranslation) {
+          const duplicate = new Error('This preview has already been saved') as Error & { code: string; statusCode: number; existingTranslation: Translation };
+          duplicate.code = 'PREVIEW_ALREADY_SAVED';
+          duplicate.statusCode = 409;
+          duplicate.existingTranslation = existingTranslation;
+          throw duplicate;
+        }
+        // Fallback: record not found despite constraint violation - throw bare 409
         const duplicate = new Error('This preview has already been saved') as Error & { code: string; statusCode: number };
         duplicate.code = 'PREVIEW_ALREADY_SAVED';
         duplicate.statusCode = 409;
@@ -345,18 +409,72 @@ export class TranslationService {
    * Basic validation (length, style enum) is handled by Zod schema at route level (400)
    * Prompt injection detection is the only semantic validation here (422)
    * Age restriction check for age-restricted styles (403)
+   *
+   * Implements HMAC-based cache deduplication (same as translatePreview):
+   * - Checks cache for identical request (userId + normalized text + style + styleVersion)
+   * - If cache hit, returns existing translation without calling LLM
+   * - If cache miss, calls LLM, persists to database
    */
   async translate(userId: number, input: TranslateInput): Promise<TranslationResult> {
-    // Use core translation logic
-    const previewResult = await this.translateCore(userId, input);
+    const { text, style } = input;
 
-    // Persist translation record
+    // Validate and normalize text first
+    const { normalizedText } = this.validateAndNormalizeText(text);
+
+    // Get style version from registry for cache key
+    const styleMetadata = await getStyleMetadata(style);
+    const styleVersion = styleMetadata.version;
+
+    // Check cache for identical request (HMAC-based deduplication)
+    const cachedPreviewId = await previewCacheService.checkCacheHit(
+      userId,
+      normalizedText,
+      style,
+      styleVersion
+    );
+
+    if (cachedPreviewId) {
+      // Cache hit - retrieve existing preview data and persist as translation
+      const cachedData = await previewCacheService.getPreview(cachedPreviewId, userId);
+      if (cachedData) {
+        // Persist translation record with style version using cached data
+        const translation = await this.prisma.translation.create({
+          data: {
+            userId,
+            previewId: cachedPreviewId,
+            originalText: cachedData.originalText,
+            translatedText: cachedData.translatedText,
+            slangStyle: cachedData.style as SlangStyle,
+            styleVersion,
+            aiProvider: cachedData.aiProvider as AIProvider,
+            favorite: false,
+          },
+        });
+
+        return {
+          id: translation.id,
+          originalText: translation.originalText,
+          translatedText: translation.translatedText,
+          slangStyle: translation.slangStyle,
+          aiProvider: translation.aiProvider,
+          favorite: translation.favorite,
+          createdAt: translation.createdAt,
+        };
+      }
+      // If cached data not found (expired/deleted), fall through to generate new
+    }
+
+    // Cache miss - perform translation
+    const previewResult = await this.translateCore(userId, { text: normalizedText, style });
+
+    // Persist translation record with style version
     const translation = await this.prisma.translation.create({
       data: {
         userId,
         originalText: previewResult.originalText,
         translatedText: previewResult.translatedText,
         slangStyle: previewResult.slangStyle,
+        styleVersion,
         aiProvider: previewResult.aiProvider,
         favorite: false,
       },

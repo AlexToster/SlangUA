@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Clipboard, X, AlertCircle } from 'lucide-react';
+import { Clipboard, Dices, X, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import './TextInput.css';
 
@@ -7,6 +7,8 @@ interface TextInputProps {
   value: string;
   onChange: (text: string) => void;
   onPaste: () => void;
+  onRandomPhrase: () => void;
+  isRandomPhraseDisabled: boolean;
   graphemeCount: number;
   maxGraphemes: number;
   isWarningZone: boolean;
@@ -14,7 +16,7 @@ interface TextInputProps {
   placeholder: string;
 }
 
-export function TextInput({ value, onChange, onPaste, graphemeCount, maxGraphemes, isWarningZone, isOverLimit, placeholder }: TextInputProps) {
+export function TextInput({ value, onChange, onPaste, onRandomPhrase, isRandomPhraseDisabled, graphemeCount, maxGraphemes, isWarningZone, isOverLimit, placeholder }: TextInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea
@@ -71,6 +73,16 @@ export function TextInput({ value, onChange, onPaste, graphemeCount, maxGrapheme
         >
           <Clipboard size={18} />
           <span>Вставити</span>
+        </button>
+        <button
+          type="button"
+          className="text-input-random-btn"
+          onClick={onRandomPhrase}
+          aria-label="Вставити випадкову фразу"
+          disabled={isRandomPhraseDisabled}
+        >
+          <Dices size={18} />
+          <span>Випадкова фраза</span>
         </button>
         <div className={clsx('char-counter', isOverLimit && 'error', isWarningZone && 'warning')}
              id={isOverLimit ? 'char-limit-error' : isWarningZone ? 'char-limit-warning' : 'char-counter'}

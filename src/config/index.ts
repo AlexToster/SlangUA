@@ -54,6 +54,10 @@ const envSchema = z.object({
   AI_RETRY_DELAY_MS: z.coerce.number().default(1000),
   AI_MAX_FALLBACK_ATTEMPTS: z.coerce.number().optional(),
 
+  // Circuit Breaker
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().default(5),
+  CIRCUIT_BREAKER_RESET_MS: z.coerce.number().default(60000),
+
   // Ollama
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
 
@@ -88,11 +92,27 @@ const envSchema = z.object({
   SHARE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(10),
   SHARE_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:share'),
 
+  // Telegram Webhook Rate Limiting
+  WEBHOOK_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  WEBHOOK_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(30),
+  WEBHOOK_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:webhook'),
+
   // Trust Proxy (for correct IP detection behind reverse proxy)
   TRUST_PROXY: z.enum(['true', 'false']).transform(v => v === 'true').default('false'),
 
+  // CORS
+  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
+
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+}).superRefine((data, ctx) => {
+  if (data.TELEGRAM_INLINE_ENABLED && (!data.TELEGRAM_WEBHOOK_SECRET || data.TELEGRAM_WEBHOOK_SECRET.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'TELEGRAM_WEBHOOK_SECRET is required when TELEGRAM_INLINE_ENABLED is true',
+      path: ['TELEGRAM_WEBHOOK_SECRET'],
+    });
+  }
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -105,7 +125,7 @@ export function loadConfig(): Env {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    console.error('❌ Invalid environment variables:');
+    console.error(' Invalid environment variables:');
     console.error(result.error.flatten().fieldErrors);
     process.exit(1);
   }

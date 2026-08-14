@@ -47,10 +47,10 @@
 На Translate немає кнопки «Перекласти». Переклад виконується автоматично після паузи у введенні. Це головна взаємодія продукту, тому індикатор стану має бути зрозумілим і не блокувати редагування тексту.
 
 1. Користувач вводить або вставляє текст.
-2. Після 700 мс без змін, якщо текст містить щонайменше 3 непробільні символи, клієнт запитує preview-переклад.
+2. Після 900 мс без змін, якщо текст містить щонайменше 3 непробільні символи, клієнт запитує preview-переклад.
 3. Поки відповідь очікується, попередній результат залишається видимим, але має ненав'язливий стан «Оновлюємо…».
 4. Відповідь замінює результат лише якщо вона відповідає останній версії тексту й стилю.
-5. При зміні стилю поточний непорожній текст перекладається одразу, без 700 мс затримки. Якщо тексту немає, змінюється тільки вибір стилю.
+5. При зміні стилю поточний непорожній текст перекладається одразу, без 900 мс затримки. Якщо тексту немає, змінюється тільки вибір стилю.
 
 Кнопка «Повторити» з'являється лише у стані помилки; вона не є основною дією екрана.
 
@@ -85,6 +85,10 @@
 Максимум — **1 000 символів**. Це достатньо для одного-двох коротких абзаців, зберігає швидку відповідь і зменшує витрати на часті автоматичні запити дешевих моделей. Клієнт не обрізає вставлений текст непомітно: над лімітом він не запускає переклад, показує пояснення та дає користувачу самостійно скоротити текст.
 
 Кнопка «Вставити» звертається до Clipboard API тільки після явного натискання. У разі відмови у дозволі або недоступності API показується короткий toast «Встав текст вручну»; поле лишається сфокусованим. Буфер не читається під час відкриття екрана або в background.
+
+Поруч із «Вставити» є кнопка «Випадкова фраза». Вона вибирає коротку українську фразу з локального набору та вставляє її в поле; поточний механізм автоматично створює preview у вибраному стилі. Нова фраза не збігається з безпосередньо попередньою. Незмінена демо-фраза замінюється одразу, а перед заміною вручну введеної, вставленої або відредагованої чернетки Mini App просить підтвердження. Демо-фрази не створюють History без явного збереження користувачем.
+
+Локальний набір містить категорії `daily`, `study`, `work`, `tech`, `social`, але в першій версії їх не показано на Translate. У майбутньому Settings дозволятиме користувачу вмикати або вимикати категорії, з яких добираються випадкові фрази.
 
 ### 3.3. Результат
 
@@ -272,7 +276,7 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 ## 12. Критерії приймання Stage 7
 
 - `/` відкриває Translate; UI не має Home-вкладки, Home-екрана чи адмінських функцій.
-- Текст від 3 до 1 000 символів автоматично створює не більше одного preview-запиту для незмінної пари `{ text, style }` після 700 мс паузи.
+- Текст від 3 до 1 000 символів автоматично створює не більше одного preview-запиту для незмінної пари `{ text, style }` після 900 мс паузи.
 - Старі відповіді ніколи не замінюють результат для новішого тексту або стилю.
 - Зміна стилю з непорожнім текстом оновлює переклад; без тексту не викликає API.
 - Вставлення й копіювання працюють після явної дії, коректно обробляють відмову Clipboard API та не читають буфер у background.
@@ -290,7 +294,7 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 ```text
 Complete the remaining Stage 7 Telegram Mini App acceptance checks in plans/docs/08-frontend-design.md.
 
-Treat plans/docs/04-api.md as the API contract. Keep `/` as the Translate screen; do not add a Home or admin screen. Preserve the implemented preview/save/share flow: debounce preview after 700 ms and 3 characters, cancel stale requests, enforce the 1,000-grapheme UI limit, and never send client-generated translated text to persistence endpoints.
+Treat plans/docs/04-api.md as the API contract. Keep `/` as the Translate screen; do not add a Home or admin screen. Preserve the implemented preview/save/share flow: debounce preview after 900 ms and 3 characters, cancel stale requests, enforce the 1,000-grapheme UI limit, and never send client-generated translated text to persistence endpoints.
 
 Use only server-filtered styles for translation requests. The selector may show a static locked Pofeni entry only to start age self-attestation; it must not enable POFENI until PATCH /user/me succeeds and styles are refetched. AGE_RESTRICTED_STYLE is a recoverable stale-selection fallback. Keep theme, sound, and haptic preferences in this Mini App's localStorage; server-side preferences remain defaultSlangStyle, notificationsEnabled, and ageConfirmedAdult.
 

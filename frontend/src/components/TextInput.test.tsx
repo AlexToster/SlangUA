@@ -6,6 +6,8 @@ describe('TextInput', () => {
     value: '',
     onChange: vi.fn(),
     onPaste: vi.fn(),
+    onRandomPhrase: vi.fn(),
+    isRandomPhraseDisabled: false,
     graphemeCount: 0,
     maxGraphemes: 1000,
     isWarningZone: false,
@@ -64,6 +66,12 @@ describe('TextInput', () => {
     const pasteButton = screen.getByLabelText('Вставити з буфера обміну');
     fireEvent.click(pasteButton);
     expect(defaultProps.onPaste).toHaveBeenCalled();
+  });
+
+  it('calls onRandomPhrase when random phrase button clicked', () => {
+    render(<TextInput {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText('Вставити випадкову фразу'));
+    expect(defaultProps.onRandomPhrase).toHaveBeenCalled();
   });
   
   it('shows clear button when value exists', () => {

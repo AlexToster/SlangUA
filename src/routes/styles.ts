@@ -40,13 +40,14 @@ export const stylesRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) 
     };
   };
 
-  // GET /api/v1/styles - Get available styles for the authenticated user
+    // GET /api/v1/styles - Get available styles for the authenticated user
   app.get('/styles', {
     schema: {
       response: {
         200: z.array(z.object({
           id: z.enum(SLANG_STYLE_VALUES),
           title: z.string(),
+          ageRestricted: z.boolean(),
         })),
         401: z.object({
           error: z.string(),
@@ -83,14 +84,15 @@ export const stylesRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) 
     // Load all styles from registry
     const registry: Record<string, RegistryEntry> = await loadRegistry();
 
-    // Filter styles: enabled === true AND (ageRestricted === false OR user's ageConfirmedAdult === true)
-    const availableStyles = Object.values(registry)
-      .filter((entry) => entry.enabled && (!entry.ageRestricted || profile.ageConfirmedAdult))
+    // Return all enabled styles with ageRestricted flag; frontend handles locking
+    const allStyles = Object.values(registry)
+      .filter((entry) => entry.enabled)
       .map((entry) => ({
         id: entry.id.toUpperCase(),
         title: entry.title,
+        ageRestricted: entry.ageRestricted,
       }));
 
-    return availableStyles;
+    return allStyles;
   });
 };

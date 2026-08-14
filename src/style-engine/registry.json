@@ -3,35 +3,35 @@
     "id": "gen_z",
     "title": "Молодіжний тікток-сленг",
     "enabled": true,
-    "version": "1.0",
+    "version": "1.0.1",
     "ageRestricted": false
   },
   "street": {
     "id": "street",
     "title": "Вуличний базар",
     "enabled": true,
-    "version": "1.0",
+    "version": "1.0.1",
     "ageRestricted": false
   },
   "it_slang": {
     "id": "it_slang",
-    "title": "АйТішний спіч",
+    "title": "АйТІшний спіч",
     "enabled": true,
-    "version": "1.0",
+    "version": "1.0.1",
     "ageRestricted": false
   },
   "pofeni": {
     "id": "pofeni",
     "title": "Зеківський жаргон",
     "enabled": true,
-    "version": "1.0",
+    "version": "1.0.1",
     "ageRestricted": true
   },
   "kancler": {
     "id": "kancler",
     "title": "Бюрократична радянщина",
     "enabled": true,
-    "version": "1.0",
+    "version": "1.0.1",
     "ageRestricted": false
   }
 }

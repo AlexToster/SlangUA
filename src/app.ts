@@ -11,6 +11,7 @@ import { shareRoutes } from './routes/share.js';
 import { connectRedis, disconnectRedis } from './lib/redis.js';
 import { createRateLimiter } from './plugins/rate-limit.js';
 import { initializeStyleEngine } from './style-engine/loader.js';
+import cors from '@fastify/cors';
 
 // Import types from fastify submodules
 import type { FastifyInstance } from 'fastify/types/instance';
@@ -40,6 +41,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Zod validation compiler
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // CORS - must be registered before routes to handle preflight requests
+  await app.register(cors, {
+    origin: config.CORS_ALLOWED_ORIGINS.split(',').map(s => s.trim()),
+    credentials: true,
+  });
 
   // Redis is required: the API must not accept LLM-capable requests without rate limiting.
   await connectRedis();

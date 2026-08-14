@@ -97,5 +97,8 @@ Detailed documentation has been moved to the `plans/docs/` directory.
 - [Architectural Decisions](docs/05-decisions.md)
 - [Security](docs/06-security.md)
 - [Styles](docs/07-styles.md)
+- [Frontend Design Specification](docs/08-frontend-design.md)
+- [Telegram-native Sharing Architecture](docs/09-telegram-sharing.md)
+- [Repository Hygiene](docs/10-repository-hygiene.md)
 - [Project Roadmap](ROADMAP.md)
 - [Prisma Schema](../prisma/schema.prisma)

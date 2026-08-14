@@ -29,6 +29,7 @@ model Translation {
   originalText   String
   translatedText String
   slangStyle     SlangStyle
+  styleVersion   String?    // version from registry.json at time of creation
   aiProvider     AIProvider
   favorite       Boolean    @default(false)
   createdAt      DateTime   @default(now())

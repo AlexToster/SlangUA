@@ -16,6 +16,7 @@ function graphemes(text: string) { return Array.from(new Intl.Segmenter('uk', { 
 
 export const shareRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   const rateLimit = createRateLimiter({ windowMs: config.SHARE_RATE_LIMIT_WINDOW_MS, maxRequests: config.SHARE_RATE_LIMIT_MAX_REQUESTS, keyPrefix: config.SHARE_RATE_LIMIT_KEY_PREFIX });
+  const webhookRateLimit = createRateLimiter({ windowMs: config.WEBHOOK_RATE_LIMIT_WINDOW_MS, maxRequests: config.WEBHOOK_RATE_LIMIT_MAX_REQUESTS, keyPrefix: config.WEBHOOK_RATE_LIMIT_KEY_PREFIX });
   const authenticate = async (request: any, reply: any) => {
     const token = request.headers.authorization?.startsWith('Bearer ') ? request.headers.authorization.slice(7) : null;
     const payload = token && await authService.verifyAccessToken(token);
@@ -45,9 +46,9 @@ export const shareRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =
     return { inlineQuery: `s_${token}`, expiresAt: expiresAt.toISOString() };
   });
 
-  app.post('/telegram/webhook', async (request: any, reply) => {
+  app.post('/telegram/webhook', { preHandler: [webhookRateLimit] }, async (request: any, reply) => {
     if (!config.TELEGRAM_INLINE_ENABLED) return reply.status(404).send();
-    if (config.TELEGRAM_WEBHOOK_SECRET && request.headers['x-telegram-bot-api-secret-token'] !== config.TELEGRAM_WEBHOOK_SECRET) return reply.status(401).send();
+    if (request.headers['x-telegram-bot-api-secret-token'] !== config.TELEGRAM_WEBHOOK_SECRET) return reply.status(401).send();
     const inlineQuery = request.body?.inline_query;
     if (inlineQuery) {
       try { await telegramInlineService.handleInlineQuery(inlineQuery); } catch (err) { request.log.error({ err }, 'Telegram inline response failed'); }

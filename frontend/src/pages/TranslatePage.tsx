@@ -10,14 +10,14 @@ import { StyleSelector } from '../components/StyleSelector';
 import { TextInput } from '../components/TextInput';
 import { PreviewResult } from '../components/PreviewResult';
 import { Toast } from '../components/Toast';
-import type { PreviewResult as PreviewResultType, ShareSource, SlangStyle, Style } from '../types/api';
-import { getStyleLabel, localizeStyles } from '../utils/styleLabels';
+import type { PreviewResult as PreviewResultType, ShareSource, SlangStyle } from '../types/api';
+import { localizeStyles } from '../utils/styleLabels';
+import { getRandomSamplePhrase, type SamplePhrase } from '../data/samplePhrases';
 import './TranslatePage.css';
 
-const DEBOUNCE_MS = 700;
+const DEBOUNCE_MS = 900;
 const MIN_CHARS_FOR_PREVIEW = 3;
 const MAX_GRAPHEMES = 1000;
-const POFENI_STYLE: Style = { id: 'POFENI', title: getStyleLabel('POFENI') };
 
 export function TranslatePage() {
   const navigate = useNavigate();
@@ -27,6 +27,7 @@ export function TranslatePage() {
   const [showStyleSheet, setShowStyleSheet] = useState(false);
   const [showAgeGateToast, setShowAgeGateToast] = useState(false);
   const [showPofeniAgeConfirm, setShowPofeniAgeConfirm] = useState(false);
+  const [pendingRandomPhrase, setPendingRandomPhrase] = useState<SamplePhrase | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -35,10 +36,13 @@ export function TranslatePage() {
   const [savedTranslationId, setSavedTranslationId] = useState<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastPreviewKeyRef = useRef<string | null>(null);
+  const previewVersionRef = useRef(0);
   const previousStyleRef = useRef<SlangStyle | null>(null);
   const previousInputKeyRef = useRef<string | null>(null);
   const previewAttemptRef = useRef({ key: '', retryNonce: 0, count: 0 });
   const pendingRestrictedStyleRef = useRef<SlangStyle | null>(null);
+  const lastRandomPhraseIdRef = useRef<string | null>(null);
+  const isDemoDraftRef = useRef(false);
 
   // Fetch styles and profile
   const {
@@ -131,9 +135,11 @@ export function TranslatePage() {
 
   // Preview translation mutation
   const previewMutation = useMutation({
-    mutationFn: ({ text, style, signal }: { text: string; style: SlangStyle; signal: AbortSignal }) =>
+    mutationFn: ({ text, style, signal }: { text: string; style: SlangStyle; signal: AbortSignal; version: number }) =>
       apiService.translatePreview(text, style, signal),
     onSuccess: (data, variables) => {
+      if (variables.version !== previewVersionRef.current || variables.signal.aborted) return;
+
       const currentKey = `${variables.text}|${variables.style}`;
       if (currentKey === lastPreviewKeyRef.current) {
         setCurrentPreview(data);
@@ -141,8 +147,14 @@ export function TranslatePage() {
         queryClient.setQueryData(['preview', currentKey], data);
       }
     },
-    onError: (error: any) => {
-      if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') return;
+    onError: (error: any, variables) => {
+      const isCanceled = axios.isCancel(error)
+        || error?.code === 'ERR_CANCELED'
+        || error?.name === 'CanceledError'
+        || error?.name === 'AbortError';
+
+      if (variables.version !== previewVersionRef.current || variables.signal.aborted || isCanceled) return;
+
       // A rate-limited request must not spend two more automatic attempts.
       if (error?.response?.status === 429) {
         previewAttemptRef.current = { ...previewAttemptRef.current, count: MAX_AUTOMATIC_PREVIEW_ATTEMPTS };
@@ -213,6 +225,7 @@ export function TranslatePage() {
   useEffect(() => {
     const inputKey = `${draftText}|${selectedStyle ?? ''}`;
     if (previousInputKeyRef.current !== null && previousInputKeyRef.current !== inputKey) {
+      previewVersionRef.current += 1;
       abortControllerRef.current?.abort();
     }
     previousInputKeyRef.current = inputKey;
@@ -220,6 +233,7 @@ export function TranslatePage() {
 
   // Debounced preview. A style change is the one exception: it refreshes immediately.
   useEffect(() => {
+    const previewVersion = previewVersionRef.current;
     const normalizedDraft = draftText.trim();
     const graphemeCount = countGraphemes(normalizedDraft);
     if (!selectedStyle || graphemeCount < MIN_CHARS_FOR_PREVIEW) {
@@ -257,7 +271,7 @@ export function TranslatePage() {
       abortControllerRef.current?.abort();
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      previewMutation.mutate({ text: draftText, style: selectedStyle, signal: controller.signal });
+      previewMutation.mutate({ text: draftText, style: selectedStyle, signal: controller.signal, version: previewVersion });
     };
 
     if (styleChanged) {
@@ -286,13 +300,14 @@ export function TranslatePage() {
     setShowPofeniAgeConfirm(true);
   }, []);
 
-  const cancelPofeniAgeConfirm = useCallback(() => {
+  const cancelAgeConfirm = useCallback(() => {
     pendingRestrictedStyleRef.current = null;
     setShowPofeniAgeConfirm(false);
   }, []);
 
   // Handle text change
   const handleTextChange = useCallback((text: string) => {
+    isDemoDraftRef.current = false;
     setDraftText(text);
     setSavedTranslationId(null);
     setErrorBanner(null);
@@ -307,6 +322,7 @@ export function TranslatePage() {
         setToast({ message: `Текст занадто довгий (макс. ${MAX_GRAPHEMES} символів)`, type: 'error' });
         return;
       }
+      isDemoDraftRef.current = false;
       setDraftText(text);
       triggerHapticFeedback('impact');
     } catch {
@@ -317,6 +333,31 @@ export function TranslatePage() {
       });
     }
   }, []);
+
+  const insertRandomPhrase = useCallback((phrase: SamplePhrase) => {
+    lastRandomPhraseIdRef.current = phrase.id;
+    isDemoDraftRef.current = true;
+    setDraftText(phrase.text);
+    setSavedTranslationId(null);
+    setErrorBanner(null);
+    triggerHapticFeedback('selection');
+  }, []);
+
+  const handleRandomPhrase = useCallback(() => {
+    const phrase = getRandomSamplePhrase(lastRandomPhraseIdRef.current);
+    if (draftText && !isDemoDraftRef.current) {
+      setPendingRandomPhrase(phrase);
+      return;
+    }
+    insertRandomPhrase(phrase);
+  }, [draftText, insertRandomPhrase]);
+
+  const cancelRandomPhrase = useCallback(() => setPendingRandomPhrase(null), []);
+
+  const confirmRandomPhrase = useCallback(() => {
+    if (pendingRandomPhrase) insertRandomPhrase(pendingRandomPhrase);
+    setPendingRandomPhrase(null);
+  }, [insertRandomPhrase, pendingRandomPhrase]);
 
   // Handle copy result
   const handleCopy = useCallback(async (text: string) => {
@@ -366,9 +407,7 @@ export function TranslatePage() {
   const isOverLimit = graphemeCount > MAX_GRAPHEMES;
   const isWarningZone = graphemeCount >= 850 && !isOverLimit;
   const localizedStyles = localizeStyles(styles);
-  const selectorStyles = !profile?.ageConfirmedAdult && !localizedStyles.some((style) => style.id === 'POFENI')
-    ? [...localizedStyles, POFENI_STYLE]
-    : localizedStyles;
+  const selectorStyles = localizedStyles;
 
   if (stylesLoading) {
     return (
@@ -391,7 +430,7 @@ export function TranslatePage() {
           isError={stylesError}
           isAuthenticated={apiService.isAuthenticated()}
           onRetry={() => void refetchStyles()}
-          lockedStyleIds={profile?.ageConfirmedAdult ? [] : ['POFENI']}
+          lockedStyleIds={profile?.ageConfirmedAdult ? [] : styles.filter(s => s.ageRestricted).map(s => s.id)}
           onLockedSelect={handleLockedStyleSelect}
         />
       </header>
@@ -401,6 +440,8 @@ export function TranslatePage() {
           value={draftText}
           onChange={handleTextChange}
           onPaste={handlePaste}
+          onRandomPhrase={handleRandomPhrase}
+          isRandomPhraseDisabled={!selectedStyle || previewMutation.isPending}
           graphemeCount={graphemeCount}
           maxGraphemes={MAX_GRAPHEMES}
           isWarningZone={isWarningZone}
@@ -421,7 +462,7 @@ export function TranslatePage() {
           canSave={!!currentPreview?.previewId && !saveMutation.isPending}
           isSaving={saveMutation.isPending}
           onShare={handleShare}
-          canShare={canUseTelegramInlineSharing() && currentPreview?.slangStyle !== 'POFENI'}
+          canShare={canUseTelegramInlineSharing() && !!currentPreview && styles.find(s => s.id === currentPreview?.slangStyle)?.ageRestricted !== true}
           isSharing={shareMutation.isPending}
         />
       </main>
@@ -445,10 +486,23 @@ export function TranslatePage() {
             <h2 id="pofeni-age-confirm-title">Підтвердження 18+</h2>
             <p>«Зеківський жаргон» може містити лексику для повнолітніх. Підтверджуючи, ви стверджуєте, що вам є 18+.</p>
             <div className="translate-age-modal-actions">
-              <button type="button" onClick={cancelPofeniAgeConfirm}>Скасувати</button>
+              <button type="button" onClick={cancelAgeConfirm}>Скасувати</button>
               <button type="button" className="confirm" onClick={() => confirmAgeMutation.mutate()} disabled={confirmAgeMutation.isPending}>
                 {confirmAgeMutation.isPending ? 'Підтверджуємо…' : 'Так, мені є 18+'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingRandomPhrase && (
+        <div className="translate-age-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="random-phrase-confirm-title">
+          <div className="translate-age-modal">
+            <h2 id="random-phrase-confirm-title">Замінити поточний текст?</h2>
+            <p>Поточна чернетка буде замінена випадковою фразою.</p>
+            <div className="translate-age-modal-actions">
+              <button type="button" onClick={cancelRandomPhrase}>Скасувати</button>
+              <button type="button" className="confirm" onClick={confirmRandomPhrase}>Замінити</button>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ export type AIProvider = 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'OLLAMA';
 export interface Style {
   id: SlangStyle;
   title: string;
+  ageRestricted: boolean;
 }
 
 export interface UserProfile {
