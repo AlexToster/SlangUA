@@ -93,9 +93,9 @@ The following entities represent the persistent state of the SlangUA system, man
   - Purpose: The specific slang style requested (e.g., "Gen-Z", "Street").
   - Conceptual Type: Enum (SlangStyle).
   - Required: Yes.
-- **aiProvider**:
-  - Purpose: The AI provider used for this specific translation.
-  - Conceptual Type: Enum (AIProvider).
+- **providerId**:
+  - Purpose: Id of the configured AI instance that served this translation, e.g. `openai`, `openrouter`, `groq`.
+  - Conceptual Type: String (lowercase id, see [Provider ids](#provider-ids)).
   - Required: Yes.
 - **favorite**:
   - Purpose: Flag indicating if the user "bookmarked" this translation.
@@ -141,12 +141,25 @@ The following entities represent the persistent state of the SlangUA system, man
 - **KANCLER**: Ukrainian bureaucratic/official register ("канцелярський").
 - **GALICIAN**: Authentic Galician regional dialect ("галицька ґвара") — added after the MVP refactor via the `add_galician_enum` migration (`ALTER TYPE "SlangStyle" ADD VALUE 'GALICIAN'`).
 
-### Enum: AIProvider
-- **OPENAI**: OpenAI models.
-- **ANTHROPIC**: Claude models.
-- **GEMINI**: Google Gemini models.
-- **OLLAMA**: Local/self-hosted models.
-- **OPENROUTER**: Router to many models via openrouter.ai; default model is free-tier (nvidia/nemotron-3-nano-30b-a3b:free).
+### Provider ids
+
+`Translation.providerId` is deliberately **not** an enum. Which AI instances exist is a
+deployment concern: `AI_EXTRA_INSTANCES` can introduce an endpoint the code has never heard
+of, and an enum would turn every such addition into a schema migration. The column stores a
+free-form lowercase id validated against `PROVIDER_ID_PATTERN` (`/^[a-z0-9][a-z0-9_-]{0,31}$/`)
+before it reaches the database, and the same string is what the API returns.
+
+The ids shipped with the backend:
+
+- **openai**: OpenAI models.
+- **anthropic**: Claude models.
+- **gemini**: Google Gemini models.
+- **ollama**: Local/self-hosted models.
+- **openrouter**: Router to many models via openrouter.ai; default model is free-tier (nvidia/nemotron-3-nano-30b-a3b:free).
+
+History: the column was `aiProvider AIProvider` until the `provider_id_free_form` migration,
+which renamed it to `providerId`, retyped it to `TEXT` and lowercased the existing values
+(`OPENAI` → `openai`), then dropped the `AIProvider` type.
 
 ## Relationships, Constraints & Indexes
 
@@ -230,7 +243,7 @@ Redis serves as a low-latency ephemeral store for data that does not require lon
 ## Scalability & Future-Proofing
 
 ### 1. Multiple AI Providers & Slang Styles
-- **Current Support**: The use of **Enums** (`AIProvider`, `SlangStyle`) allows for the easy addition of new values without changing the table structure.
+- **Current Support**: `SlangStyle` is an **Enum**, so a new style is added without changing the table structure. `providerId` is a plain string, so a new AI instance is a configuration change (`AI_EXTRA_INSTANCES`) with no migration at all.
 - **Scalability**: The `Translation` entity already tracks which provider and style were used for every record, enabling style-specific or provider-specific analysis.
 
 ### 2. Premium Subscriptions

@@ -4,7 +4,7 @@
  * Core interfaces and types for the AI provider abstraction layer.
  */
 
-import { AIProvider } from '@prisma/client';
+import { KeyCooldownMs, KeyCooldownStore } from './key-pool';
 
 /**
  * Translation request parameters
@@ -19,7 +19,12 @@ export interface TranslateRequest {
  */
 export interface TranslateResponse {
   translatedText: string;
-  provider: AIProvider;
+  /**
+   * Id of the configured instance that served the request, persisted as
+   * `Translation.providerId`. A string rather than an enum: see
+   * PROVIDER_ID_PATTERN in src/constants.
+   */
+  providerId: string;
   model: string;
   usage?: {
     promptTokens: number;
@@ -33,7 +38,16 @@ export interface TranslateResponse {
  */
 export interface ProviderConfig {
   enabled: boolean;
-  apiKey?: string;
+  /**
+   * Every API key configured for this instance, in priority order. A list
+   * rather than a single value because free tiers are per key: `*_API_KEY`
+   * accepts a comma-separated set, and the adapter rotates away from a key that
+   * is rate-limited or out of quota instead of failing the request.
+   *
+   * Empty means "no key configured", which is only usable together with
+   * `requiresApiKey: false`.
+   */
+  apiKeys?: string[];
   /**
    * Whether this provider needs an API key to be considered available.
    * Defaults to true. A local OpenAI-compatible server (Ollama, vLLM,
@@ -45,6 +59,10 @@ export interface ProviderConfig {
   maxRetries: number;
   retryDelayMs: number;
   priority: number;
+  /** How long a key stays parked after each kind of exhaustion. */
+  keyCooldownMs?: KeyCooldownMs;
+  /** Where per-key cooldowns are stored; defaults to the in-memory store. */
+  keyCooldownStore?: KeyCooldownStore;
 }
 
 /**
@@ -52,18 +70,13 @@ export interface ProviderConfig {
  */
 export interface IAIProvider {
   /**
-   * Unique provider identifier (matches Prisma AIProvider enum)
-   */
-  readonly provider: AIProvider;
-
-  /**
-   * Instance identifier used in logs and operation names.
+   * Identifier of this configured instance: lowercase, matching
+   * PROVIDER_ID_PATTERN (`openai`, `openrouter`, `groq`). It is what gets
+   * persisted in `Translation.providerId`, what keys the circuit breaker and the
+   * key pool, and what appears in logs.
    *
-   * Today it is always the lowercased `provider`, but it is a separate field
-   * on purpose: `provider` is the value persisted in `Translation.aiProvider`,
-   * while `id` names one configured instance. Two instances of the same
-   * provider (say, two Gemini keys) would share `provider` and differ by `id`,
-   * and that has to stay a config change rather than a refactor.
+   * Two instances of the same vendor (a second Gemini account, say) differ only
+   * by id, which keeps that a config change rather than a refactor.
    */
   readonly id: string;
 
@@ -95,9 +108,9 @@ export interface IProviderFactory {
   getProviders(): IAIProvider[];
 
   /**
-   * Get a specific provider by name
+   * Get a specific provider by instance id
    */
-  getProvider(name: AIProvider): IAIProvider | undefined;
+  getProvider(id: string): IAIProvider | undefined;
 
   /**
    * Get the primary (highest priority) available provider

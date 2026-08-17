@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Copy, Check, Save, Send, AlertCircle, Loader2 } from 'lucide-react';
 import type { PreviewResult as PreviewResultType } from '../types/api';
 import { getStyleLabel } from '../utils/styleLabels';
+import { getProviderLabel } from '../utils/providerLabels';
 import './PreviewResult.css';
 
 interface PreviewResultProps {
@@ -147,7 +148,7 @@ export function PreviewResult({
           <div className="preview-text">{preview.translatedText}</div>
           <div className="preview-meta">
             <span className="preview-style">{getStyleLabel(preview.slangStyle)}</span>
-            <span className="preview-provider">{preview.aiProvider}</span>
+            <span className="preview-provider">{getProviderLabel(preview.providerId)}</span>
           </div>
         </div>
         <div className="preview-actions">

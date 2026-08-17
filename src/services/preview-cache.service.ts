@@ -8,7 +8,12 @@ export interface PreviewData {
   translatedText: string;
   style: string;
   styleVersion: string;
-  aiProvider: string;
+  /**
+   * Id of the AI instance that produced the text. Renamed from `aiProvider`
+   * together with the database column; a payload still using the old field name
+   * is rejected as unreadable in `getPreview`.
+   */
+  providerId: string;
   userId: number;
   createdAt: number;
   expiresAt: number;
@@ -166,6 +171,14 @@ export class PreviewCacheService {
         return null;
       }
       const data = this.decrypt(encrypted, iv, authTag);
+
+      // A payload written before `aiProvider` became `providerId` decrypts fine
+      // but is missing a field the API must return. Treated as expired: the TTL
+      // is ten minutes, and a cache miss just regenerates the preview.
+      if (typeof data.providerId !== 'string' || data.providerId.length === 0) {
+        await this.redis.del(dataKey);
+        return null;
+      }
 
       // Verify ownership
       if (data.userId !== userId) {

@@ -95,7 +95,7 @@ describe('History Integration Tests', () => {
             originalText: `Original ${i}`,
             translatedText: `Translated ${i}`,
             slangStyle: 'GEN_Z',
-            aiProvider: 'OLLAMA',
+            providerId: 'ollama',
             favorite: false,
             createdAt: baseTime,
           },
@@ -157,9 +157,9 @@ describe('History Integration Tests', () => {
     it('should return opaque nextCursor accepted unchanged', async () => {
       await prisma.translation.createMany({
         data: [
-          { userId: userId1, originalText: 'Test 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'Test 2', translatedText: 'Translated 2', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'Test 3', translatedText: 'Translated 3', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
+          { userId: userId1, originalText: 'Test 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'Test 2', translatedText: 'Translated 2', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'Test 3', translatedText: 'Translated 3', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
         ],
       });
 
@@ -191,10 +191,10 @@ describe('History Integration Tests', () => {
     it('should return totalCount representing all matching filters', async () => {
       await prisma.translation.createMany({
         data: [
-          { userId: userId1, originalText: 'Favorite 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: true },
-          { userId: userId1, originalText: 'Favorite 2', translatedText: 'Translated 2', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: true },
-          { userId: userId1, originalText: 'Not Favorite 1', translatedText: 'Translated 3', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'Not Favorite 2', translatedText: 'Translated 4', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
+          { userId: userId1, originalText: 'Favorite 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: true },
+          { userId: userId1, originalText: 'Favorite 2', translatedText: 'Translated 2', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: true },
+          { userId: userId1, originalText: 'Not Favorite 1', translatedText: 'Translated 3', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'Not Favorite 2', translatedText: 'Translated 4', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
         ],
       });
 
@@ -224,7 +224,7 @@ describe('History Integration Tests', () => {
           originalText: `Seeded ${i}`,
           translatedText: `Translated ${i}`,
           slangStyle: 'GEN_Z' as const,
-          aiProvider: 'OLLAMA' as const,
+          providerId: 'ollama' as const,
           // The very oldest row is starred, so pruning must skip it and take the
           // next-oldest instead.
           favorite: i === 0,
@@ -255,7 +255,7 @@ describe('History Integration Tests', () => {
           originalText: `Starred ${i}`,
           translatedText: `Translated ${i}`,
           slangStyle: 'GEN_Z' as const,
-          aiProvider: 'OLLAMA' as const,
+          providerId: 'ollama' as const,
           favorite: true,
           createdAt: new Date(base.getTime() + i * 1000),
         })),
@@ -278,9 +278,9 @@ describe('History Integration Tests', () => {
     it('should return only non-favorites for ?favorite=false', async () => {
       await prisma.translation.createMany({
         data: [
-          { userId: userId1, originalText: 'Favorite 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: true },
-          { userId: userId1, originalText: 'Not Favorite 1', translatedText: 'Translated 2', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'Not Favorite 2', translatedText: 'Translated 3', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
+          { userId: userId1, originalText: 'Favorite 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: true },
+          { userId: userId1, originalText: 'Not Favorite 1', translatedText: 'Translated 2', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'Not Favorite 2', translatedText: 'Translated 3', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
         ],
       });
 
@@ -303,8 +303,8 @@ describe('History Integration Tests', () => {
     it('should return all records when the favorite filter is omitted', async () => {
       await prisma.translation.createMany({
         data: [
-          { userId: userId1, originalText: 'Favorite 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: true },
-          { userId: userId1, originalText: 'Not Favorite 1', translatedText: 'Translated 2', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
+          { userId: userId1, originalText: 'Favorite 1', translatedText: 'Translated 1', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: true },
+          { userId: userId1, originalText: 'Not Favorite 1', translatedText: 'Translated 2', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
         ],
       });
 
@@ -333,10 +333,10 @@ describe('History Integration Tests', () => {
     it('should support case-insensitive search', async () => {
       await prisma.translation.createMany({
         data: [
-          { userId: userId1, originalText: 'Hello World', translatedText: 'Translated 1', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'hello world', translatedText: 'Translated 2', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'HELLO WORLD', translatedText: 'Translated 3', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
-          { userId: userId1, originalText: 'Goodbye', translatedText: 'Translated 4', slangStyle: 'GEN_Z', aiProvider: 'OLLAMA', favorite: false },
+          { userId: userId1, originalText: 'Hello World', translatedText: 'Translated 1', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'hello world', translatedText: 'Translated 2', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'HELLO WORLD', translatedText: 'Translated 3', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
+          { userId: userId1, originalText: 'Goodbye', translatedText: 'Translated 4', slangStyle: 'GEN_Z', providerId: 'ollama', favorite: false },
         ],
       });
 
@@ -360,7 +360,7 @@ describe('History Integration Tests', () => {
           originalText: 'Owner test',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -397,7 +397,7 @@ describe('History Integration Tests', () => {
           originalText: 'Toggle cycle',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -434,7 +434,7 @@ describe('History Integration Tests', () => {
           originalText: 'Idempotent favorite',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -474,7 +474,7 @@ describe('History Integration Tests', () => {
           originalText: 'Toggle without body',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -517,7 +517,7 @@ describe('History Integration Tests', () => {
           originalText: 'Owner test',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -541,7 +541,7 @@ describe('History Integration Tests', () => {
           originalText: 'Delete me',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -566,7 +566,7 @@ describe('History Integration Tests', () => {
           originalText: 'Owner test',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });
@@ -604,7 +604,7 @@ describe('History Integration Tests', () => {
             originalText: 'Clear me 1',
             translatedText: 'Translated',
             slangStyle: 'GEN_Z',
-            aiProvider: 'OLLAMA',
+            providerId: 'ollama',
             favorite: false,
           },
           {
@@ -613,7 +613,7 @@ describe('History Integration Tests', () => {
             originalText: 'Clear me 2',
             translatedText: 'Translated',
             slangStyle: 'GEN_Z',
-            aiProvider: 'OLLAMA',
+            providerId: 'ollama',
             favorite: true,
           },
         ],
@@ -625,7 +625,7 @@ describe('History Integration Tests', () => {
           originalText: 'Keep me',
           translatedText: 'Translated',
           slangStyle: 'GEN_Z',
-          aiProvider: 'OLLAMA',
+          providerId: 'ollama',
           favorite: false,
         },
       });

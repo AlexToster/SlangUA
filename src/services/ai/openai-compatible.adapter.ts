@@ -6,26 +6,25 @@
  * compatible server. It replaces the former OpenAIAdapter, OllamaAdapter and
  * OpenRouterAdapter — see plans/docs/05-decisions.md.
  *
- * Two fields are deliberately separate:
- * - `provider` is the Prisma AIProvider value persisted in
- *   `Translation.aiProvider`; it is a label of who served the translation.
- * - `id` names one configured instance. They coincide today, but two instances
- *   of the same provider must stay a config change, not a refactor.
+ * An instance is fully described by data: an `id`, a base URL and a model. That
+ * is what lets `AI_EXTRA_INSTANCES` add a provider without touching code, and
+ * why `id` is free-form (see PROVIDER_ID_PATTERN) rather than an enum value.
  */
 
-import { AIProvider } from '@prisma/client';
 import OpenAI from 'openai';
-import { BaseAdapter } from './base.adapter';
+import { BaseAdapter, NO_API_KEY } from './base.adapter';
 import { TranslateRequest, TranslateResponse, ProviderConfig } from './types';
+import { KeyExhaustionKind } from './key-pool';
 
 /**
  * Per-instance description of an OpenAI-compatible endpoint.
  */
 export interface OpenAICompatibleOptions {
-  /** Instance id, used in logs and operation names (e.g. `openrouter`). */
+  /**
+   * Instance id: lowercase, matching PROVIDER_ID_PATTERN. Persisted in
+   * `Translation.providerId` and used in logs and operation names.
+   */
   id: string;
-  /** Value persisted in `Translation.aiProvider`. */
-  provider: AIProvider;
   /** Full base URL including the API version segment, e.g. `.../v1`. */
   baseURL: string;
   model: string;
@@ -63,12 +62,15 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 500;
 
 export class OpenAICompatibleAdapter extends BaseAdapter {
-  readonly provider: AIProvider;
+  readonly id: string;
   readonly model: string;
 
-  private readonly instanceId: string;
   private readonly options: OpenAICompatibleOptions;
-  private client: OpenAI | null = null;
+  /**
+   * One SDK client per key. Cached because a client holds connection state, and
+   * bounded by the number of configured keys.
+   */
+  private readonly clients = new Map<string, OpenAI>();
 
   constructor(options: OpenAICompatibleOptions, providerConfig: Partial<ProviderConfig> = {}) {
     super({
@@ -77,50 +79,45 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
     });
 
     this.options = options;
-    this.instanceId = options.id;
-    this.provider = options.provider;
+    this.id = options.id;
     this.model = options.model;
+  }
 
-    const keyRequired = this.config.requiresApiKey !== false;
-    if (this.config.apiKey || !keyRequired) {
-      this.client = new OpenAI({
-        // The SDK refuses to construct without a key and would otherwise fall
-        // back to process.env.OPENAI_API_KEY, which must never leak into a
-        // request aimed at a different endpoint.
-        apiKey: this.config.apiKey ?? 'not-required',
-        baseURL: options.baseURL,
-        // Retries belong to BaseAdapter so every provider observes the same
-        // AI_MAX_RETRIES / AI_RETRY_DELAY_MS. The SDK's own default is 2, which
-        // would silently multiply into up to 9 HTTP calls per translation.
-        maxRetries: 0,
-        // BaseAdapter's withTimeout protects the caller but cannot cancel an
-        // in-flight request; this aborts it at the same deadline.
-        timeout: this.config.timeout,
-        ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}),
-      });
+  private clientFor(apiKey: string): OpenAI {
+    const cached = this.clients.get(apiKey);
+    if (cached) {
+      return cached;
     }
-  }
 
-  override get id(): string {
-    return this.instanceId;
-  }
+    const client = new OpenAI({
+      // The SDK refuses to construct without a key and would otherwise fall
+      // back to process.env.OPENAI_API_KEY, which must never leak into a
+      // request aimed at a different endpoint.
+      apiKey: apiKey === NO_API_KEY ? 'not-required' : apiKey,
+      baseURL: this.options.baseURL,
+      // Retries belong to BaseAdapter so every provider observes the same
+      // AI_MAX_RETRIES / AI_RETRY_DELAY_MS. The SDK's own default is 2, which
+      // would silently multiply into up to 9 HTTP calls per translation - and
+      // would reuse a key the pool already knows is exhausted.
+      maxRetries: 0,
+      // BaseAdapter's withTimeout protects the caller but cannot cancel an
+      // in-flight request; this aborts it at the same deadline.
+      timeout: this.config.timeout,
+      ...(this.options.defaultHeaders ? { defaultHeaders: this.options.defaultHeaders } : {}),
+    });
 
-  isAvailable(): boolean {
-    return super.isAvailable() && !!this.client;
+    this.clients.set(apiKey, client);
+    return client;
   }
 
   async translate(request: TranslateRequest): Promise<TranslateResponse> {
-    if (!this.client) {
-      throw new Error(`${this.instanceId} client not initialized - missing API key`);
-    }
-
     const systemPrompt = await this.buildSystemPrompt(request.style);
-    const operationName = `${this.instanceId} translation`;
+    const operationName = `${this.id} translation`;
     const body = this.buildRequestBody(systemPrompt, request.text);
 
-    const response = await this.withRetry(async () => {
+    const response = await this.withKeyRotation(async (apiKey) => {
       return this.withTimeout(
-        this.client!.chat.completions.create(body),
+        this.clientFor(apiKey).chat.completions.create(body),
         this.config.timeout,
         operationName
       );
@@ -179,6 +176,39 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
   }
 
   /**
+   * Classify a key-level failure from a structured SDK error.
+   *
+   * 402 and a 429 that names the quota mean a spent budget; a plain 429 is a
+   * short-term limit. 401 is a rejected key. 403 is deliberately absent: on
+   * compatible endpoints it is at least as often a model or region restriction,
+   * which no amount of key rotation fixes.
+   */
+  protected classifyKeyExhaustion(error: unknown): KeyExhaustionKind | null {
+    if (error instanceof OpenAI.APIError) {
+      const code = typeof error.code === 'string' ? error.code.toLowerCase() : '';
+      const message = error.message.toLowerCase();
+      const namesQuota = code === 'insufficient_quota' ||
+        message.includes('insufficient_quota') ||
+        message.includes('quota') ||
+        message.includes('credit');
+
+      if (error.status === 402) {
+        return 'quota';
+      }
+      if (error.status === 429) {
+        return namesQuota ? 'quota' : 'rate';
+      }
+      if (error.status === 401) {
+        return 'invalid';
+      }
+      if (error.status !== undefined) {
+        return null;
+      }
+    }
+    return super.classifyKeyExhaustion(error);
+  }
+
+  /**
    * Process the response and extract the translation. `usage` is optional on
    * purpose: several compatible servers (Ollama among them) omit it.
    */
@@ -190,7 +220,7 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
 
     return {
       translatedText,
-      provider: this.provider,
+      providerId: this.id,
       model: this.model,
       usage: response.usage ? {
         promptTokens: response.usage.prompt_tokens,

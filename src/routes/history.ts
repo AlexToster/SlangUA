@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify/types/instance';
 import { historyService } from '../services/history.service.js';
 import { createRateLimiter } from '../plugins/rate-limit.js';
-import { SLANG_STYLE_VALUES, AI_PROVIDER_VALUES, HISTORY_MAX_ENTRIES } from '../constants/index.js';
+import { SLANG_STYLE_VALUES, PROVIDER_ID_PATTERN, HISTORY_MAX_ENTRIES } from '../constants/index.js';
 import { config } from '../config/index.js';
 import { authenticate } from '../plugins/authenticate.js';
 
@@ -34,7 +34,9 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
             originalText: z.string(),
             translatedText: z.string(),
             slangStyle: z.enum(SLANG_STYLE_VALUES),
-            aiProvider: z.enum(AI_PROVIDER_VALUES),
+            // Not an enum: which AI instances exist is a deployment concern
+            // (see AI_EXTRA_INSTANCES), so only the id shape is constrained.
+            providerId: z.string().regex(PROVIDER_ID_PATTERN),
             favorite: z.boolean(),
             createdAt: z.string().datetime(),
           })),
@@ -93,7 +95,7 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
         originalText: t.originalText,
         translatedText: t.translatedText,
         slangStyle: t.slangStyle,
-        aiProvider: t.aiProvider,
+        providerId: t.providerId,
         favorite: t.favorite,
         createdAt: t.createdAt.toISOString(),
       })),
@@ -120,7 +122,7 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
           originalText: z.string(),
           translatedText: z.string(),
           slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(AI_PROVIDER_VALUES),
+          providerId: z.string().regex(PROVIDER_ID_PATTERN),
           favorite: z.boolean(),
           createdAt: z.string().datetime(),
         }),
@@ -162,7 +164,7 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
       originalText: result.originalText,
       translatedText: result.translatedText,
       slangStyle: result.slangStyle,
-      aiProvider: result.aiProvider,
+      providerId: result.providerId,
       favorite: result.favorite,
       createdAt: result.createdAt.toISOString(),
     };

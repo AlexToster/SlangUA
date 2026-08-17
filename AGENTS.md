@@ -34,7 +34,7 @@ Route  →  Service  →  Prisma / Redis / AI Adapter  →  PostgreSQL / LLM
 - **Route** — реєстрація ендпоінта, валідація через Zod, формування відповіді, HTTP-специфічні речі (кукі, заголовки). Бізнес-логіки немає.
 - **Service** — уся бізнес-логіка, доступ до Prisma і Redis, виклик AI, координація транзакцій.
 - **Prisma** — єдиний шар доступу до БД. Сирий SQL лише в міграціях.
-- **AI Adapter** — абстракція над провайдерами: вибір, таймаути, retry, fallback, circuit breaker.
+- **AI Adapter** — абстракція над провайдерами: вибір, таймаути, retry, fallback, circuit breaker. Класів адаптерів три — один на протокол, а не на вендора: `OpenAICompatibleAdapter` (OpenAI, OpenRouter, локальна Ollama через `/v1`), `ClaudeAdapter`, `GeminiAdapter`. Новий сумісний ендпоінт додається параметрами інстанса в `provider.factory.ts` і `.env`, без нового класу. Retry живе лише в `BaseAdapter`: усі SDK-клієнти створюються з `maxRetries: 0`.
 
 Шарів repository/use-case тут немає навмисно — це рішення для MVP одного розробника, зафіксоване в [plans/docs/05-decisions.md](plans/docs/05-decisions.md). Не додавай абстракцій, поки не з'явиться реальна потреба.
 
@@ -62,7 +62,8 @@ Backend, у корені репозиторію:
 
 ```bash
 npm run test:typecheck     # tsc --noEmit
-npm test                   # typecheck + smoke + integration (потрібен Docker Desktop)
+npm run test:unit          # vitest, AI-шар (пул ключів, ротація, fallback) — Docker не потрібен
+npm test                   # typecheck + smoke + unit + integration (потрібен Docker Desktop)
 ```
 
 Frontend, у теці `frontend/`:
@@ -102,16 +103,31 @@ npm run build              # tsc -b tsconfig.app.json tsconfig.node.json && vite
 3. `src/style-engine/registry.json` — запис `{ id, title, enabled, ageRestricted, version }`; ключ мапи мусить дорівнювати `id`, у нижньому регістрі.
 4. `src/style-engine/styles/<id>/` — `prompt.md`, `lexicon.json`, `examples.json` (мінімум 3 приклади; `preferred` — 20–40 найхарактерніших слів).
 5. Frontend — union у `frontend/src/types/api.ts` і вичерпний `Record` у `frontend/src/utils/styleLabels.ts`.
-6. Тести — мок `test/helpers/mock-ollama-server.ts`: додай запис у `DEFAULT_RESPONSES` **і** унікальну фразу в `STYLE_MARKERS` (беруть з рядка `**Voice**` нового `prompt.md`; збіг по id стилю не працює, бо id інших стилів зустрічаються в секціях «Avoid»). Також `test/verify-style-engine.mjs`. Файл `test/helpers/mock-ollama.ts` — застарілий дублікат, який підлягає видаленню; не додавай до нього нові стилі.
+6. Тести — мок `test/helpers/mock-ollama-server.ts`: додай запис у `DEFAULT_RESPONSES` **і** унікальну фразу в `STYLE_MARKERS` (беруть з рядка `**Voice**` нового `prompt.md`; збіг по id стилю не працює, бо id інших стилів зустрічаються в секціях «Avoid»). Також `test/verify-style-engine.mjs`.
 7. Документація — `plans/docs/04-api.md`, `plans/docs/07-styles.md`, `README.md`.
 
 Якщо стилі перетинаються лексично (як STREET і POFENI), розведи їх через `preferred`/`forbidden` за таблицею з `plans/docs/07-styles.md`.
 
-## 10. Чого не робити
+## 10. Як додати AI-провайдера
+
+Якщо ендпоінт розмовляє форматом OpenAI Chat Completions — коду не потрібно взагалі, це зміна `.env`:
+
+```
+AI_EXTRA_INSTANCES=groq
+AI_BASE_URL_GROQ=https://api.groq.com/openai/v1
+AI_MODEL_GROQ=llama-3.3-70b-versatile
+GROQ_API_KEY=...            # можна кілька через кому
+```
+
+Так задумано: `Translation.providerId` — вільний рядок (`PROVIDER_ID_PATTERN`), а не enum, тому новий інстанс не тягне ні міграцію бази, ні зміну union у клієнті. Frontend показує ідентифікатор через `getProviderLabel()`, який для невідомого id повертає його ж у верхньому регістрі. Додати інстанс до `AI_PROVIDER_PRIORITY` не обов'язково: не згаданий у списку працює, просто останнім у ланцюжку.
+
+Власний клас адаптера потрібен лише тоді, коли протокол інший (як в Anthropic і Gemini). Тоді: успадкуй `BaseAdapter`, задай `readonly id`, викликай API через `withKeyRotation()`, а класифікацію помилок провайдера додай в `isNonRetryableError()` і в розпізнавання виду вичерпання ключа. SDK-клієнт створюй **тільки** з `maxRetries: 0` — повтори належать `BaseAdapter`.
+
+## 11. Чого не робити
 
 - Не змінювати `prisma/schema.prisma` заради зручності Style Engine — контракт сумісності забороняє це, крім явно погодженого age gate.
 - Не додавати нових залежностей без потреби; спочатку перевір, що потрібне вже є в проекті.
 - Не вводити Tailwind чи іншу CSS-систему у frontend — там свідомо звичайний CSS на компонент.
-- Не викликати реальні LLM у тестах. Інтеграційні тести користуються локальним Ollama-сумісним моком і не мають жодних зовнішніх мережевих викликів.
+- Не викликати реальні LLM у тестах. Інтеграційні тести користуються локальним OpenAI-сумісним моком (`POST /v1/chat/completions`) і не мають жодних зовнішніх мережевих викликів.
 - Не залишати `console.log`. Логування — через pino-логер Fastify.
 - Не переписувати історію git і не робити операцій із широким радіусом дії без явного погодження.

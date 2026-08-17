@@ -129,7 +129,7 @@ describe('Translate Integration Tests', () => {
       const body = JSON.parse(response.body);
       expect(body).toHaveProperty('translatedText');
       expect(body).toHaveProperty('slangStyle', 'GEN_Z');
-      expect(body).toHaveProperty('aiProvider');
+      expect(body).toHaveProperty('providerId');
       expect(body).toHaveProperty('previewId');
       expect(typeof body.previewId).toBe('string');
       // Validate UUID format
@@ -624,7 +624,7 @@ describe('Translate Integration Tests', () => {
       const originalText = previewBody.originalText;
       const translatedText = previewBody.translatedText;
       const slangStyle = previewBody.slangStyle;
-      const aiProvider = previewBody.aiProvider;
+      const providerId = previewBody.providerId;
 
       // Save from preview
       const saveResponse = await app.inject({
@@ -641,7 +641,7 @@ describe('Translate Integration Tests', () => {
       expect(saveBody.originalText).toBe(originalText);
       expect(saveBody.translatedText).toBe(translatedText);
       expect(saveBody.slangStyle).toBe(slangStyle);
-      expect(saveBody.aiProvider).toBe(aiProvider);
+      expect(saveBody.providerId).toBe(providerId);
       expect(saveBody.favorite).toBe(false);
       expect(saveBody).toHaveProperty('id');
       expect(saveBody).toHaveProperty('createdAt');
@@ -654,7 +654,7 @@ describe('Translate Integration Tests', () => {
       expect(translation!.originalText).toBe(originalText);
       expect(translation!.translatedText).toBe(translatedText);
       expect(translation!.slangStyle).toBe(slangStyle);
-      expect(translation!.aiProvider).toBe(aiProvider);
+      expect(translation!.providerId).toBe(providerId);
     });
 
     it('should persist styleVersion on the saved translation row', async () => {
@@ -883,7 +883,7 @@ describe('Translate Integration Tests', () => {
       const body = JSON.parse(response.body);
       expect(body).toHaveProperty('translatedText');
       expect(body).toHaveProperty('slangStyle', 'GEN_Z');
-      expect(body).toHaveProperty('aiProvider');
+      expect(body).toHaveProperty('providerId');
       expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('favorite', false);
       expect(body).toHaveProperty('createdAt');

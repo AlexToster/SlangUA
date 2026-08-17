@@ -30,7 +30,11 @@ model Translation {
   translatedText String
   slangStyle     SlangStyle
   styleVersion   String?    // version from registry.json at time of creation
-  aiProvider     AIProvider
+  // Which configured AI instance served this translation, e.g. "openai",
+  // "openrouter", "groq". A free-form lowercase id rather than an enum: adding a
+  // provider is a config change (see AI_EXTRA_INSTANCES), and an enum would make
+  // it a schema migration. Validated against PROVIDER_ID_PATTERN before use.
+  providerId     String
   favorite       Boolean    @default(false)
   createdAt      DateTime   @default(now())
   user           User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -62,12 +66,4 @@ enum SlangStyle {
   POFENI
   KANCLER
   GALICIAN
-}
-
-enum AIProvider {
-  OPENAI
-  ANTHROPIC
-  GEMINI
-  OLLAMA
-  OPENROUTER
 }

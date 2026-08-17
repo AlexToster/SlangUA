@@ -1,58 +1,60 @@
 /**
  * Claude (Anthropic) Adapter
- * 
+ *
  * Implements the IAIProvider interface for Anthropic Claude API.
- * Provider identifier stored in database is ANTHROPIC (per Prisma schema).
+ * Instance id persisted in `Translation.providerId` is `anthropic`.
  */
 
-import { AIProvider } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseAdapter } from './base.adapter';
 import { TranslateRequest, TranslateResponse, ProviderConfig } from './types';
+import { KeyExhaustionKind, parseKeyList } from './key-pool';
 import { config } from '../../config';
 
 export class ClaudeAdapter extends BaseAdapter {
-  readonly provider = AIProvider.ANTHROPIC;
+  readonly id = 'anthropic';
   readonly model = config.AI_MODEL_ANTHROPIC;
 
-  private client: Anthropic | null = null;
+  /** One SDK client per key; see OpenAICompatibleAdapter for the rationale. */
+  private readonly clients = new Map<string, Anthropic>();
 
   constructor(providerConfig: Partial<ProviderConfig> = {}) {
     super({
       ...providerConfig,
-      apiKey: providerConfig.apiKey ?? config.ANTHROPIC_API_KEY,
+      apiKeys: providerConfig.apiKeys ?? parseKeyList(config.ANTHROPIC_API_KEY),
       timeout: providerConfig.timeout ?? config.AI_TIMEOUT_ANTHROPIC,
       priority: providerConfig.priority ?? 1,
     });
-
-    if (this.config.apiKey) {
-      this.client = new Anthropic({
-        apiKey: this.config.apiKey,
-        // Retries belong to BaseAdapter so every provider observes the same
-        // AI_MAX_RETRIES / AI_RETRY_DELAY_MS. The SDK's own default is 2, which
-        // silently multiplied into up to 9 HTTP calls per translation.
-        maxRetries: 0,
-        // withTimeout protects the caller but cannot cancel an in-flight
-        // request; this aborts it at the same deadline.
-        timeout: this.config.timeout,
-      });
-    }
   }
 
-  isAvailable(): boolean {
-    return super.isAvailable() && !!this.client;
+  private clientFor(apiKey: string): Anthropic {
+    const cached = this.clients.get(apiKey);
+    if (cached) {
+      return cached;
+    }
+
+    const client = new Anthropic({
+      apiKey,
+      // Retries belong to BaseAdapter so every provider observes the same
+      // AI_MAX_RETRIES / AI_RETRY_DELAY_MS. The SDK's own default is 2, which
+      // silently multiplied into up to 9 HTTP calls per translation - and would
+      // reuse a key the pool already knows is exhausted.
+      maxRetries: 0,
+      // withTimeout protects the caller but cannot cancel an in-flight
+      // request; this aborts it at the same deadline.
+      timeout: this.config.timeout,
+    });
+
+    this.clients.set(apiKey, client);
+    return client;
   }
 
   async translate(request: TranslateRequest): Promise<TranslateResponse> {
-    if (!this.client) {
-      throw new Error('Anthropic client not initialized - missing API key');
-    }
-
     const systemPrompt = await this.buildSystemPrompt(request.style);
 
-    const response = await this.withRetry(async () => {
+    const response = await this.withKeyRotation(async (apiKey) => {
       return this.withTimeout(
-        this.client!.messages.create({
+        this.clientFor(apiKey).messages.create({
           model: this.model,
           system: systemPrompt,
           messages: [
@@ -86,6 +88,30 @@ export class ClaudeAdapter extends BaseAdapter {
   }
 
   /**
+   * Anthropic reports a spent credit balance as 400 `invalid_request_error` with
+   * "credit balance is too low", so the message is checked as well as the status.
+   */
+  protected classifyKeyExhaustion(error: unknown): KeyExhaustionKind | null {
+    if (error instanceof Anthropic.APIError) {
+      const message = error.message.toLowerCase();
+
+      if (message.includes('credit balance') || message.includes('quota')) {
+        return 'quota';
+      }
+      if (error.status === 429) {
+        return 'rate';
+      }
+      if (error.status === 401) {
+        return 'invalid';
+      }
+      if (error.status !== undefined) {
+        return null;
+      }
+    }
+    return super.classifyKeyExhaustion(error);
+  }
+
+  /**
    * Process the Anthropic response and extract translation
    */
   protected processResponse(response: Anthropic.Messages.Message, request: TranslateRequest): TranslateResponse {
@@ -97,7 +123,7 @@ export class ClaudeAdapter extends BaseAdapter {
 
     return {
       translatedText,
-      provider: this.provider,
+      providerId: this.id,
       model: this.model,
       usage: response.usage ? {
         promptTokens: response.usage.input_tokens,

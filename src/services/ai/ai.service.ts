@@ -7,9 +7,9 @@
  * All behavior is driven by configuration, not hardcoded.
  */
 
-import { AIProvider } from '@prisma/client';
 import { IAIProvider, TranslateRequest, TranslateResponse } from './types';
 import { providerFactory } from './provider.factory';
+import { AllKeysExhaustedError, isAllKeysExhaustedError } from './errors';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
 
@@ -27,7 +27,8 @@ interface CircuitBreakerState {
 export class AIService {
   private factory: typeof providerFactory;
   private serviceConfig: AIServiceConfig;
-  private circuitBreakers: Map<AIProvider, CircuitBreakerState> = new Map();
+  /** Keyed by provider instance id, the same string the API returns. */
+  private circuitBreakers: Map<string, CircuitBreakerState> = new Map();
 
   constructor(
     factory = providerFactory,
@@ -44,17 +45,17 @@ export class AIService {
     };
   }
 
-  private getCircuitBreakerState(providerName: AIProvider): CircuitBreakerState {
-    let state = this.circuitBreakers.get(providerName);
+  private getCircuitBreakerState(providerId: string): CircuitBreakerState {
+    let state = this.circuitBreakers.get(providerId);
     if (!state) {
       state = { failures: 0, lastFailureTime: 0, isOpen: false };
-      this.circuitBreakers.set(providerName, state);
+      this.circuitBreakers.set(providerId, state);
     }
     return state;
   }
 
-  private isCircuitOpen(providerName: AIProvider): boolean {
-    const state = this.getCircuitBreakerState(providerName);
+  private isCircuitOpen(providerId: string): boolean {
+    const state = this.getCircuitBreakerState(providerId);
     const now = Date.now();
     const resetMs = config.CIRCUIT_BREAKER_RESET_MS ?? 60000;
 
@@ -64,7 +65,7 @@ export class AIService {
         // Reset window elapsed - half-open state, allow one request through
         state.isOpen = false;
         state.failures = 0;
-        logger.info({ provider: providerName }, 'Circuit breaker reset (half-open)');
+        logger.info({ providerId }, 'Circuit breaker reset (half-open)');
         return false;
       }
       return true;
@@ -72,17 +73,17 @@ export class AIService {
     return false;
   }
 
-  private recordSuccess(providerName: AIProvider): void {
-    const state = this.getCircuitBreakerState(providerName);
+  private recordSuccess(providerId: string): void {
+    const state = this.getCircuitBreakerState(providerId);
     if (state.failures > 0 || state.isOpen) {
       state.failures = 0;
       state.isOpen = false;
-      logger.info({ provider: providerName }, 'Circuit breaker closed after successful request');
+      logger.info({ providerId }, 'Circuit breaker closed after successful request');
     }
   }
 
-  private recordFailure(providerName: AIProvider): void {
-    const state = this.getCircuitBreakerState(providerName);
+  private recordFailure(providerId: string): void {
+    const state = this.getCircuitBreakerState(providerId);
     const now = Date.now();
     const threshold = config.CIRCUIT_BREAKER_FAILURE_THRESHOLD ?? 5;
     const resetMs = config.CIRCUIT_BREAKER_RESET_MS ?? 60000;
@@ -93,7 +94,7 @@ export class AIService {
     if (state.failures >= threshold && !state.isOpen) {
       state.isOpen = true;
       logger.warn(
-        { provider: providerName, failures: state.failures, resetMs },
+        { providerId, failures: state.failures, resetMs },
         'Circuit breaker OPENED; provider will be skipped until the reset window elapses',
       );
     }
@@ -101,7 +102,7 @@ export class AIService {
 
   private getEligibleProviders(): IAIProvider[] {
     const allProviders = this.factory.getProviders();
-    return allProviders.filter((p) => !this.isCircuitOpen(p.provider));
+    return allProviders.filter((p) => !this.isCircuitOpen(p.id));
   }
 
   /**
@@ -112,8 +113,8 @@ export class AIService {
    */
   private pickRecoveryProbe(providers: IAIProvider[]): IAIProvider {
     return providers.reduce((oldest, candidate) => {
-      const a = this.getCircuitBreakerState(candidate.provider).lastFailureTime;
-      const b = this.getCircuitBreakerState(oldest.provider).lastFailureTime;
+      const a = this.getCircuitBreakerState(candidate.id).lastFailureTime;
+      const b = this.getCircuitBreakerState(oldest.id).lastFailureTime;
       return a < b ? candidate : oldest;
     });
   }
@@ -131,7 +132,7 @@ export class AIService {
       }
       const probe = this.pickRecoveryProbe(allProviders);
       logger.warn(
-        { provider: probe.provider },
+        { providerId: probe.id },
         'All providers circuit-open; probing the longest-failing one',
       );
       return this.translateWithFallback(request, [probe]);
@@ -153,16 +154,32 @@ export class AIService {
 
       try {
         const result = await provider.translate(request);
-        this.recordSuccess(provider.provider);
+        this.recordSuccess(provider.id);
         return result;
       } catch (error) {
         lastError = error as Error;
-        this.recordFailure(provider.provider);
+
+        // An exhausted key pool is not a provider failure: the endpoint is
+        // healthy, its keys are spent and come back on their own. Counting it
+        // would open the breaker and keep the provider out of the chain long
+        // after the cooldown ended. Skipping costs nothing here - the pool
+        // refuses the lease without making an HTTP call at all.
+        const keysExhausted = isAllKeysExhaustedError(error);
+        if (!keysExhausted) {
+          this.recordFailure(provider.id);
+        }
 
         const willRetry = this.serviceConfig.enableFallback && i < maxAttempts - 1;
         logger.warn(
-          { err: lastError, provider: provider.provider, model: provider.model, willRetry },
-          'AI provider failed',
+          {
+            err: lastError,
+            providerId: provider.id,
+            model: provider.model,
+            willRetry,
+            keysExhausted,
+            ...(keysExhausted ? { retryAfterMs: (error as AllKeysExhaustedError).retryAfterMs } : {}),
+          },
+          keysExhausted ? 'AI provider skipped: all API keys exhausted' : 'AI provider failed',
         );
 
         // If fallback is disabled or this was the last attempt, throw
@@ -180,16 +197,16 @@ export class AIService {
    */
   async translateWithProvider(
     request: TranslateRequest,
-    providerName: AIProvider
+    providerId: string
   ): Promise<TranslateResponse> {
-    const provider = this.factory.getProvider(providerName);
-    
+    const provider = this.factory.getProvider(providerId);
+
     if (!provider) {
-      throw new Error(`Provider ${providerName} not found or not configured`);
+      throw new Error(`Provider ${providerId} not found or not configured`);
     }
 
     if (!provider.isAvailable()) {
-      throw new Error(`Provider ${providerName} is not available`);
+      throw new Error(`Provider ${providerId} is not available`);
     }
 
     return provider.translate(request);

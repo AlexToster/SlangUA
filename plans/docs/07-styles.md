@@ -40,7 +40,7 @@ Style Engine — окремий модуль (`src/style-engine/`), **єдина
 
 - `TranslationService`, `AIService`, `ProviderFactory` — **жодних змін, жодних нових імпортів**. Вони й далі викликають `aiService.translate({ text, style })` рівно так само, як зараз.
 - З точки зору API, БД і клієнта — нічого не змінюється.
-- Концептуально Style Engine — незалежна підсистема (дані: prompt/examples/lexicon), але технічно це **бібліотека, яку споживає `base.adapter.ts`**, а не новий вузол у ланцюжку викликів `TranslationService → AIProvider`.
+- Концептуально Style Engine — незалежна підсистема (дані: prompt/examples/lexicon), але технічно це **бібліотека, яку споживає `base.adapter.ts`**, а не новий вузол у ланцюжку викликів `TranslationService → IAIProvider`.
 
 ```
 Translation Service

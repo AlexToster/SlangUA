@@ -51,7 +51,7 @@ Convert the conceptual model into Prisma.
 **Include:**
 - Prisma models (`User`, `Translation`, `RefreshToken`)
 - Relations and Referential integrity
-- Enums (Slang styles, AI providers)
+- Enum for slang styles; provider ids kept as a plain string on purpose
 - Indexes (Performance optimization)
 - Constraints (Database-level validation)
 - Migrations (Initial schema setup)

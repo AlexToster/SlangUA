@@ -127,8 +127,8 @@ Stage 7 uses the implemented authenticated `POST /translate/preview` with these 
 | --- | --- |
 | Запит | `{ text, style }`, з тією самою перевіркою стилю, age gate і захистом від prompt injection, що й звичайний переклад. |
 | Ліміт `text` | від 1 до 1 000 Unicode grapheme clusters після trim (Intl.Segmenter); whitespace-only відхиляється; однаковий ліміт у UI та сервері. |
-| Відповідь | `{ originalText, translatedText, slangStyle, aiProvider, previewId }`; без `id`, `favorite`, `createdAt`. `previewId` — криптографічно випадковий opaque UUID. |
-| Побічні ефекти | не створює і не оновлює `Translation` у базі. Сервер короткочасно зберігає exact preview result (зашифрований) у Redis, прив'язаний до userId: originalText, translatedText, style, styleVersion, aiProvider, expiry (10 хв). |
+| Відповідь | `{ originalText, translatedText, slangStyle, providerId, previewId }`; без `id`, `favorite`, `createdAt`. `previewId` — криптографічно випадковий opaque UUID. |
+| Побічні ефекти | не створює і не оновлює `Translation` у базі. Сервер короткочасно зберігає exact preview result (зашифрований) у Redis, прив'язаний до userId: originalText, translatedText, style, styleVersion, providerId, expiry (10 хв). |
 | Помилки | зберігає семантику 400, 401, 403, 422, 429 і 503 чинного `/translate`. |
 
 Для явного збереження результату потрібен `POST /translate/save` з body `{ previewId }`. Він має:

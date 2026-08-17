@@ -6,7 +6,7 @@ const mockPreview: PreviewResultType = {
   originalText: 'Привіт',
   translatedText: 'Привіт, як справи?',
   slangStyle: 'GEN_Z',
-  aiProvider: 'OPENAI',
+  providerId: 'openai',
   previewId: 'preview-123',
 };
 
@@ -60,7 +60,14 @@ describe('PreviewResult', () => {
     render(<PreviewResult {...defaultProps} />);
     expect(screen.getByText('Привіт, як справи?')).toBeInTheDocument();
     expect(screen.getByText('Молодіжний тікток-сленг')).toBeInTheDocument();
-    expect(screen.getByText('OPENAI')).toBeInTheDocument();
+    expect(screen.getByText('OpenAI')).toBeInTheDocument();
+  });
+
+  // Instance ids are free-form since the backend dropped the AIProvider enum,
+  // so a deployment-specific id must still render as a label.
+  it('uppercases an unknown provider id', () => {
+    render(<PreviewResult {...defaultProps} preview={{ ...mockPreview, providerId: 'groq' }} />);
+    expect(screen.getByText('GROQ')).toBeInTheDocument();
   });
   
   it('calls onCopy when copy button clicked', () => {

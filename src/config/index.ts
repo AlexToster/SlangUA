@@ -27,10 +27,23 @@ const envSchema = z.object({
   AUTH_DATE_TTL: z.coerce.number().default(86400), // 24 hours in seconds
 
   // AI Provider API Keys
+  // Each accepts a comma-separated list. Several keys for one provider are
+  // rotated: a key that is rate-limited or out of quota is parked for a cooldown
+  // and the next one serves the request, which is what makes a free tier usable.
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+
+  // How long an exhausted API key stays parked, in milliseconds.
+  // `rate` covers short-term limits (requests per minute) and is deliberately
+  // cheap, because Gemini reports a spent free-tier day the same way. `quota`
+  // covers an explicitly spent budget. `invalid` covers a rejected key: parked
+  // like a spent one so a single bad key cannot fail every request that lands on
+  // it, and logged at error level because it needs a human.
+  AI_KEY_COOLDOWN_RATE_MS: z.coerce.number().default(60000),
+  AI_KEY_COOLDOWN_QUOTA_MS: z.coerce.number().default(3600000),
+  AI_KEY_COOLDOWN_INVALID_MS: z.coerce.number().default(3600000),
 
   // AI Provider Model Names
   AI_MODEL_OPENAI: z.string().default('gpt-4o-mini'),
@@ -47,7 +60,18 @@ const envSchema = z.object({
   AI_BASE_URL_OPENAI: z.string().url().default('https://api.openai.com/v1'),
   AI_BASE_URL_OPENROUTER: z.string().url().default('https://openrouter.ai/api/v1'),
 
-  // AI Provider Priority (comma-separated)
+  // Extra OpenAI-compatible instances, comma-separated ids (e.g. "groq,deepseek").
+  // Each id <ID> is configured through AI_BASE_URL_<ID>, AI_MODEL_<ID>,
+  // <ID>_API_KEY and the optional AI_TIMEOUT_<ID>. Those names depend on this
+  // value, so they cannot be declared in this schema; provider.factory.ts
+  // validates them and skips an instance it cannot build, with an error log.
+  // Ids are lowercase, must match PROVIDER_ID_PATTERN and cannot shadow a
+  // built-in provider.
+  AI_EXTRA_INSTANCES: z.string().default(''),
+
+  // AI Provider Priority (comma-separated instance ids). Order defines the
+  // fallback chain; a configured instance the list does not mention still takes
+  // part, sorted last.
   AI_PROVIDER_PRIORITY: z.string().default('openai,anthropic,gemini,ollama,openrouter'),
 
   // AI Provider Timeouts (ms)

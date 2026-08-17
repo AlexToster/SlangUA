@@ -1,4 +1,4 @@
-import { PrismaClient, SlangStyle, AIProvider, Translation, Prisma } from '@prisma/client';
+import { PrismaClient, SlangStyle, Translation, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 
 export interface HistoryListParams {
@@ -20,7 +20,7 @@ export interface ToggleFavoriteResult {
   originalText: string;
   translatedText: string;
   slangStyle: SlangStyle;
-  aiProvider: AIProvider;
+  providerId: string;
   favorite: boolean;
   createdAt: Date;
 }
@@ -158,7 +158,7 @@ export class HistoryService {
       originalText: updated.originalText,
       translatedText: updated.translatedText,
       slangStyle: updated.slangStyle,
-      aiProvider: updated.aiProvider,
+      providerId: updated.providerId,
       favorite: updated.favorite,
       createdAt: updated.createdAt,
     };

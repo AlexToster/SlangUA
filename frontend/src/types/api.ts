@@ -1,5 +1,12 @@
 export type SlangStyle = 'GEN_Z' | 'STREET' | 'IT_SLANG' | 'POFENI' | 'KANCLER' | 'GALICIAN';
-export type AIProvider = 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'OLLAMA' | 'OPENROUTER';
+
+/**
+ * Id of the AI instance that produced a translation, e.g. "openai", "gemini",
+ * "openrouter". A free-form lowercase string, not a union: which instances exist
+ * is a server deployment concern, so a closed union here would break the client
+ * the moment the backend gains a provider. Render it through providerLabel().
+ */
+export type ProviderId = string;
 
 export interface Style {
   id: SlangStyle;
@@ -23,7 +30,7 @@ export interface PreviewResult {
   originalText: string;
   translatedText: string;
   slangStyle: SlangStyle;
-  aiProvider: AIProvider;
+  providerId: ProviderId;
   previewId: string;
 }
 
@@ -32,7 +39,7 @@ export interface Translation {
   originalText: string;
   translatedText: string;
   slangStyle: SlangStyle;
-  aiProvider: AIProvider;
+  providerId: ProviderId;
   favorite: boolean;
   createdAt: string;
 }
@@ -54,7 +61,7 @@ export interface SaveFromPreviewResult {
   originalText: string;
   translatedText: string;
   slangStyle: SlangStyle;
-  aiProvider: AIProvider;
+  providerId: ProviderId;
   favorite: boolean;
   createdAt: string;
 }

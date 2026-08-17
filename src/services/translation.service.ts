@@ -1,4 +1,4 @@
-import { PrismaClient, SlangStyle, AIProvider, Translation } from '@prisma/client';
+import { PrismaClient, SlangStyle, Translation } from '@prisma/client';
 import { aiService } from './ai/ai.service.js';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
@@ -18,7 +18,8 @@ export interface TranslationResult {
   originalText: string;
   translatedText: string;
   slangStyle: SlangStyle;
-  aiProvider: AIProvider;
+  /** Instance id of the AI provider that served the translation, e.g. "openai". */
+  providerId: string;
   favorite: boolean;
   createdAt: Date;
 }
@@ -27,7 +28,7 @@ export interface PreviewResult {
   originalText: string;
   translatedText: string;
   slangStyle: SlangStyle;
-  aiProvider: AIProvider;
+  providerId: string;
   previewId: string;
 }
 
@@ -250,7 +251,7 @@ export class TranslationService {
       originalText: normalizedText, // Return normalized text
       translatedText: aiResponse.translatedText,
       slangStyle: style,
-      aiProvider: aiResponse.provider,
+      providerId: aiResponse.providerId,
       previewId: '', // Will be set by caller after cache storage
     };
   }
@@ -298,7 +299,7 @@ export class TranslationService {
           originalText: cachedData.originalText,
           translatedText: cachedData.translatedText,
           slangStyle: cachedData.style as SlangStyle,
-          aiProvider: cachedData.aiProvider as AIProvider,
+          providerId: cachedData.providerId,
           previewId: cachedPreviewId,
         };
       }
@@ -314,7 +315,7 @@ export class TranslationService {
       translatedText: previewResult.translatedText,
       style: previewResult.slangStyle,
       styleVersion,
-      aiProvider: previewResult.aiProvider,
+      providerId: previewResult.providerId,
       userId,
       createdAt: Date.now(),
       // Same TTL the Redis key gets - both must come from one setting
@@ -388,7 +389,7 @@ export class TranslationService {
           translatedText: previewData.translatedText,
           slangStyle: previewData.style as SlangStyle,
           styleVersion: previewData.styleVersion,
-          aiProvider: previewData.aiProvider as AIProvider,
+          providerId: previewData.providerId,
           favorite: false,
         },
       });
@@ -426,7 +427,7 @@ export class TranslationService {
         originalText: translation.originalText,
         translatedText: translation.translatedText,
         slangStyle: translation.slangStyle,
-        aiProvider: translation.aiProvider,
+        providerId: translation.providerId,
         favorite: translation.favorite,
         createdAt: translation.createdAt,
       },
@@ -483,7 +484,7 @@ export class TranslationService {
             translatedText: cachedData.translatedText,
             slangStyle: cachedData.style as SlangStyle,
             styleVersion,
-            aiProvider: cachedData.aiProvider as AIProvider,
+            providerId: cachedData.providerId,
             favorite: false,
           },
         });
@@ -495,7 +496,7 @@ export class TranslationService {
           originalText: translation.originalText,
           translatedText: translation.translatedText,
           slangStyle: translation.slangStyle,
-          aiProvider: translation.aiProvider,
+          providerId: translation.providerId,
           favorite: translation.favorite,
           createdAt: translation.createdAt,
         };
@@ -514,7 +515,7 @@ export class TranslationService {
         translatedText: previewResult.translatedText,
         slangStyle: previewResult.slangStyle,
         styleVersion,
-        aiProvider: previewResult.aiProvider,
+        providerId: previewResult.providerId,
         favorite: false,
       },
     });
@@ -527,7 +528,7 @@ export class TranslationService {
       originalText: translation.originalText,
       translatedText: translation.translatedText,
       slangStyle: translation.slangStyle,
-      aiProvider: translation.aiProvider,
+      providerId: translation.providerId,
       favorite: translation.favorite,
       createdAt: translation.createdAt,
     };

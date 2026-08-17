@@ -58,11 +58,12 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
     - Manages "Slang Styles" (e.g., "Gen-Z", "Street", "IT-Slang").
     - Orchestrates AI calls and database logging.
 - **`AI Service & Adapters`**:
-    - **`IAIProvider`**: Interface defining `translate(text, style)` method.
-    - **`AIService`**: Implements provider fallback strategy, timeout handling, and retry policy.
-    - **`OpenAICompatibleAdapter`**: One parameterized class for every provider that speaks the OpenAI Chat Completions format. Configured instances today: `OPENAI`, `OPENROUTER` and `OLLAMA` (a local server via its `/v1` endpoint). Per-instance options: base URL, model, key requirement, temperature, output-cap field name, extra body fields and extra headers.
+    - **`IAIProvider`**: Interface defining `translate(request)` plus the instance's `id` — a lowercase string matching `PROVIDER_ID_PATTERN`, persisted as `Translation.providerId`.
+    - **`AIService`**: Implements provider fallback strategy, timeout handling, retry policy and a per-instance circuit breaker (keyed by `id`). An `AllKeysExhaustedError` is not counted as a provider failure.
+    - **`OpenAICompatibleAdapter`**: One parameterized class for every provider that speaks the OpenAI Chat Completions format. Configured instances today: `openai`, `openrouter` and `ollama` (a local server via its `/v1` endpoint), plus anything listed in `AI_EXTRA_INSTANCES`. Per-instance options: base URL, model, key requirement, temperature, output-cap field name, extra body fields and extra headers.
     - **`ClaudeAdapter`**, **`GeminiAdapter`**: The two providers that keep a native SDK — Anthropic for prompt caching, Gemini because its native API has no system role and needs its own error classification.
-    - **`ProviderFactory`**: Resolves implementation based on priority and availability.
+    - **`KeyPool`**: Each adapter holds one. `*_API_KEY` accepts a comma-separated list; keys are leased round-robin and a key the provider refused is parked for a cooldown that depends on the kind of refusal (`rate`, `quota`, `invalid`). Cooldowns are keyed by pool id and index, never by the key value. When no key is usable the adapter throws `AllKeysExhaustedError` without an HTTP call, so `AIService` moves to the next instance for free. See [Architectural Decisions](05-decisions.md#a-pool-of-keys-per-instance-not-one-key).
+    - **`ProviderFactory`**: Builds one instance per configured id and orders them by `AI_PROVIDER_PRIORITY`. An instance the list does not mention still participates, sorted last; an instance missing its base URL, model or key is skipped with an error log rather than failing boot.
 - **`History Module`**:
     - Provides paginated access to user-specific translations.
     - Handles "Favorite" flagging and search.
@@ -78,7 +79,7 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
     - Frontend sends POST `/api/v1/translate` with payload and JWT.
 4. **AI Processing**:
     - Backend validates input and sanities against prompt injection.
-    - `AIService` selects the primary provider (e.g., `OpenAIAdapter`).
+    - `AIService` selects the primary provider (e.g., the `openai` instance of `OpenAICompatibleAdapter`).
     - Generates system prompt based on selected style.
     - Calls OpenAI API.
 5. **Persistence & Response**:
@@ -113,9 +114,11 @@ sequenceDiagram
 
 The `AIService` is managed via a central configuration that defines the operational parameters for all adapters:
 
-- **Provider Priority**: An ordered list determining which provider to attempt first.
-- **Enable/Disable Flags**: Granular control to toggle specific providers (e.g., disabling a provider during maintenance).
-- **API Keys**: Injected via environment variables (e.g., `OPENAI_API_KEY`). A provider that authenticates nobody declares `requiresApiKey: false` instead of carrying a placeholder key.
+- **Provider Priority**: `AI_PROVIDER_PRIORITY`, an ordered list of instance ids determining which one to attempt first. Ids it omits sort last rather than being disabled.
+- **Enable/Disable Flags**: Granular control to toggle specific providers (e.g., disabling a provider during maintenance). For key-bearing providers, presence of a key is the switch; `OLLAMA_ENABLED` exists because a local server has no key to check.
+- **API Keys**: Injected via environment variables (e.g., `OPENAI_API_KEY`), each accepting a comma-separated pool of keys that the adapter rotates through. A provider that authenticates nobody declares `requiresApiKey: false` instead of carrying a placeholder key.
+- **Key Cooldowns**: `AI_KEY_COOLDOWN_RATE_MS`, `AI_KEY_COOLDOWN_QUOTA_MS` and `AI_KEY_COOLDOWN_INVALID_MS` — how long a refused key stays parked before the pool offers it again.
+- **Extra Instances**: `AI_EXTRA_INSTANCES` names additional OpenAI-compatible endpoints; each id `<ID>` reads `AI_BASE_URL_<ID>`, `AI_MODEL_<ID>`, `<ID>_API_KEY` and the optional `AI_TIMEOUT_<ID>`.
 - **Base URLs**: `AI_BASE_URL_*` per OpenAI-compatible instance, including the API version segment. Ollama has no variable of its own — `/v1` is appended to `OLLAMA_BASE_URL`.
 - **Timeouts**: Specific duration limits for each provider to prevent hanging requests. The same value is passed to the SDK client so an in-flight HTTP request is aborted, not merely abandoned.
 - **Retry Policy**: Defined number of attempts and backoff intervals for transient error handling. Retries belong to `BaseAdapter` alone: every SDK client is constructed with `maxRetries: 0`, otherwise the SDK's own default of 2 multiplies into up to 9 HTTP calls per translation.

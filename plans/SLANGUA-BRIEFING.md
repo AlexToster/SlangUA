@@ -46,18 +46,18 @@ Layout of what matters:
 src/
   app.ts                  Fastify bootstrap, plugin + route registration, error handler
   config/index.ts          Zod env schema — single source of truth for configuration
-  constants/index.ts       SLANG_STYLE_VALUES, AI_PROVIDER_VALUES, zod enums
+  constants/index.ts       SLANG_STYLE_VALUES, PROVIDER_ID_PATTERN, BUILTIN_PROVIDER_IDS, zod enums
   lib/                     prisma.ts, redis.ts, preview-keys.ts (HKDF key derivation)
   plugins/rate-limit.ts    Redis sliding-window limiter factory
   routes/                  auth, translate, history, user, styles, share
   services/                auth, translation, history, user,
                            preview-cache, share-payload, telegram-inline
-  services/ai/             ai.service, provider.factory, base.adapter,
-                           {openai,claude,gemini,ollama,openrouter}.adapter, types
+  services/ai/             ai.service, provider.factory, base.adapter, key-pool,
+                           errors, openai-compatible/claude/gemini.adapter, types
   style-engine/            loader.ts, registry.json, base-rules.md, styles/<id>/
-prisma/                    schema.prisma + 10 migrations
+prisma/                    schema.prisma + 11 migrations
 scripts/copy-style-assets.mjs
-test/                      integration/ (vitest + Testcontainers), helpers/, verify-style-engine.mjs
+test/                      integration/ (vitest + Testcontainers), unit/ (plain vitest), helpers/, verify-style-engine.mjs
 frontend/src/              App.tsx, pages/, components/, services/, utils/, types/, data/
 deploy/nginx/              HTTP/HTTPS templates + frontend.conf
 plans/                     architecture.md, ROADMAP.md, docs/01–10, this briefing
@@ -123,11 +123,11 @@ Three PostgreSQL tables via Prisma. Redis is intentionally absent from the relat
 
 **`User`** — `id` (autoincrement Int PK), `telegramId` String @unique, optional `username` / `firstName` / `lastName` / `languageCode`, `defaultSlangStyle SlangStyle?`, `notificationsEnabled` default `true`, `ageConfirmedAdult` default `false`, `createdAt`. Relations: `translations`, `refreshTokens`.
 
-**`Translation`** — `id`, `userId` (FK, `onDelete: Cascade`), `previewId String? @unique` (save idempotency), `originalText`, `translatedText`, `slangStyle SlangStyle`, `styleVersion String?` (registry version captured at creation), `aiProvider AIProvider`, `favorite` default `false`, `createdAt`. Indexes: `[userId]`, `[createdAt]`, and the keyset index `[userId, createdAt, id]`. Business rule: the only mutable field is `favorite`. Retention is permanent.
+**`Translation`** — `id`, `userId` (FK, `onDelete: Cascade`), `previewId String? @unique` (save idempotency), `originalText`, `translatedText`, `slangStyle SlangStyle`, `styleVersion String?` (registry version captured at creation), `providerId String` (free-form lowercase instance id, **not** an enum), `favorite` default `false`, `createdAt`. Indexes: `[userId]`, `[createdAt]`, and the keyset index `[userId, createdAt, id]`. Business rule: the only mutable field is `favorite`. Retention is permanent.
 
 **`RefreshToken`** — `id`, `userId` (FK Cascade), `hashedToken String @unique`, `expiresAt`, `deviceInfo Json?`, `createdAt`, index `[userId]`. Rows are rotated (delete + create), never updated, and deleted on logout, refresh or expiry.
 
-Enums: `SlangStyle { GEN_Z STREET IT_SLANG POFENI KANCLER GALICIAN }`, `AIProvider { OPENAI ANTHROPIC GEMINI OLLAMA OPENROUTER }`.
+The only enum is `SlangStyle { GEN_Z STREET IT_SLANG POFENI KANCLER GALICIAN }`. There is no provider enum: `providerId` is a `TEXT` column holding a lowercase id validated against `PROVIDER_ID_PATTERN` (`/^[a-z0-9][a-z0-9_-]{0,31}$/`) before it is written, because `AI_EXTRA_INSTANCES` can name an instance the code has never seen and an enum would make that a migration. The `20260817090000_provider_id_free_form` migration renamed `aiProvider`, retyped it and lowercased the stored values.
 
 Deleting a `User` cascades to both child tables — that is the privacy-cleanup requirement, not an accident.
 
@@ -151,7 +151,7 @@ All routes are under `/api/v1`. JSON only. Auth is a `Bearer` access token unles
 
 ### Translate
 
-- **`POST /translate/preview`** — JWT. Body `{ text, style }`. `text` is trimmed, must be 1–1000 **grapheme clusters** measured with `Intl.Segmenter('uk')`, rejected if whitespace-only, and sanitized against prompt injection. Returns `{ originalText, translatedText, slangStyle, aiProvider, previewId }` — a UUID, and **no database row**. Side effect: an AES-256-GCM encrypted payload in Redis with a 10-minute TTL. Errors: 400 `EMPTY_TEXT` / `INVALID_TEXT_LENGTH` / `STYLE_UNAVAILABLE`; 401; 403 `AGE_RESTRICTED_STYLE`; 422 `PROMPT_INJECTION_DETECTED`; 429 (12/min/user); 503 `AI_PROVIDER_UNAVAILABLE`.
+- **`POST /translate/preview`** — JWT. Body `{ text, style }`. `text` is trimmed, must be 1–1000 **grapheme clusters** measured with `Intl.Segmenter('uk')`, rejected if whitespace-only, and sanitized against prompt injection. Returns `{ originalText, translatedText, slangStyle, providerId, previewId }` — a UUID, and **no database row**. Side effect: an AES-256-GCM encrypted payload in Redis with a 10-minute TTL. Errors: 400 `EMPTY_TEXT` / `INVALID_TEXT_LENGTH` / `STYLE_UNAVAILABLE`; 401; 403 `AGE_RESTRICTED_STYLE`; 422 `PROMPT_INJECTION_DETECTED`; 429 (12/min/user); 503 `AI_PROVIDER_UNAVAILABLE`.
 - **`POST /translate/save`** — JWT. Body `{ previewId }` **only**. Verifies ownership and TTL, then persists the exact preview text (WYSIWYG). No LLM call. Returns the full `Translation`. Errors: 400; 401; 404 `PREVIEW_NOT_FOUND`; 409 `PREVIEW_ALREADY_SAVED`; 410 `PREVIEW_EXPIRED`; 429 (10/min/user).
 - **`POST /translate`** — JWT. Same request DTO; translates **and** persists in one call. Returns the full `Translation`. Same error family plus its own 10/min limit. Currently unused by the UI.
 - **`POST /share/inline`** — JWT. Body is exactly one of `{ previewId }` or `{ translationId }`. Returns `{ inlineQuery: "s_<uuid>", shareText, expiresAt }`, where `shareText` is the translation alone. No LLM call, no History write. Errors: 400; 401; 403 `AGE_RESTRICTED_SHARE` (age-restricted style without `ageConfirmedAdult`); 404 `SHARE_SOURCE_NOT_FOUND`; 410; 422 `SHARE_TEXT_TOO_LONG`; 429 (10/min); 503 `TELEGRAM_INLINE_UNAVAILABLE`.
@@ -174,7 +174,7 @@ Rate limits are separate Redis key prefixes per concern: `ratelimit:global` (100
 
 Called "the most important decision of the spec" in `plans/docs/07-styles.md`, because it resolved a contradiction between two earlier documents.
 
-**The Style Engine is a library, not a pipeline stage.** It is consumed only from inside `BaseAdapter.buildSystemPrompt()`. It is not a node in the `TranslationService → AIProvider` chain, and it must never touch Prisma, Redis, HTTP or history logic. Its entire public contract is:
+**The Style Engine is a library, not a pipeline stage.** It is consumed only from inside `BaseAdapter.buildSystemPrompt()`. It is not a node in the `TranslationService → IAIProvider` chain, and it must never touch Prisma, Redis, HTTP or history logic. Its entire public contract is:
 
 ```ts
 loadStyle(styleId: string): Promise<LoadedStyle>   // LoadedStyle = { systemPrompt: string }
@@ -202,15 +202,17 @@ The signature never accepts file paths, and it is `Promise`-returning even thoug
 
 `src/services/ai/` implements the adapter pattern so that providers are interchangeable and the codebase avoids vendor lock-in. Automatic fallback to a backup provider is the stated high-availability mechanism.
 
-**Contracts** (`types.ts`): `IAIProvider { provider, model, isAvailable(), translate(req) }`, `TranslateRequest { text, style }`, `TranslateResponse { translatedText, provider, model, usage? }`, `ProviderConfig { enabled, apiKey?, timeout, maxRetries, retryDelayMs, priority }`.
+**Contracts** (`types.ts`): `IAIProvider { id, model, isAvailable(), translate(req) }`, `TranslateRequest { text, style }`, `TranslateResponse { translatedText, providerId, model, usage? }`, `ProviderConfig { enabled, apiKeys?, requiresApiKey?, timeout, maxRetries, retryDelayMs, priority, keyCooldownMs?, keyCooldownStore? }`. `id` names one configured instance and is the only identity in the layer: it keys the circuit breaker and the key pool, appears in logs, and is persisted as `Translation.providerId`. It is a free-form lowercase string (`PROVIDER_ID_PATTERN`), not an enum value, so a second instance of the same vendor — or an endpoint this build has never heard of — stays a config change.
 
-**`BaseAdapter`** provides `isAvailable()` (enabled and has an api key), `withTimeout()`, `withRetry()` (exponential backoff `retryDelayMs * 2^(attempt-1)`), `isNonRetryableError()` (matches invalid api key / unauthorized / forbidden / bad request / quota exceeded / insufficient_quota), and `buildSystemPrompt(style)` which is the single call site of `loadStyle()`.
+**`BaseAdapter`** provides `isAvailable()` (enabled, and either has at least one api key or declares `requiresApiKey: false`), `withTimeout()`, `withRetry()` (exponential backoff `retryDelayMs * 2^(attempt-1)`), `isNonRetryableError()` (matches invalid api key / unauthorized / forbidden / bad request / quota exceeded / insufficient_quota), `withKeyRotation()` (leases a key from the pool, classifies a refusal as `rate` / `quota` / `invalid`, parks it and rotates instead of sleeping when a spare key exists, and throws `AllKeysExhaustedError` when none is usable), and `buildSystemPrompt(style)` which is the single call site of `loadStyle()`. `BaseAdapter` is the **only** retry owner: every SDK client is constructed with `maxRetries: 0`, because the SDK default of 2 would multiply into up to 9 HTTP calls per translation.
 
-**`ProviderFactory`** reads `AI_PROVIDER_PRIORITY`, uppercases and filters it against the Prisma enum, builds per-provider configs (`enabled = !!<API_KEY>`, with Ollama hardcoded `enabled: true`), and exposes `getProviders()` filtered by `isAvailable()` in priority order.
+**`KeyPool`** (`key-pool.ts`) turns each comma-separated `*_API_KEY` into a rotating pool. Keys are leased round-robin; a refused key is parked for `AI_KEY_COOLDOWN_RATE_MS` / `_QUOTA_MS` / `_INVALID_MS` depending on how the provider refused it. Cooldowns are keyed by pool id plus key **index**, never by the key value, so no secret reaches a map key or a log line. A keyless instance is modelled as a single keyless entry. The `KeyCooldownStore` seam defaults to an in-memory store and can be swapped for a shared one.
 
-**`AIService`** adds a per-provider circuit breaker: failures accumulate, the breaker opens at `CIRCUIT_BREAKER_FAILURE_THRESHOLD`, and goes half-open after `CIRCUIT_BREAKER_RESET_MS`. `translate()` walks eligible providers sequentially; if every breaker is open it retries the whole chain as a last resort.
+**`ProviderFactory`** reads `AI_PROVIDER_PRIORITY` as lowercase instance ids, dropping unknown ones with a warning; an id it does not mention still participates but sorts last (priority 999). It builds per-instance configs — `enabled = at least one parsed key`, Ollama instead following `OLLAMA_ENABLED ?? NODE_ENV !== 'production'` with `requiresApiKey: false` — and exposes `getProviders()` filtered by `isAvailable()` in priority order. It also owns the table of OpenAI-compatible instances, derives Ollama's base URL as `<OLLAMA_BASE_URL>/v1`, and appends every `AI_EXTRA_INSTANCES` id (each needing `AI_BASE_URL_<ID>`, `AI_MODEL_<ID>`, `<ID>_API_KEY`, optional `AI_TIMEOUT_<ID>`; an incomplete one is logged and skipped, never fatal).
 
-**Adapters.** Default priority order is OpenAI (0), Anthropic (1), Gemini (2), Ollama (3), OpenRouter (4). All use temperature 0.7 and a ~500-token output cap. `OllamaAdapter` supplies a placeholder api key and points at `OLLAMA_BASE_URL`. `OpenRouterAdapter` lazily `import()`s its SDK and caches the promise, because the SDK is ESM-only while this project emits CommonJS.
+**`AIService`** adds a per-instance circuit breaker: failures accumulate, the breaker opens at `CIRCUIT_BREAKER_FAILURE_THRESHOLD`, and goes half-open after `CIRCUIT_BREAKER_RESET_MS`. `translate()` walks eligible providers sequentially; if every breaker is open it retries the whole chain as a last resort. `AllKeysExhaustedError` is deliberately **not** counted as a failure: spent keys recover on their own, and the wasted attempt costs nothing because the pool refuses the lease without an HTTP call.
+
+**Adapters.** Three classes, N configured instances. `OpenAICompatibleAdapter` serves everything speaking the OpenAI Chat Completions format — today `openai`, `openrouter` and a local Ollama through `/v1`, plus any extra instance — parameterized per instance (`id`, `baseURL`, `model`, `requiresApiKey`, `temperature`, output-cap field name, `extraBody`, `defaultHeaders`) and holding one SDK client per key. OpenRouter passes `reasoning: { effort: 'none' }` through `extraBody` so reasoning-capable models keep their chain of thought out of the message. `ClaudeAdapter` and `GeminiAdapter` keep native SDKs: Anthropic for the prompt-caching option, Gemini because its native API has no system role and needs its own error classification. Default priority order is openai (0), anthropic (1), gemini (2), ollama (3), openrouter (4); all use temperature 0.7 and a ~500-token output cap.
 
 ## 10. Security model
 
@@ -280,7 +282,7 @@ Required: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET` (≥32 chars), `REFRESH_TOKE
 
 Key optional variables with defaults: `NODE_ENV` (`development`), `PORT`/`HOST` (3000 / 0.0.0.0), `JWT_ACCESS_TTL`/`JWT_REFRESH_TTL` (`15m` / `7d`), `AUTH_DATE_TTL` (86400), `LOG_LEVEL` (`info`), `TRUST_PROXY` (false), `CORS_ALLOWED_ORIGINS` (`http://localhost:5173`), `TELEGRAM_INLINE_ENABLED` (false), `TELEGRAM_WEBHOOK_SECRET` (optional), `PREVIEW_CACHE_TTL_SECONDS` / `SHARE_CACHE_TTL_SECONDS` (600), `PREVIEW_KEY_VERSION` (`v1`).
 
-AI: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` (all optional — at least one provider or a local Ollama is needed), `AI_MODEL_OPENAI` (`gpt-4o-mini`), `AI_MODEL_ANTHROPIC` (`claude-3-haiku-20240307`), `AI_MODEL_GEMINI`, `AI_MODEL_OLLAMA` (`llama3.1:8b`), `AI_MODEL_OPENROUTER`, `AI_PROVIDER_PRIORITY` (`openai,anthropic,gemini,ollama,openrouter`), `AI_TIMEOUT_*` (30000, Ollama 60000), `AI_MAX_RETRIES` (2), `AI_RETRY_DELAY_MS` (1000), `AI_MAX_FALLBACK_ATTEMPTS` (optional), `CIRCUIT_BREAKER_FAILURE_THRESHOLD` (5), `CIRCUIT_BREAKER_RESET_MS` (60000), `OLLAMA_BASE_URL` (`http://localhost:11434`).
+AI: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` (all optional — at least one provider or a local Ollama is needed; each accepts a **comma-separated pool** of keys that the adapter rotates through), `AI_KEY_COOLDOWN_RATE_MS` (60000), `AI_KEY_COOLDOWN_QUOTA_MS` / `AI_KEY_COOLDOWN_INVALID_MS` (3600000), `AI_MODEL_OPENAI` (`gpt-4o-mini`), `AI_MODEL_ANTHROPIC` (`claude-3-haiku-20240307`), `AI_MODEL_GEMINI`, `AI_MODEL_OLLAMA` (`llama3.1:8b`), `AI_MODEL_OPENROUTER`, `AI_BASE_URL_OPENAI` / `AI_BASE_URL_OPENROUTER`, `AI_EXTRA_INSTANCES` (empty; per id `<ID>`: `AI_BASE_URL_<ID>`, `AI_MODEL_<ID>`, `<ID>_API_KEY`, optional `AI_TIMEOUT_<ID>`), `AI_PROVIDER_PRIORITY` (`openai,anthropic,gemini,ollama,openrouter`), `AI_TIMEOUT_*` (30000, Ollama 60000), `AI_MAX_RETRIES` (2), `AI_RETRY_DELAY_MS` (1000), `AI_MAX_FALLBACK_ATTEMPTS` (optional), `CIRCUIT_BREAKER_FAILURE_THRESHOLD` (5), `CIRCUIT_BREAKER_RESET_MS` (60000), `OLLAMA_BASE_URL` (`http://localhost:11434`), `OLLAMA_ENABLED` (optional; unset means enabled outside production).
 
 Rate limits, each with a window, a max and a key prefix: `GLOBAL_RATE_LIMIT_*` (60000/100), `RATE_LIMIT_*` (60000/100), `PREVIEW_RATE_LIMIT_*` (60000/12), `SAVE_RATE_LIMIT_*` (60000/10), `SHARE_RATE_LIMIT_*` (60000/10), `WEBHOOK_RATE_LIMIT_*` (60000/30).
 
@@ -302,8 +304,9 @@ npm start
 
 npm run test:typecheck      # tsc --noEmit && tsc -p tsconfig.test.json (src + test/)
 npm run test:smoke          # build + node test/verify-style-engine.mjs
+npm run test:unit           # vitest, no Docker — AI layer: key pool, rotation, fallback
 npm run test:integration    # vitest + Testcontainers — REQUIRES Docker Desktop
-npm test                    # all three in sequence
+npm test                    # all four in sequence
 ```
 
 Frontend, in `frontend/`:

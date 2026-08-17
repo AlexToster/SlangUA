@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify/types/instance';
 import { createRateLimiter } from '../plugins/rate-limit.js';
 import { translationService } from '../services/translation.service.js';
 import { SlangStyle, Translation } from '@prisma/client';
-import { SLANG_STYLE_VALUES, AI_PROVIDER_VALUES } from '../constants/index.js';
+import { SLANG_STYLE_VALUES, PROVIDER_ID_PATTERN } from '../constants/index.js';
 import { config } from '../config/index.js';
 import { authenticate } from '../plugins/authenticate.js';
 
@@ -37,7 +37,7 @@ function httpErrorName(statusCode: number): string {
  */
 type SerializableTranslation = Pick<
   Translation,
-  'id' | 'originalText' | 'translatedText' | 'slangStyle' | 'aiProvider' | 'favorite' | 'createdAt'
+  'id' | 'originalText' | 'translatedText' | 'slangStyle' | 'providerId' | 'favorite' | 'createdAt'
 >;
 
 function serializeTranslation(translation: SerializableTranslation) {
@@ -46,7 +46,7 @@ function serializeTranslation(translation: SerializableTranslation) {
     originalText: translation.originalText,
     translatedText: translation.translatedText,
     slangStyle: translation.slangStyle,
-    aiProvider: translation.aiProvider,
+    providerId: translation.providerId,
     favorite: translation.favorite,
     createdAt: translation.createdAt.toISOString(),
   };
@@ -58,7 +58,10 @@ const translationSchema = z.object({
   originalText: z.string(),
   translatedText: z.string(),
   slangStyle: z.enum(SLANG_STYLE_VALUES),
-  aiProvider: z.enum(AI_PROVIDER_VALUES),
+  // Not an enum: the set of configured AI instances is a deployment concern
+  // (see AI_EXTRA_INSTANCES), so the contract constrains the shape of the id,
+  // not the list of ids.
+  providerId: z.string().regex(PROVIDER_ID_PATTERN),
   favorite: z.boolean(),
   createdAt: z.string().datetime(),
 });
@@ -159,7 +162,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
           originalText: z.string(),
           translatedText: z.string(),
           slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(AI_PROVIDER_VALUES),
+          providerId: z.string().regex(PROVIDER_ID_PATTERN),
           previewId: z.string().uuid(),
         }),
         ...errorResponses,

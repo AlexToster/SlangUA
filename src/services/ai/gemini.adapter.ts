@@ -4,48 +4,50 @@
  * Implements the IAIProvider interface for Google Gemini API.
  */
 
-import { AIProvider } from '@prisma/client';
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { BaseAdapter } from './base.adapter';
 import { TranslateRequest, TranslateResponse, ProviderConfig } from './types';
+import { parseKeyList } from './key-pool';
 import { config } from '../../config';
 
 export class GeminiAdapter extends BaseAdapter {
-  readonly provider = AIProvider.GEMINI;
+  readonly id = 'gemini';
   readonly model = config.AI_MODEL_GEMINI;
 
-  private client: GoogleGenerativeAI | null = null;
-  private modelInstance: GenerativeModel | null = null;
+  /**
+   * One model handle per key. This SDK has no retry option to switch off - it
+   * does not retry on its own - so BaseAdapter remains the only retry owner here
+   * as well.
+   */
+  private readonly models = new Map<string, GenerativeModel>();
 
   constructor(providerConfig: Partial<ProviderConfig> = {}) {
     super({
       ...providerConfig,
-      apiKey: providerConfig.apiKey ?? config.GEMINI_API_KEY,
+      apiKeys: providerConfig.apiKeys ?? parseKeyList(config.GEMINI_API_KEY),
       timeout: providerConfig.timeout ?? config.AI_TIMEOUT_GEMINI,
       priority: providerConfig.priority ?? 2,
     });
-
-    if (this.config.apiKey) {
-      this.client = new GoogleGenerativeAI(this.config.apiKey);
-      this.modelInstance = this.client.getGenerativeModel({ model: this.model });
-    }
   }
 
-  isAvailable(): boolean {
-    return super.isAvailable() && !!this.modelInstance;
+  private modelFor(apiKey: string): GenerativeModel {
+    const cached = this.models.get(apiKey);
+    if (cached) {
+      return cached;
+    }
+
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: this.model });
+    this.models.set(apiKey, model);
+    return model;
   }
 
   async translate(request: TranslateRequest): Promise<TranslateResponse> {
-    if (!this.modelInstance) {
-      throw new Error('Gemini model not initialized - missing API key');
-    }
-
     const systemPrompt = await this.buildSystemPrompt(request.style);
     const fullPrompt = `${systemPrompt}\n\nUser: ${request.text}\n\nTranslation:`;
 
-    const response = await this.withRetry(async () => {
+    const response = await this.withKeyRotation(async (apiKey) => {
       return this.withTimeout(
-        this.modelInstance!.generateContent(fullPrompt),
+        this.modelFor(apiKey).generateContent(fullPrompt),
         this.config.timeout,
         'Gemini translation'
       );
@@ -69,6 +71,13 @@ export class GeminiAdapter extends BaseAdapter {
     return super.isNonRetryableError(error);
   }
 
+  // classifyKeyExhaustion is not overridden: this SDK throws plain Errors whose
+  // messages ("[429 Too Many Requests] Resource has been exhausted...",
+  // "API key not valid") are exactly what BaseAdapter's string classification
+  // already covers. A free-tier daily cap is reported as RESOURCE_EXHAUSTED too,
+  // which is why that phrase is classified as the cheap `rate` cooldown rather
+  // than parking the key for an hour.
+
   /**
    * Process the Gemini response and extract translation
    */
@@ -80,7 +89,7 @@ export class GeminiAdapter extends BaseAdapter {
     
     return {
       translatedText,
-      provider: this.provider,
+      providerId: this.id,
       model: this.model,
       usage: usageMetadata ? {
         promptTokens: usageMetadata.promptTokenCount || 0,

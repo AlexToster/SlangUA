@@ -83,7 +83,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
   | `originalText` | `string` | Source Ukrainian text (trimmed, normalized) |
   | `translatedText` | `string` | Generated slang text |
   | `slangStyle` | `SlangStyle` | Style used |
-  | `aiProvider` | `AIProvider` | Provider that succeeded (see [Database Design](03-database.md#enum-aiprovider)) |
+  | `providerId` | `string` | Id of the AI instance that succeeded, lowercase (see [Database Design](03-database.md#provider-ids)) |
   | `previewId` | `string (UUID)` | Opaque identifier for saving this exact preview result |
 
 - **Error codes**:
@@ -114,7 +114,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
   | `originalText` | `string` | Source Ukrainian text (exactly as shown in preview) |
   | `translatedText` | `string` | Generated slang text (exactly as shown in preview) |
   | `slangStyle` | `SlangStyle` | Style used |
-  | `aiProvider` | `AIProvider` | Provider that succeeded |
+  | `providerId` | `string` | Id of the AI instance that succeeded, lowercase |
   | `favorite` | `boolean` | Always `false` on creation |
   | `createdAt` | `datetime` | ISO 8601 timestamp |
 
@@ -138,7 +138,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
       "originalText": "string",
       "translatedText": "string",
       "slangStyle": "GEN_Z",
-      "aiProvider": "OPENAI",
+      "providerId": "openai",
       "favorite": false,
       "createdAt": "2026-01-01T00:00:00.000Z"
     }
@@ -167,7 +167,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
   | `originalText` | `string` | Source Ukrainian text |
   | `translatedText` | `string` | Generated slang text |
   | `slangStyle` | `SlangStyle` | Style used |
-  | `aiProvider` | `AIProvider` | Provider that succeeded (see [Database Design](03-database.md#enum-aiprovider)) |
+  | `providerId` | `string` | Id of the AI instance that succeeded, lowercase (see [Database Design](03-database.md#provider-ids)) |
   | `favorite` | `boolean` | Always `false` on creation |
   | `createdAt` | `datetime` | ISO 8601 timestamp |
 
@@ -284,7 +284,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
     "originalText": "string",
     "translatedText": "string",
     "slangStyle": "GEN_Z",
-    "aiProvider": "OPENAI",
+    "providerId": "openai",
     "favorite": true,
     "createdAt": "2026-01-01T00:00:00.000Z"
   }
@@ -368,16 +368,16 @@ This section describes the Service-layer responsibilities for each module, consi
   - Slang style resolution and system prompt construction per style
   - Orchestration of AI translation via the AI Adapter (provider selection, fallback, retry, timeout)
   - Core translation logic shared by preview and persistent translation (age gate, sanitization, AI call)
-  - Persistence of translation result: create `Translation` record linking `userId`, `originalText`, `translatedText`, `slangStyle`, `aiProvider`, `favorite: false`
+  - Persistence of translation result: create `Translation` record linking `userId`, `originalText`, `translatedText`, `slangStyle`, `providerId`, `favorite: false`
 - **Prisma models read/written**:
   - `Translation` — write (create)
   - `User` — read (verify user exists / get preferences if needed)
 - **Other components called**:
-  - **AI Adapter** (`AIService.translate(text, style)`) — executes provider fallback strategy, returns `{ translatedText, aiProvider }`
+  - **AI Adapter** (`AIService.translate(text, style)`) — executes provider fallback strategy, returns `{ translatedText, providerId, model }`
 - **Returns to Route layer**:
-  - `POST /translate/preview` → Preview result (originalText, translatedText, slangStyle, aiProvider) — no persistence
+  - `POST /translate/preview` → Preview result (originalText, translatedText, slangStyle, providerId) — no persistence
   - `POST /translate/save` → `{ translation, fromPreview }`; on a duplicate save it throws a `409 PREVIEW_ALREADY_SAVED` error carrying the already-saved row, which the Route layer serializes as the optional `translation` field
-  - `POST /translate` → Full `Translation` record (id, originalText, translatedText, slangStyle, aiProvider, favorite, createdAt)
+  - `POST /translate` → Full `Translation` record (id, originalText, translatedText, slangStyle, providerId, favorite, createdAt)
 
 ### HistoryService
 - **Business logic owned**:

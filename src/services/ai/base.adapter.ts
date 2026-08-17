@@ -1,55 +1,109 @@
 /**
  * Base AI Adapter
- * 
+ *
  * Abstract base class providing common functionality for all AI providers:
  * - Retry logic with exponential backoff
  * - Timeout handling
+ * - API key rotation across a pool of keys
  * - Configuration management
  */
 
-import { AIProvider } from '@prisma/client';
 import { IAIProvider, TranslateRequest, TranslateResponse, ProviderConfig } from './types';
 import { config } from '../../config';
 import { loadStyle } from '../../style-engine/loader.js';
+import { KeyExhaustionKind, KeyPool } from './key-pool';
+import { AllKeysExhaustedError } from './errors';
+import { logger } from '../../lib/logger';
+
+/**
+ * Sentinel used as the single pool entry of an instance that needs no key, so
+ * that keyed and keyless providers share one code path. Adapters translate it
+ * into whatever their SDK accepts.
+ */
+export const NO_API_KEY = '';
+
+interface RetryOptions {
+  /**
+   * Stop retrying as soon as the error looks like key exhaustion. Set when the
+   * pool has another key to try: backing off against a limit that belongs to
+   * this key alone just delays the request by seconds for nothing.
+   */
+  abortOnKeyExhaustion?: boolean;
+}
 
 export abstract class BaseAdapter implements IAIProvider {
-  abstract readonly provider: AIProvider;
+  /**
+   * Instance id, supplied by the subclass. Every subclass declares it as a field
+   * or a getter, so it is only readable after `super()` returns - which is why
+   * the key pool below is built lazily.
+   */
+  abstract readonly id: string;
   abstract readonly model: string;
 
-  /**
-   * Instance identifier. Defaults to the lowercased provider name; the
-   * OpenAI-compatible adapter overrides it, because one class serves several
-   * configured instances.
-   */
-  get id(): string {
-    return this.provider.toLowerCase();
-  }
-
   protected readonly config: ProviderConfig;
+
+  /**
+   * Keys resolved in the constructor; the pool itself is built on first use
+   * because its id comes from `this.id`, which does not exist yet while the base
+   * constructor runs - subclass field initializers run after `super()`.
+   */
+  private readonly poolKeys: string[];
+  private keyPoolInstance: KeyPool | null = null;
 
   constructor(providerConfig: Partial<ProviderConfig> = {}) {
     this.config = {
       enabled: providerConfig.enabled ?? true,
-      apiKey: providerConfig.apiKey,
+      apiKeys: providerConfig.apiKeys ?? [],
       requiresApiKey: providerConfig.requiresApiKey ?? true,
       timeout: providerConfig.timeout ?? 30000,
       maxRetries: providerConfig.maxRetries ?? config.AI_MAX_RETRIES,
       retryDelayMs: providerConfig.retryDelayMs ?? config.AI_RETRY_DELAY_MS,
       priority: providerConfig.priority ?? 0,
+      keyCooldownMs: providerConfig.keyCooldownMs ?? {
+        rate: config.AI_KEY_COOLDOWN_RATE_MS,
+        quota: config.AI_KEY_COOLDOWN_QUOTA_MS,
+        invalid: config.AI_KEY_COOLDOWN_INVALID_MS,
+      },
+      keyCooldownStore: providerConfig.keyCooldownStore,
     };
+
+    this.poolKeys = this.config.apiKeys && this.config.apiKeys.length > 0
+      ? this.config.apiKeys
+      // A keyless instance still gets one pool entry, so rotation, cooldowns and
+      // the client cache do not need a second branch for it.
+      : (this.config.requiresApiKey === false ? [NO_API_KEY] : []);
+  }
+
+  /**
+   * The keys this instance may use. `size === 0` means no key is configured,
+   * which is what makes a key-requiring provider unavailable.
+   */
+  protected get keyPool(): KeyPool {
+    if (!this.keyPoolInstance) {
+      // The pool is keyed by instance id, never by a key value: cooldown state
+      // must never carry a secret into a store, a log line or a metric label.
+      this.keyPoolInstance = new KeyPool({
+        id: this.id,
+        keys: this.poolKeys,
+        cooldownMs: this.config.keyCooldownMs!,
+        store: this.config.keyCooldownStore,
+      });
+    }
+    return this.keyPoolInstance;
   }
 
   /**
    * Check if provider is configured and available.
    *
    * A provider that authenticates nobody (a local OpenAI-compatible server)
-   * declares `requiresApiKey: false` instead of carrying a placeholder key.
+   * declares `requiresApiKey: false`, which gives it one keyless pool entry
+   * instead of a placeholder key.
    */
   isAvailable(): boolean {
     if (!this.config.enabled) {
       return false;
     }
-    return this.config.requiresApiKey === false || !!this.config.apiKey;
+    return this.keyPool.size > 0;
   }
 
   /**
@@ -92,7 +146,8 @@ export abstract class BaseAdapter implements IAIProvider {
    */
   protected async withRetry<T>(
     fn: () => Promise<T>,
-    operationName: string
+    operationName: string,
+    options: RetryOptions = {}
   ): Promise<T> {
     let lastError: Error | undefined;
     const maxAttempts = this.config.maxRetries + 1;
@@ -102,9 +157,15 @@ export abstract class BaseAdapter implements IAIProvider {
         return await fn();
       } catch (error) {
         lastError = error as Error;
-        
+
         // Don't retry on certain errors (e.g., invalid API key, bad request)
         if (this.isNonRetryableError(error)) {
+          throw error;
+        }
+
+        // Another key is waiting: hand the error up immediately instead of
+        // sleeping out a backoff that this key's limit will outlive anyway.
+        if (options.abortOnKeyExhaustion && this.classifyKeyExhaustion(error)) {
           throw error;
         }
 
@@ -116,6 +177,119 @@ export abstract class BaseAdapter implements IAIProvider {
     }
 
     throw lastError;
+  }
+
+  /**
+   * Run `fn` with a key from the pool, rotating to the next key when the current
+   * one is rate-limited or out of quota. Every key gets at most one turn per
+   * request, so a request can never walk the pool twice.
+   *
+   * Throws `AllKeysExhaustedError` when no key is usable - which `AIService`
+   * treats as "skip this provider" rather than "this provider is broken". Any
+   * other error propagates unchanged: a bad request or a server error is not a
+   * key problem and must not consume the pool.
+   */
+  protected async withKeyRotation<T>(
+    fn: (apiKey: string) => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    const attempts = this.keyPool.size;
+    let lastError: Error | undefined;
+    let lastKind: KeyExhaustionKind | undefined;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const lease = await this.keyPool.next();
+      if (!lease) {
+        break;
+      }
+
+      try {
+        return await this.withRetry(() => fn(lease.key), operationName, {
+          // With a single key there is nowhere to rotate to, so keep the plain
+          // backoff behaviour: a short rate limit is often over by then.
+          abortOnKeyExhaustion: this.keyPool.size > 1,
+        });
+      } catch (error) {
+        const kind = this.classifyKeyExhaustion(error);
+        if (!kind) {
+          throw error;
+        }
+
+        lastError = error as Error;
+        lastKind = kind;
+        await this.keyPool.penalize(lease.index, kind);
+
+        // Only the index is logged - the key itself must never reach a log line.
+        const logPayload = {
+          providerId: this.id,
+          keyIndex: lease.index,
+          poolSize: this.keyPool.size,
+          kind,
+        };
+        if (kind === 'invalid') {
+          logger.error(logPayload, 'AI API key rejected as invalid; parked and rotating');
+        } else {
+          logger.warn(logPayload, 'AI API key exhausted; parked and rotating');
+        }
+      }
+    }
+
+    throw new AllKeysExhaustedError(
+      this.id,
+      await this.keyPool.retryAfterMs(),
+      lastKind,
+      { cause: lastError }
+    );
+  }
+
+  /**
+   * Decide whether an error means "this key is spent" and how long it should be
+   * parked. Returning null means the error has nothing to do with the key, so
+   * rotation must not swallow it.
+   *
+   * The base implementation matches provider-agnostic wording, which covers
+   * Gemini's messages as well; SDKs with structured errors (OpenAI-compatible,
+   * Anthropic) override it and inspect the status code first.
+   */
+  protected classifyKeyExhaustion(error: unknown): KeyExhaustionKind | null {
+    if (!(error instanceof Error)) {
+      return null;
+    }
+
+    const message = error.message.toLowerCase();
+
+    // A spent budget: hours, not seconds.
+    if (message.includes('insufficient_quota') ||
+        message.includes('quota exceeded') ||
+        message.includes('exceeded your current quota') ||
+        (message.includes('billing') && message.includes('quota'))) {
+      return 'quota';
+    }
+
+    // A key that will never work until someone fixes the configuration. Kept
+    // narrow on purpose: "forbidden" alone can also mean a content policy
+    // refusal, which has nothing to do with the key.
+    if (message.includes('invalid api key') ||
+        message.includes('api key not valid') ||
+        message.includes('api key expired') ||
+        message.includes('invalid_api_key') ||
+        message.includes('api_key_invalid')) {
+      return 'invalid';
+    }
+
+    // Short-term limits. Gemini reports a spent free-tier day the same way, so
+    // this is deliberately the cheap classification: a minute of cooldown, not
+    // an hour.
+    if (message.includes('rate limit') ||
+        message.includes('rate_limit') ||
+        message.includes('too many requests') ||
+        message.includes('resource has been exhausted') ||
+        message.includes('resource_exhausted') ||
+        message.includes('429')) {
+      return 'rate';
+    }
+
+    return null;
   }
 
   /**
