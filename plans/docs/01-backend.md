@@ -59,10 +59,10 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
     - Orchestrates AI calls and database logging.
 - **`AI Service & Adapters`**:
     - **`IAIProvider`**: Interface defining `translate(request)` plus the instance's `id` — a lowercase string matching `PROVIDER_ID_PATTERN`, persisted as `Translation.providerId`.
-    - **`AIService`**: Implements provider fallback strategy, timeout handling, retry policy and a per-instance circuit breaker (keyed by `id`). An `AllKeysExhaustedError` is not counted as a provider failure.
+    - **`AIService`**: Implements provider fallback strategy, timeout handling, retry policy and a per-instance circuit breaker (keyed by `id`).
     - **`OpenAICompatibleAdapter`**: One parameterized class for every provider that speaks the OpenAI Chat Completions format. Configured instances today: `openai`, `openrouter` and `ollama` (a local server via its `/v1` endpoint), plus anything listed in `AI_EXTRA_INSTANCES`. Per-instance options: base URL, model, key requirement, temperature, output-cap field name, extra body fields and extra headers.
     - **`ClaudeAdapter`**, **`GeminiAdapter`**: The two providers that keep a native SDK — Anthropic for prompt caching, Gemini because its native API has no system role and needs its own error classification.
-    - **`KeyPool`**: Each adapter holds one. `*_API_KEY` accepts a comma-separated list; keys are leased round-robin and a key the provider refused is parked for a cooldown that depends on the kind of refusal (`rate`, `quota`, `invalid`). Cooldowns are keyed by pool id and index, never by the key value. When no key is usable the adapter throws `AllKeysExhaustedError` without an HTTP call, so `AIService` moves to the next instance for free. See [Architectural Decisions](05-decisions.md#a-pool-of-keys-per-instance-not-one-key).
+    - **`KeyPool`**: Each adapter holds one. `*_API_KEY` accepts a comma-separated list of keys; the pool leases them in turn and parks a key the provider refused for a cooldown (`AI_KEY_COOLDOWN_*`), so a spent free-tier key does not take the whole instance down. With a single key the behaviour is unchanged.
     - **`ProviderFactory`**: Builds one instance per configured id and orders them by `AI_PROVIDER_PRIORITY`. An instance the list does not mention still participates, sorted last; an instance missing its base URL, model or key is skipped with an error log rather than failing boot.
 - **`History Module`**:
     - Provides paginated access to user-specific translations.

@@ -31,13 +31,7 @@ The integration harness exercises this path end to end: the deterministic mock s
 
 ## A Pool of Keys per Instance, Not One Key
 
-Production starts on free tiers, where the quota belongs to the key rather than to the provider. So every `*_API_KEY` variable accepts a comma-separated list, and each adapter holds a `KeyPool` (`src/services/ai/key-pool.ts`) that leases keys round-robin and parks a key that the provider just refused.
-
-- **Cooldowns are per key, keyed by pool id plus index — never by the key value.** Nothing derived from a secret ends up in a map key, a log line or (later) a Redis key.
-- **Three kinds of exhaustion, three durations.** `rate` (`AI_KEY_COOLDOWN_RATE_MS`, 60 s) is deliberately cheap, because Gemini reports a spent free-tier *day* with the same 429 as a per-minute limit and a short park costs one wasted request instead of an hour of unnecessary fallback. `quota` (`AI_KEY_COOLDOWN_QUOTA_MS`, 1 h) covers an explicitly spent budget. `invalid` (`AI_KEY_COOLDOWN_INVALID_MS`, 1 h) parks a key the provider rejected outright: a bad key in a pool must not fail every request that happens to land on it, and it is logged at error level because only a human can fix it.
-- **Rotation pre-empts backoff.** With a spare key available the adapter rotates immediately rather than sleeping out `AI_RETRY_DELAY_MS` — the limit belongs to the key it just left. With a single key the plain backoff stays.
-- **`AllKeysExhaustedError` is not a provider failure.** `AIService` explicitly does not count it towards the circuit breaker: a provider whose keys are spent is healthy, and its keys return on their own, so opening the breaker would keep it out of the chain long past the cooldown. The retry is free anyway — the pool refuses the lease without an HTTP request, which makes skipping an exhausted instance cheaper than a breaker probe would be.
-- **The store is swappable.** `KeyCooldownStore` defaults to an in-memory implementation, which is correct for a single process; a Redis-backed store can share cooldowns across replicas without touching the adapters.
+Production starts on free tiers, where the quota belongs to the key rather than to the provider. So every `*_API_KEY` variable accepts a comma-separated list of keys, and each adapter holds a `KeyPool` (`src/services/ai/key-pool.ts`) that leases them in turn and parks a key the provider has just refused until its cooldown (`AI_KEY_COOLDOWN_*`) expires. With one key the behaviour is unchanged.
 
 Pooling keys is a deployment decision with a legal edge: some vendors forbid holding several free-tier accounts, and rotation cannot make that acceptable. `.env.example` says so where the variables are documented.
 
