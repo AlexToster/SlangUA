@@ -1,16 +1,16 @@
 # Repository Hygiene Follow-up
 
-## Current audit
+**Status:** the two items this document was opened for are closed. Kept as the record of what was done and why, so the decisions are not re-litigated.
 
-- Root `dist/` and `frontend/dist/` are ignored and are not tracked by Git.
-- `.env` is still tracked in the current repository history. Its secrets must be treated as exposed and rotated before any history cleanup is considered.
-- `node_modules/` is ignored for new files but approximately 8,788 paths remain tracked from earlier commits. This inflates repository size and can make dependency updates noisy.
+## Resolved
 
-## Separately reviewable cleanup plan
+- **`node_modules/` is no longer tracked.** ~8,788 paths inherited from early commits were removed from the index in an isolated commit (`git rm`-equivalent via `git update-index --force-remove`; the local installation was untouched). It was already in `.gitignore`, so nothing re-adds it. This is what made `git status` at the repository root time out past 120 s.
+- **`.env` is out of the current history.** History was rewritten by the owner; `main` and `origin/main` no longer contain the file. What remains locally are `refs/original/*` backup refs left behind by `git filter-branch` — they are local-only and can be dropped with `git update-ref -d` plus `git reflog expire --expire=now --all && git gc --prune=now` whenever the owner wants the objects gone.
+- **Credential rotation: deliberately declined by the repository owner.** The repository was private for its whole life, and when the committed `.env` was noticed the GitHub repository was deleted and recreated under the same name. The exposure window was therefore limited to the owner's own account. This is a closed decision — do not re-raise it.
+- **Root `dist/` and `frontend/dist/` are ignored** and are not tracked.
+- **Deployment scripts live outside the repository** because they carry production server details. `deploy/*.ps1` and `deploy/*.sh` are ignored in both `.gitignore` and `.dockerignore`; only `deploy/nginx/` is versioned, parameterised with `__SERVER_NAME__`. Do not recreate them here.
 
-1. Rotate every credential that has ever appeared in `.env` (database, Redis, JWT, refresh HMAC, preview root key, Telegram, and AI providers). Confirm deployed environments use the replacements.
-2. In a dedicated branch, remove only `node_modules/` from the Git index while preserving the local installation, verify `package-lock.json` is the sole dependency lockfile, then commit that isolated change. Do not mix application changes into this commit.
-3. Confirm a fresh clone followed by `npm ci` and `npm ci --prefix frontend` recreates the required dependencies; run backend and frontend checks.
-4. Decide with repository owners whether secret-bearing `.env` history requires a history rewrite. If approved, perform it as a separately coordinated operation after rotation, force-push safeguards, and collaborator communication are in place.
+## Remaining
 
-No history rewrite, credential rotation, or dependency deletion is performed by this document.
+1. Regenerate `package-lock.json` — it was not refreshed after the `@fastify/cookie` and `jsonwebtoken` removals. Run `npm install` on the development machine (a Linux run would resolve different optional native packages).
+2. Verify a fresh clone: `npm ci` and `npm ci --prefix frontend`, then the backend and frontend check suites. This is the real proof that untracking `node_modules` cost nothing.

@@ -2,6 +2,11 @@ interface TelegramWebApp {
   ready(): void;
   expand(): void;
   switchInlineQuery(query: string, chooseChatTypes?: ('users' | 'bots' | 'groups' | 'channels')[]): void;
+  /**
+   * Opens a t.me link inside Telegram. Optional: older clients (and the jsdom
+   * test stub) do not provide it, so every call site must feature-detect.
+   */
+  openTelegramLink?(url: string): void;
   close(): void;
   readTextFromClipboard(callback: (text: string | null) => void): void;
   initData: string;

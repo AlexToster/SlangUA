@@ -2,8 +2,11 @@
 .translate-page {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* Grows with its content inside the app's single scroll container
+     (.app-layout-content) and fills it when the content is shorter. It must NOT
+     be shrunk to the viewport (`flex: 1` + `min-height: 0`): that clipped long
+     content and broke sticky positioning inside the page. */
+  flex: 1 0 auto;
   background: var(--tg-bg-color, var(--color-bg));
   color: var(--tg-text-color, var(--color-text));
 }
@@ -28,22 +31,97 @@
   to { transform: rotate(360deg); }
 }
 
-.translate-header {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
-  background: var(--tg-bg-color, var(--color-bg));
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
 .translate-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-lg) calc(var(--spacing-xl) + env(safe-area-inset-bottom));
-  overflow-y: auto;
+  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-xl);
+  /* Do NOT clip overflow: the StyleDropdown panel opens downward and must be
+     able to overlay the result below it. */
+}
+
+/* Merged style trigger + result card.
+   No overflow: hidden here — that would clip the dropdown panel — so the
+   rounded corners are applied to the two children instead. */
+.translate-output {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-lg);
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+/* Accent hand-off. The editor above owns the ring while it has focus
+   (.text-input-wrapper:focus-within). The moment a translation starts, and for
+   as long as a result is on screen, .active moves the same border+glow down
+   here, so one accent follows the active step instead of two rings competing.
+   The keyframe makes the glow arrive from the top edge - the "flowing down"
+   part - and settle into the full ring. */
+.translate-output.active {
+  border-color: var(--tg-link-color, var(--color-primary));
+  box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20));
+  animation: translate-accent-flow var(--transition-normal) ease;
+}
+
+@keyframes translate-accent-flow {
+  from { box-shadow: 0 -12px 14px -8px var(--tg-link-color, var(--color-primary-alpha-20)); }
+  to { box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .translate-output {
+    transition: none;
+  }
+
+  .translate-output.active {
+    animation: none;
+  }
+}
+
+/* The trigger is the highlighted header of the card. */
+.translate-output .style-dropdown-trigger {
+  border: none;
+  border-bottom: 2px solid var(--color-divider-strong);
+  border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
+  background: var(--color-primary-alpha-15);
+  color: var(--tg-link-color, var(--color-primary));
+  font-weight: 600;
+}
+
+.translate-output .style-dropdown-trigger:hover,
+.translate-output .style-dropdown-trigger.open {
+  background: var(--color-primary-alpha-20);
+}
+
+.translate-output .style-dropdown-trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.translate-output .style-dropdown-chevron {
+  color: var(--tg-link-color, var(--color-primary));
+}
+
+/* The result is the body of the same card: no border, no ring, no own surface. */
+.translate-output .preview-result {
+  border: none;
+  border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
+  background: transparent;
+}
+
+.translate-output .preview-result:focus-within {
+  box-shadow: none;
+}
+
+.translate-output .preview-result.empty {
+  background: transparent;
+}
+
+.translate-output .preview-result.error {
+  background: var(--tg-destructive-color-alpha-05, var(--color-error-alpha-05));
 }
 
 .translate-age-modal-overlay {
@@ -97,21 +175,10 @@
   color: var(--color-primary-text);
 }
 
-/* Safe area for bottom navigation */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .translate-main {
-    padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom));
-  }
-}
-
 /* Responsive adjustments */
 @media (max-width: 480px) {
-  .translate-header {
-    padding: var(--spacing-sm) var(--spacing-md);
-  }
-  
   .translate-main {
-    padding: var(--spacing-sm) var(--spacing-md) calc(var(--spacing-lg) + env(safe-area-inset-bottom));
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-lg);
     gap: var(--spacing-sm);
   }
 }

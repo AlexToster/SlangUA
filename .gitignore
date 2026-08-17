@@ -3,6 +3,17 @@ node_modules/
 
 # Build output
 dist/
+dist-test/
+frontend/dist/
+
+# Deployment archives
+*.tar.gz
+
+# Local deploy scripts. They carry production server details (hosts, paths,
+# credentials) and are kept outside the repository on purpose - only the nginx
+# templates under deploy/ belong here.
+deploy/*.ps1
+deploy/*.sh
 
 # Environment files (secrets)
 .env
@@ -18,3 +29,7 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# Postman (local workspace artifacts)
+postman/
+.postman/

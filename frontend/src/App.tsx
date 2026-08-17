@@ -8,6 +8,7 @@ import TranslatePage from './pages/TranslatePage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import LoadingScreen from './components/LoadingScreen';
+import AppLayout from './components/AppLayout';
 import './styles/global.css';
 
 const queryClient = new QueryClient({
@@ -87,14 +88,16 @@ function App() {
         )}
         {initState === 'ready' && (
           <Routes>
-            <Route path="/" element={<TranslatePage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<TranslatePage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         )}
       </BrowserRouter>
-      <ReactQueryDevtools initialIsOpen={false} />
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   );
 }

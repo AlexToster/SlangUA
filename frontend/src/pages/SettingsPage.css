@@ -1,15 +1,21 @@
-/* SettingsPage Component Styles */
+/* SettingsPage Component Styles
+   Laid out to fit one phone screen: every row stays horizontal (label left,
+   control right) and the descriptive hints are gone. The previous version
+   switched .settings-item to `flex-direction: column` under 480px, which made
+   each of the rows three lines tall and pushed the page well past one screen. */
 .settings-page {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* Grows with its content inside the app's single scroll container
+     (.app-layout-content). See TranslatePage.css. */
+  flex: 1 0 auto;
+  max-width: 100%;
+  min-width: 0;
   background: var(--tg-bg-color, var(--color-bg));
   color: var(--tg-text-color, var(--color-text));
 }
 
 .settings-page.loading {
-  display: flex;
   align-items: center;
   justify-content: center;
 }
@@ -29,9 +35,6 @@
 }
 
 .settings-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--tg-border-color, var(--color-border));
   background: var(--tg-bg-color, var(--color-bg));
@@ -40,46 +43,45 @@
   z-index: 10;
 }
 
+/* Size, weight, centring and colour all come from .page-title in global.css. */
 .settings-header h1 {
   margin: 0;
-  font-size: var(--font-size-xl);
-  font-weight: 700;
 }
 
+/* No own scroller — the app scrolls in .app-layout-content. */
 .settings-main {
   flex: 1;
-  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-xl);
-  overflow-y: auto;
+  padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-md);
 }
 
 .settings-section {
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
 }
 
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Section labels used to be 12px hint-coloured text, which read as a caption
+   rather than a heading. Same font family (no web font is loaded), but a
+   different presentation: two steps larger, bolder, wider letter-spacing and
+   full text contrast. */
 .settings-section-title {
-  margin: 0 0 var(--spacing-md);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-base);
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--tg-hint-color, var(--color-text-muted));
-}
-
-.settings-section-danger {
-  border-top: 1px solid var(--tg-destructive-color-alpha-30, var(--color-error-alpha-30));
-  padding-top: var(--spacing-xl);
-  margin-top: var(--spacing-xl);
-}
-
-.settings-section-danger .settings-section-title {
-  color: var(--tg-destructive-color, var(--color-error));
+  letter-spacing: 0.08em;
+  line-height: var(--line-height-tight);
+  color: var(--tg-text-color, var(--color-text));
 }
 
 .settings-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md) 0;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
   border-bottom: 1px solid var(--tg-border-color, var(--color-border));
 }
 
@@ -88,9 +90,6 @@
 }
 
 .settings-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   flex: 1;
   min-width: 0;
 }
@@ -101,43 +100,29 @@
   color: var(--tg-text-color, var(--color-text));
 }
 
-.settings-item-hint {
-  font-size: var(--font-size-xs);
-  color: var(--tg-hint-color, var(--color-text-muted));
-}
-
 .settings-item-control {
   flex-shrink: 0;
-  margin-left: var(--spacing-md);
+  /* Wide enough for the longest style name, narrow enough to leave the label
+     on the same line. */
+  width: 48%;
+  max-width: 200px;
+  display: flex;
+  justify-content: flex-end;
 }
 
-.settings-select {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-family: inherit;
-  font-size: var(--font-size-base);
-  color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-  min-width: 180px;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--spacing-sm) center;
-  padding-right: 36px;
+/* One row per line: label above, control stretched across the whole window.
+   Used by the default-style picker, whose option labels are too long for the
+   48% control column. */
+.settings-item.settings-item-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-sm);
 }
 
-.settings-select:focus {
-  outline: none;
-  border-color: var(--tg-link-color, var(--color-primary));
-  box-shadow: 0 0 0 3px var(--tg-link-color-alpha-20, var(--color-primary-alpha-20));
-}
-
-.settings-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.settings-item.settings-item-stacked .settings-item-control {
+  width: 100%;
+  max-width: none;
+  justify-content: stretch;
 }
 
 /* Toggle switch */
@@ -158,10 +143,10 @@
 .settings-toggle-slider {
   position: relative;
   display: block;
-  width: 48px;
-  height: 28px;
+  width: 44px;
+  height: 26px;
   background: var(--tg-border-color, var(--color-border));
-  border-radius: 14px;
+  border-radius: 13px;
   transition: background-color var(--transition-fast);
 }
 
@@ -170,8 +155,8 @@
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   background: white;
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -183,7 +168,7 @@
 }
 
 .settings-toggle input:checked + .settings-toggle-slider::before {
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 
 .settings-toggle input:focus-visible + .settings-toggle-slider {
@@ -221,7 +206,7 @@
 }
 
 .settings-btn-primary {
-  color: var(--tg-button-text-color, var(--color-on-primary));
+  color: var(--tg-button-text-color, var(--color-primary-text));
   background: var(--tg-link-color, var(--color-primary));
   border: 1px solid var(--tg-link-color, var(--color-primary));
 }
@@ -241,7 +226,7 @@
 }
 
 .settings-btn-danger {
-  color: var(--tg-button-text-color, var(--color-on-error));
+  color: #ffffff;
   background: var(--tg-destructive-color, var(--color-error));
   border: 1px solid var(--tg-destructive-color, var(--color-error));
 }
@@ -250,126 +235,22 @@
   filter: brightness(1.1);
 }
 
-/* Badge */
-.settings-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px var(--spacing-xs);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-}
-
-.settings-badge.success {
-  color: var(--tg-success-color, var(--color-success));
-  background: var(--tg-success-color-alpha-10, var(--color-success-alpha-10));
-}
-
-/* Modals */
-.settings-modal-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-md);
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
-  animation: modal-fade-in 0.2s ease-out;
-}
-
-@keyframes modal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.settings-modal {
-  width: 100%;
-  max-width: 360px;
-  padding: var(--spacing-xl);
-  background: var(--tg-bg-color, var(--color-bg));
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg, 0 20px 60px rgba(0, 0, 0, 0.2));
-  animation: modal-slide-up 0.3s ease-out;
-}
-
-@keyframes modal-slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.settings-modal h3 {
-  margin: 0 0 var(--spacing-md);
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--tg-text-color, var(--color-text));
-}
-
-.settings-modal p {
-  margin: 0 0 var(--spacing-sm);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed);
-  color: var(--tg-hint-color, var(--color-text-muted));
-}
-
-.settings-modal p:last-of-type {
-  margin-bottom: var(--spacing-lg);
-}
-
-.settings-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-}
-
-/* Responsive adjustments */
 @media (max-width: 480px) {
   .settings-header {
     padding: var(--spacing-sm) var(--spacing-md);
   }
-  
-  .settings-header h1 {
-    font-size: var(--font-size-lg);
-  }
-  
+
   .settings-main {
-    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-lg);
+    padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
   }
-  
+
+  /* Deliberately still a row - see the note at the top of this file. */
   .settings-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-sm);
     padding: var(--spacing-sm) 0;
   }
-  
+
   .settings-item-control {
-    margin-left: 0;
-    width: 100%;
-  }
-  
-  .settings-select {
-    width: 100%;
-    min-width: auto;
-  }
-  
-  .settings-modal {
-    padding: var(--spacing-lg);
-    margin: var(--spacing-md);
-  }
-  
-  .settings-modal-actions {
-    flex-direction: column-reverse;
-  }
-  
-  .settings-modal-actions .settings-btn {
-    width: 100%;
+    width: 50%;
+    max-width: 180px;
   }
 }

@@ -1,0 +1,23 @@
+{
+  // The root tsconfig.json excludes `test` because its `rootDir` is `./src` and
+  // the build must not emit test files. Without this second project the test
+  // suites were never type-checked at all, which is how integration tests that
+  // could not compile ended up on main. `npm run test:typecheck` runs both.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "outDir": "./dist-test",
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  // `test/vitest-globals.d.ts` pulls in vitest's global declarations.
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "test/**/*.ts",
+    "test/**/*.d.ts"
+  ],
+  "exclude": ["node_modules", "dist", "dist-test"]
+}

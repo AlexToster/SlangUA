@@ -2,14 +2,19 @@
 
 /* CSS Custom Properties for Telegram Theme Integration */
 :root {
-  /* Telegram theme colors (mapped from themeParams) */
-  --tg-bg-color: #ffffff;
-  --tg-text-color: #000000;
-  --tg-hint-color: #999999;
-  --tg-link-color: #2481cc;
-  --tg-button-color: #2481cc;
+  /* Keeps native UI (scrollbars, form controls, the on-screen keyboard) in step
+     with the chosen theme. Overridden in the dark blocks below. */
+  color-scheme: light;
+
+  /* Telegram theme colors (mapped from themeParams).
+     Світла тема — з голубуватим відтінком (bluish light). */
+  --tg-bg-color: #eef3fb;
+  --tg-text-color: #12203a;
+  --tg-hint-color: #64748b;
+  --tg-link-color: #2563eb;
+  --tg-button-color: #2563eb;
   --tg-button-text-color: #ffffff;
-  --tg-secondary-bg-color: #f1f1f1;
+  --tg-secondary-bg-color: #dde8f7;
 
   /* Safe area insets */
   --safe-area-top: 0px;
@@ -28,6 +33,39 @@
   --color-error: #e74c3c;
   --color-success: #27ae60;
   --color-warning: #f39c12;
+
+  /* Per-style accent colours, used by the history badges. */
+  --color-gen-z: #d946ef;
+  --color-street: #f59e0b;
+  --color-it-slang: #06b6d4;
+  --color-pofeni: #94a3b8;
+  --color-kancler: #8b5cf6;
+  --color-galician: #10b981;
+
+  /* Alpha derivatives. Component stylesheets referenced these names already,
+     but nothing defined them - so `box-shadow: 0 0 0 3px var(--…-alpha-20)`
+     and every `background: var(--…-alpha-15)` was an invalid declaration and
+     silently did nothing (no focus rings, colourless badges). */
+  --color-primary-alpha-10: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-primary-alpha-15: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  --color-primary-alpha-20: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --color-primary-alpha-50: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  --color-error-alpha-10: color-mix(in srgb, var(--color-error) 10%, transparent);
+  --color-error-alpha-20: color-mix(in srgb, var(--color-error) 20%, transparent);
+  --color-error-alpha-30: color-mix(in srgb, var(--color-error) 30%, transparent);
+  --color-success-alpha-10: color-mix(in srgb, var(--color-success) 10%, transparent);
+  --color-gen-z-alpha-15: color-mix(in srgb, var(--color-gen-z) 15%, transparent);
+  --color-street-alpha-15: color-mix(in srgb, var(--color-street) 15%, transparent);
+  --color-it-slang-alpha-15: color-mix(in srgb, var(--color-it-slang) 15%, transparent);
+  --color-pofeni-alpha-15: color-mix(in srgb, var(--color-pofeni) 15%, transparent);
+  --color-kancler-alpha-15: color-mix(in srgb, var(--color-kancler) 15%, transparent);
+  --color-galician-alpha-15: color-mix(in srgb, var(--color-galician) 15%, transparent);
+
+  /* Contrast divider. Used where two previously separate blocks are merged into
+     one card and must still read as two zones: the editor and its action row,
+     the style trigger and the translation result. Deliberately stronger than
+     --color-border, which is barely visible against --color-surface. */
+  --color-divider-strong: color-mix(in srgb, var(--color-text) 32%, transparent);
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -59,6 +97,18 @@
   --font-size-lg: 18px;
   --font-size-xl: 20px;
   --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+
+  /* Line heights. Several component stylesheets already referenced
+     --line-height-normal / --line-height-relaxed; without a definition those
+     declarations were invalid and silently fell back to `normal`. */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.7;
+
+  /* One size shared by the translation input and the translated result, so the
+     result is never rendered smaller than what the user typed. */
+  --font-size-editor: var(--font-size-xl);
 
   /* Z-index */
   --z-dropdown: 100;
@@ -66,8 +116,19 @@
   --z-toast: 300;
 }
 
-/* Dark theme (applied via data-theme attribute) */
+/* Phones get one step smaller, but input and result still match each other. */
+@media (max-width: 480px) {
+  :root {
+    --font-size-editor: var(--font-size-lg);
+  }
+}
+
+/* Dark theme (applied via data-theme attribute).
+   The theme picker in Settings works by setting this attribute; for that to be
+   visible, utils/localSettings must first withdraw Telegram's inline --tg-*
+   properties from <html>, because inline styles outrank this rule. */
 [data-theme="dark"] {
+  color-scheme: dark;
   --tg-bg-color: #1c1c1e;
   --tg-text-color: #ffffff;
   --tg-hint-color: #8e8e93;
@@ -77,9 +138,11 @@
   --tg-secondary-bg-color: #2c2c2e;
 }
 
-/* System theme fallback */
+/* System theme fallback: used when no explicit theme is chosen and no Telegram
+   palette is available, so the attribute is absent altogether. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --tg-bg-color: #1c1c1e;
     --tg-text-color: #ffffff;
     --tg-hint-color: #8e8e93;
@@ -275,82 +338,16 @@ body {
   filter: brightness(1.1);
 }
 
-/* Toggle switch */
-.settings-toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
+/* Toggle switch
+   Deliberately NOT styled here. global.css is imported last (see App.tsx), so a
+   duplicate .settings-toggle* block won over SettingsPage.css at equal
+   specificity and quietly overrode the page's own sizing. SettingsPage.css owns
+   the toggle. */
 
-.settings-toggle input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.settings-toggle-slider {
-  position: relative;
-  width: 44px;
-  height: 26px;
-  background: var(--color-border);
-  border-radius: var(--radius-full);
-  transition: background var(--transition-fast);
-}
-
-.settings-toggle-slider::before {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--transition-fast);
-}
-
-.settings-toggle input:checked + .settings-toggle-slider {
-  background: var(--color-primary);
-}
-
-.settings-toggle input:checked + .settings-toggle-slider::before {
-  transform: translateX(18px);
-}
-
-.settings-toggle input:focus-visible + .settings-toggle-slider {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Select */
-.settings-select {
-  appearance: none;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  padding-right: 36px;
-  font-size: var(--font-size-base);
-  color: var(--color-text);
-  cursor: pointer;
-  transition: border-color var(--transition-fast);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-}
-
-.settings-select:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.settings-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Select
+   Removed: nothing renders a native <select> any more. The OS draws its option
+   list, which ignored the Telegram theme and opened as a white popup on a dark
+   app - see components/SelectField.tsx, which replaces it. */
 
 /* Input & Textarea */
 .input,
@@ -384,70 +381,11 @@ textarea {
   line-height: 1.6;
 }
 
-/* Toast */
-.toast {
-  position: fixed;
-  bottom: calc(var(--safe-area-bottom) + var(--spacing-lg));
-  left: 50%;
-  transform: translateX(-50%) translateY(100px);
-  opacity: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  z-index: var(--z-toast);
-  animation: toast-in 0.3s ease forwards;
-  max-width: calc(100vw - 2 * var(--spacing-lg));
-}
-
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-.toast.hiding {
-  animation: toast-out 0.3s ease forwards;
-}
-
-@keyframes toast-in {
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
-@keyframes toast-out {
-  to { opacity: 0; transform: translateX(-50%) translateY(100px); }
-}
-
-.toast-success {
-  border-left: 4px solid var(--color-success);
-}
-
-.toast-error {
-  border-left: 4px solid var(--color-error);
-}
-
-.toast-info {
-  border-left: 4px solid var(--color-primary);
-}
-
-.toast-action {
-  margin-left: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-primary);
-  background: transparent;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.toast-action:hover {
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-}
+/* Toast
+   Deliberately NOT styled here. global.css is imported last (see App.tsx), so
+   every rule in this file beats the component stylesheets at equal specificity.
+   A duplicate `.toast` block here used to win over Toast.css and collapse the
+   toast to ~50vw (`left: 50%` with no width). Toast.css owns the toast now. */
 
 /* Error Banner */
 .error-banner {
@@ -556,6 +494,22 @@ textarea {
   display: flex;
   gap: var(--spacing-md);
   justify-content: flex-end;
+}
+
+/* Page title
+   One shared rule for the History / Settings headers: roughly twice the old
+   20px, centred, and coloured from --color-text so it inverts with the theme
+   (light glyphs on the dark theme, dark on the light one). */
+.page-title {
+  display: block;
+  width: 100%;
+  /* One token step down from --font-size-3xl (32px → 24px). 20px was rejected as
+     too small: it is the size the title had before it was deliberately enlarged. */
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-tight);
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-text);
 }
 
 /* Badge */

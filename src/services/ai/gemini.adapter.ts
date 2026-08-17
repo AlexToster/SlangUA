@@ -54,34 +54,6 @@ export class GeminiAdapter extends BaseAdapter {
     return this.processResponse(response, request);
   }
 
-  protected async withRetry<T>(
-    fn: () => Promise<T>,
-    operationName: string
-  ): Promise<T> {
-    let lastError: Error | undefined;
-    const maxAttempts = this.config.maxRetries + 1;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const result = await fn();
-        return result;
-      } catch (error) {
-        lastError = error as Error;
-
-        if (this.isNonRetryableError(error)) {
-          throw error;
-        }
-
-        if (attempt < maxAttempts) {
-          const delay = this.config.retryDelayMs * Math.pow(2, attempt - 1);
-          await this.sleep(delay);
-        }
-      }
-    }
-
-    throw lastError;
-  }
-
   protected isNonRetryableError(error: unknown): boolean {
     if (error instanceof Error) {
       const message = error.message.toLowerCase();

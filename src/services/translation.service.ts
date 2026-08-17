@@ -1,9 +1,12 @@
 import { PrismaClient, SlangStyle, AIProvider, Translation } from '@prisma/client';
 import { aiService } from './ai/ai.service.js';
 import { prisma } from '../lib/prisma.js';
-import { getStyleMetadata } from '../style-engine/loader.js';
+import { logger } from '../lib/logger.js';
+import { config } from '../config/index.js';
+import { getStyleMetadata, RegistryEntry } from '../style-engine/loader.js';
 import { userService } from './user.service.js';
 import { previewCacheService, PreviewData } from './preview-cache.service.js';
+import { HISTORY_MAX_ENTRIES } from '../constants/index.js';
 
 export interface TranslateInput {
   text: string;
@@ -100,10 +103,11 @@ export class TranslationService {
     /девелопер\s+режим/i,
     /dev\s+mode/i,
 
-    // Special tokens / instruction tags (unchanged)
-    /<\|.*?\|>/g,
-    /\[INST\].*?\[\/INST\]/gis,
-    /<<SYS>>.*?<\/SYS>>/gis,
+    // Special tokens / instruction tags.
+    // Declared WITHOUT the /g flag on purpose - see sanitizeForPromptInjection().
+    /<\|.*?\|>/is,
+    /\[INST\].*?\[\/INST\]/is,
+    /<<SYS>>.*?<\/SYS>>/is,
   ];
 
   constructor(prismaClient: PrismaClient = prisma) {
@@ -146,6 +150,10 @@ export class TranslationService {
   /**
    * Sanitize text for prompt injection protection
    * Returns sanitized text and whether any suspicious patterns were found
+   *
+   * None of the patterns carry the /g flag: a global regex reused across calls
+   * keeps `lastIndex` between `.test()` invocations, which produced intermittent
+   * false negatives. Global replacement is done on a per-call clone instead.
    */
   private sanitizeForPromptInjection(text: string): { sanitized: string; suspicious: boolean } {
     let sanitized = text;
@@ -154,8 +162,8 @@ export class TranslationService {
     for (const pattern of this.PROMPT_INJECTION_PATTERNS) {
       if (pattern.test(text)) {
         suspicious = true;
-        // Replace suspicious patterns with safe placeholder
-        sanitized = sanitized.replace(pattern, '[FILTERED]');
+        // Replace every occurrence, not just the first one
+        sanitized = sanitized.replace(new RegExp(pattern.source, `${pattern.flags}g`), '[FILTERED]');
       }
     }
 
@@ -166,48 +174,62 @@ export class TranslationService {
   }
 
   /**
-   * Core translation logic shared by preview and persistent translation
-   * Performs age gate check, prompt injection sanitization, and AI translation
-   * Does NOT persist to database
+   * Resolve style metadata from the registry.
+   * An unknown or disabled style is a client error (400), never a silent fallback.
    */
-  private async translateCore(userId: number, input: TranslateInput): Promise<PreviewResult> {
-    const { text, style } = input;
-
-    // Validate and normalize text
-    const { normalizedText } = this.validateAndNormalizeText(text);
-
-    // 0. Age restriction check - before any AI call
-    let styleMetadata;
+  private async resolveStyleMetadata(style: SlangStyle): Promise<RegistryEntry> {
     try {
-      styleMetadata = await getStyleMetadata(style);
+      return await getStyleMetadata(style);
     } catch {
       const error = new Error('Selected style is unavailable.') as Error & { code: string; statusCode: number };
       error.code = 'STYLE_UNAVAILABLE';
       error.statusCode = 400;
       throw error;
     }
-    if (styleMetadata.ageRestricted) {
-      const profile = await userService.getProfile(userId);
-      if (!profile || !profile.ageConfirmedAdult) {
-        const error = new Error('This style requires age confirmation.') as Error & { code: string; statusCode: number };
-        error.code = 'AGE_RESTRICTED_STYLE';
-        error.statusCode = 403;
-        throw error;
-      }
+  }
+
+  /**
+   * The single real enforcement point of the age gate. `GET /styles` only exposes
+   * the `ageRestricted` flag so the UI can lock the entry; that lock is cosmetic.
+   * Must run on every request path, including cache hits.
+   */
+  private async assertAgeAllowed(userId: number, styleMetadata: RegistryEntry): Promise<void> {
+    if (!styleMetadata.ageRestricted) {
+      return;
     }
-
-    // 1. Sanitize for prompt injection (only semantic validation at service layer)
-    const { sanitized: sanitizedText, suspicious } = this.sanitizeForPromptInjection(normalizedText);
-
-    // If suspicious content detected, reject with 422
-    if (suspicious) {
-      const error = new Error('Input contains potentially malicious content');
-      (error as any).code = 'PROMPT_INJECTION_DETECTED';
-      (error as any).statusCode = 422;
+    const profile = await userService.getProfile(userId);
+    if (!profile || !profile.ageConfirmedAdult) {
+      const error = new Error('This style requires age confirmation.') as Error & { code: string; statusCode: number };
+      error.code = 'AGE_RESTRICTED_STYLE';
+      error.statusCode = 403;
       throw error;
     }
+  }
 
-    // 2. Call AI service for translation
+  /**
+   * Reject prompt injection attempts (422) and return the sanitized text.
+   * Must run on every request path, including cache hits.
+   */
+  private assertNoPromptInjection(normalizedText: string): string {
+    const { sanitized, suspicious } = this.sanitizeForPromptInjection(normalizedText);
+    if (suspicious) {
+      const error = new Error('Input contains potentially malicious content') as Error & { code: string; statusCode: number };
+      error.code = 'PROMPT_INJECTION_DETECTED';
+      error.statusCode = 422;
+      throw error;
+    }
+    return sanitized;
+  }
+
+  /**
+   * Call the AI layer. Expects text that has already been normalized, age-gated
+   * and checked for prompt injection by the caller. Does NOT persist anything.
+   */
+  private async translateCore(
+    normalizedText: string,
+    sanitizedText: string,
+    style: SlangStyle
+  ): Promise<PreviewResult> {
     let aiResponse;
     try {
       aiResponse = await aiService.translate({
@@ -216,15 +238,14 @@ export class TranslationService {
       });
     } catch (error) {
       // Log the raw provider error server-side for diagnostics
-      console.error('[TranslationService] All AI providers failed:', error);
+      logger.error({ err: error }, '[TranslationService] All AI providers failed');
       // Throw generic message to client (no raw SDK details)
-      const err = new Error('All AI providers are currently unavailable. Please try again later.');
-      (err as any).code = 'AI_PROVIDER_UNAVAILABLE';
-      (err as any).statusCode = 503;
+      const err = new Error('All AI providers are currently unavailable. Please try again later.') as Error & { code: string; statusCode: number };
+      err.code = 'AI_PROVIDER_UNAVAILABLE';
+      err.statusCode = 503;
       throw err;
     }
 
-    // 3. Return preview result (no persistence)
     return {
       originalText: normalizedText, // Return normalized text
       translatedText: aiResponse.translatedText,
@@ -251,9 +272,15 @@ export class TranslationService {
     // Validate and normalize text first
     const { normalizedText } = this.validateAndNormalizeText(text);
 
-    // Get style version from registry for cache key
-    const styleMetadata = await getStyleMetadata(style);
+    // Get style metadata from the registry (version feeds the cache key)
+    const styleMetadata = await this.resolveStyleMetadata(style);
     const styleVersion = styleMetadata.version;
+
+    // Age gate and prompt-injection check run BEFORE the cache lookup on purpose.
+    // A warm cache must never become a way around them: age confirmation can be
+    // revoked while a cached entry is still inside its TTL.
+    await this.assertAgeAllowed(userId, styleMetadata);
+    const sanitizedText = this.assertNoPromptInjection(normalizedText);
 
     // Check cache for identical request (HMAC-based deduplication)
     const cachedPreviewId = await previewCacheService.checkCacheHit(
@@ -279,7 +306,7 @@ export class TranslationService {
     }
 
     // Cache miss - perform translation
-    const previewResult = await this.translateCore(userId, { text: normalizedText, style });
+    const previewResult = await this.translateCore(normalizedText, sanitizedText, style);
 
     // Store in cache with encryption, get previewId
     const previewData: PreviewData = {
@@ -290,7 +317,8 @@ export class TranslationService {
       aiProvider: previewResult.aiProvider,
       userId,
       createdAt: Date.now(),
-      expiresAt: Date.now() + (600 * 1000), // 10 minutes in ms
+      // Same TTL the Redis key gets - both must come from one setting
+      expiresAt: Date.now() + config.PREVIEW_CACHE_TTL_SECONDS * 1000,
     };
 
     const previewId = await previewCacheService.storePreview(previewData);
@@ -359,6 +387,7 @@ export class TranslationService {
           originalText: previewData.originalText,
           translatedText: previewData.translatedText,
           slangStyle: previewData.style as SlangStyle,
+          styleVersion: previewData.styleVersion,
           aiProvider: previewData.aiProvider as AIProvider,
           favorite: false,
         },
@@ -387,6 +416,8 @@ export class TranslationService {
 
     // Delete preview data after successful save (keeps idempotency marker)
     await previewCacheService.deletePreview(previewId, previewData);
+
+    await this.pruneHistory(userId);
 
     // Return full translation record
     return {
@@ -421,9 +452,14 @@ export class TranslationService {
     // Validate and normalize text first
     const { normalizedText } = this.validateAndNormalizeText(text);
 
-    // Get style version from registry for cache key
-    const styleMetadata = await getStyleMetadata(style);
+    // Get style metadata from the registry (version feeds the cache key)
+    const styleMetadata = await this.resolveStyleMetadata(style);
     const styleVersion = styleMetadata.version;
+
+    // Age gate and prompt-injection check run BEFORE the cache lookup on purpose.
+    // See translatePreview() - a cache hit must not skip either check.
+    await this.assertAgeAllowed(userId, styleMetadata);
+    const sanitizedText = this.assertNoPromptInjection(normalizedText);
 
     // Check cache for identical request (HMAC-based deduplication)
     const cachedPreviewId = await previewCacheService.checkCacheHit(
@@ -437,11 +473,12 @@ export class TranslationService {
       // Cache hit - retrieve existing preview data and persist as translation
       const cachedData = await previewCacheService.getPreview(cachedPreviewId, userId);
       if (cachedData) {
-        // Persist translation record with style version using cached data
+        // previewId is deliberately NOT written here. It is a @unique column owned
+        // by the preview -> save flow; claiming it on this direct path made a second
+        // warm-cache request violate the constraint and surface as a 500.
         const translation = await this.prisma.translation.create({
           data: {
             userId,
-            previewId: cachedPreviewId,
             originalText: cachedData.originalText,
             translatedText: cachedData.translatedText,
             slangStyle: cachedData.style as SlangStyle,
@@ -450,6 +487,8 @@ export class TranslationService {
             favorite: false,
           },
         });
+
+        await this.pruneHistory(userId);
 
         return {
           id: translation.id,
@@ -465,7 +504,7 @@ export class TranslationService {
     }
 
     // Cache miss - perform translation
-    const previewResult = await this.translateCore(userId, { text: normalizedText, style });
+    const previewResult = await this.translateCore(normalizedText, sanitizedText, style);
 
     // Persist translation record with style version
     const translation = await this.prisma.translation.create({
@@ -480,6 +519,8 @@ export class TranslationService {
       },
     });
 
+    await this.pruneHistory(userId);
+
     // Return full translation record
     return {
       id: translation.id,
@@ -490,6 +531,39 @@ export class TranslationService {
       favorite: translation.favorite,
       createdAt: translation.createdAt,
     };
+  }
+  /**
+   * Keep a user's history at HISTORY_MAX_ENTRIES rows by deleting the oldest
+   * non-favorite translations. Called after every insert.
+   *
+   * The cap lives here, not in the client: the UI label ("5/100") is cosmetic
+   * and a client could simply not send it. Favorites are exempt on purpose -
+   * silently deleting something the user starred is worse than going over.
+   *
+   * A failure here must never fail the save the user asked for, so it is logged
+   * and swallowed; the next insert retries the prune.
+   */
+  private async pruneHistory(userId: number): Promise<void> {
+    try {
+      const total = await this.prisma.translation.count({ where: { userId } });
+      const excess = total - HISTORY_MAX_ENTRIES;
+      if (excess <= 0) return;
+
+      const stale = await this.prisma.translation.findMany({
+        where: { userId, favorite: false },
+        orderBy: { createdAt: 'asc' },
+        take: excess,
+        select: { id: true },
+      });
+      if (stale.length === 0) return;
+
+      await this.prisma.translation.deleteMany({
+        where: { userId, id: { in: stale.map(row => row.id) } },
+      });
+      logger.debug({ userId, pruned: stale.length }, 'History pruned to cap');
+    } catch (err) {
+      logger.warn({ err, userId }, 'History prune failed');
+    }
   }
 }
 

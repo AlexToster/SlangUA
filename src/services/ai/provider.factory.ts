@@ -7,12 +7,53 @@
 
 import { AIProvider } from '@prisma/client';
 import { IAIProvider, IProviderFactory, ProviderConfig } from './types';
-import { OpenAIAdapter } from './openai.adapter';
+import { OpenAICompatibleAdapter, OpenAICompatibleOptions } from './openai-compatible.adapter';
 import { ClaudeAdapter } from './claude.adapter';
 import { GeminiAdapter } from './gemini.adapter';
-import { OllamaAdapter } from './ollama.adapter';
-import { OpenRouterAdapter } from './openrouter.adapter';
 import { config } from '../../config';
+
+/**
+ * Base URL of the local Ollama instance in OpenAI-compatible form. Ollama
+ * exposes `/v1/chat/completions` next to its native API, which is what lets it
+ * be an instance of the shared adapter instead of a class of its own.
+ */
+function ollamaCompatibleBaseUrl(): string {
+  return `${config.OLLAMA_BASE_URL.replace(/\/+$/, '')}/v1`;
+}
+
+/**
+ * The OpenAI-compatible instances. Everything that differs between them is
+ * data here; the adapter class is the same. `id` and `provider` are separate
+ * fields on purpose - see types.ts.
+ */
+function compatibleInstances(): Partial<Record<AIProvider, OpenAICompatibleOptions>> {
+  return {
+    [AIProvider.OPENAI]: {
+      id: 'openai',
+      provider: AIProvider.OPENAI,
+      baseURL: config.AI_BASE_URL_OPENAI,
+      model: config.AI_MODEL_OPENAI,
+    },
+    [AIProvider.OLLAMA]: {
+      id: 'ollama',
+      provider: AIProvider.OLLAMA,
+      baseURL: ollamaCompatibleBaseUrl(),
+      model: config.AI_MODEL_OLLAMA,
+      // A local server authenticates nobody.
+      requiresApiKey: false,
+    },
+    [AIProvider.OPENROUTER]: {
+      id: 'openrouter',
+      provider: AIProvider.OPENROUTER,
+      baseURL: config.AI_BASE_URL_OPENROUTER,
+      model: config.AI_MODEL_OPENROUTER,
+      // Nemotron and other reasoning-capable models would otherwise put their
+      // chain of thought into the message returned to the user. A translation
+      // is a direct transformation task, so reasoning is disabled.
+      extraBody: { reasoning: { effort: 'none' } },
+    },
+  };
+}
 
 export class ProviderFactory implements IProviderFactory {
   private providers: Map<AIProvider, IAIProvider> = new Map();
@@ -77,7 +118,10 @@ export class ProviderFactory implements IProviderFactory {
         ...baseRetryConfig,
       },
       [AIProvider.OLLAMA]: {
-        enabled: true, // Ollama doesn't need API key, just needs to be running
+        // Ollama has no API key to key "configured" off, so it follows an
+        // explicit flag; unset means enabled everywhere except production.
+        enabled: config.OLLAMA_ENABLED ?? config.NODE_ENV !== 'production',
+        requiresApiKey: false,
         timeout: config.AI_TIMEOUT_OLLAMA,
         priority: this.getPriority(AIProvider.OLLAMA),
         ...baseRetryConfig,
@@ -101,7 +145,11 @@ export class ProviderFactory implements IProviderFactory {
   }
 
   /**
-   * Create a provider instance based on name
+   * Create a provider instance based on name.
+   *
+   * Only Anthropic and Gemini have classes of their own: the first for prompt
+   * caching, the second because its native SDK has no system role and its own
+   * error classification. Everything else is an OpenAI-compatible instance.
    */
   private createProvider(name: AIProvider, providerConfig: ProviderConfig): IAIProvider | null {
     // Skip if not enabled
@@ -110,18 +158,14 @@ export class ProviderFactory implements IProviderFactory {
     }
 
     switch (name) {
-      case AIProvider.OPENAI:
-        return new OpenAIAdapter(providerConfig);
       case AIProvider.ANTHROPIC:
         return new ClaudeAdapter(providerConfig);
       case AIProvider.GEMINI:
         return new GeminiAdapter(providerConfig);
-      case AIProvider.OLLAMA:
-        return new OllamaAdapter(providerConfig);
-      case AIProvider.OPENROUTER:
-        return new OpenRouterAdapter(providerConfig);
-      default:
-        return null;
+      default: {
+        const options = compatibleInstances()[name];
+        return options ? new OpenAICompatibleAdapter(options, providerConfig) : null;
+      }
     }
   }
 

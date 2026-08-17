@@ -28,6 +28,13 @@ export class ClaudeAdapter extends BaseAdapter {
     if (this.config.apiKey) {
       this.client = new Anthropic({
         apiKey: this.config.apiKey,
+        // Retries belong to BaseAdapter so every provider observes the same
+        // AI_MAX_RETRIES / AI_RETRY_DELAY_MS. The SDK's own default is 2, which
+        // silently multiplied into up to 9 HTTP calls per translation.
+        maxRetries: 0,
+        // withTimeout protects the caller but cannot cancel an in-flight
+        // request; this aborts it at the same deadline.
+        timeout: this.config.timeout,
       });
     }
   }
@@ -60,34 +67,6 @@ export class ClaudeAdapter extends BaseAdapter {
     }, 'Anthropic translation');
 
     return this.processResponse(response, request);
-  }
-
-  protected async withRetry<T>(
-    fn: () => Promise<T>,
-    operationName: string
-  ): Promise<T> {
-    let lastError: Error | undefined;
-    const maxAttempts = this.config.maxRetries + 1;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const result = await fn();
-        return result;
-      } catch (error) {
-        lastError = error as Error;
-
-        if (this.isNonRetryableError(error)) {
-          throw error;
-        }
-
-        if (attempt < maxAttempts) {
-          const delay = this.config.retryDelayMs * Math.pow(2, attempt - 1);
-          await this.sleep(delay);
-        }
-      }
-    }
-
-    throw lastError;
   }
 
   protected isNonRetryableError(error: unknown): boolean {

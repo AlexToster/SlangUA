@@ -1,25 +1,41 @@
-/* Toast Component Styles */
+/* Toast Component Styles
+ *
+ * This file is the single owner of the toast. global.css used to declare
+ * `.toast` as well and, because it is imported last, it won: `left: 50%` with
+ * no width made the box shrink-to-fit inside the remaining 50vw, which is the
+ * narrow, wrapped toast from the bug report.
+ *
+ * Geometry: stretched between both edges and capped by max-width, so `margin:
+ * 0 auto` centres it. It sits above the fixed bottom navigation instead of
+ * underneath it.
+ *
+ * Colours: the old rules referenced --tg-success-color-alpha-10 and friends,
+ * none of which exist, so background and border resolved to nothing. They are
+ * built with color-mix() from the tokens that do exist.
+ */
 .toast {
   position: fixed;
-  bottom: var(--spacing-lg);
+  bottom: calc(var(--bottom-nav-height, 56px) + var(--safe-area-bottom) + var(--spacing-md));
   left: var(--spacing-md);
   right: var(--spacing-md);
-  max-width: 400px;
+  max-width: 560px;
   margin: 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg, 0 10px 40px rgba(0, 0, 0, 0.15));
+  box-shadow: var(--shadow-lg);
   animation: toast-slide-in 0.3s ease-out;
-  z-index: 1000;
+  z-index: var(--z-toast);
 }
 
 @keyframes toast-slide-in {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(20px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -33,50 +49,53 @@
 }
 
 .toast-success {
-  background: var(--tg-success-color-alpha-10, var(--color-success-alpha-10));
-  border: 1px solid var(--tg-success-color-alpha-30, var(--color-success-alpha-30));
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
 }
 
 .toast-success .toast-icon {
-  color: var(--tg-success-color, var(--color-success));
+  color: var(--color-success);
 }
 
 .toast-error {
-  background: var(--tg-destructive-color-alpha-10, var(--color-error-alpha-10));
-  border: 1px solid var(--tg-destructive-color-alpha-30, var(--color-error-alpha-30));
+  background: color-mix(in srgb, var(--color-error) 12%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
 }
 
 .toast-error .toast-icon {
-  color: var(--tg-destructive-color, var(--color-error));
+  color: var(--color-error);
 }
 
 .toast-info {
-  background: var(--tg-link-color-alpha-10, var(--color-primary-alpha-10));
-  border: 1px solid var(--tg-link-color-alpha-30, var(--color-primary-alpha-30));
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 
 .toast-info .toast-icon {
-  color: var(--tg-link-color, var(--color-primary));
+  color: var(--color-primary);
 }
 
 .toast-message {
   flex: 1;
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
-  color: var(--tg-text-color, var(--color-text));
-  word-break: break-word;
+  color: var(--color-text);
+  /* break-word only where a word really cannot fit; `break-all` shredded
+     Ukrainian words mid-syllable in the narrow toast. */
+  overflow-wrap: break-word;
+  white-space: pre-line;
 }
 
 .toast-action {
   flex-shrink: 0;
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--tg-link-color, var(--color-primary));
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-primary);
   background: transparent;
-  border: 1px solid var(--tg-link-color, var(--color-primary));
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color var(--transition-fast), color var(--transition-fast);
@@ -84,12 +103,12 @@
 }
 
 .toast-action:hover {
-  background: var(--tg-link-color, var(--color-primary));
-  color: var(--tg-button-text-color, var(--color-on-primary));
+  background: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .toast-action:focus-visible {
-  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
@@ -98,10 +117,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  color: var(--tg-hint-color, var(--color-text-muted));
+  color: var(--color-text-secondary);
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
@@ -110,30 +129,22 @@
 }
 
 .toast-close:hover {
-  color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface-hover));
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
 .toast-close:focus-visible {
-  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-/* Responsive adjustments */
+/* Narrow screens keep the full text size on purpose - the toast is the only
+   place where a failure is explained, so it must stay readable. */
 @media (max-width: 480px) {
   .toast {
     left: var(--spacing-sm);
     right: var(--spacing-sm);
-    bottom: var(--spacing-md);
-    padding: var(--spacing-sm) var(--spacing-md);
-  }
-  
-  .toast-message {
-    font-size: var(--font-size-xs);
-  }
-  
-  .toast-action {
-    font-size: var(--font-size-xs);
-    padding: 2px var(--spacing-xs);
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
   }
 }

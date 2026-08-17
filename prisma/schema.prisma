@@ -61,6 +61,7 @@ enum SlangStyle {
   IT_SLANG
   POFENI
   KANCLER
+  GALICIAN
 }
 
 enum AIProvider {

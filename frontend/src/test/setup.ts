@@ -1,8 +1,6 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
-console.log('Test setup loaded');
-
 // Mock Intl.Segmenter for grapheme counting - use a proper constructor
 class MockSegmenter {
   constructor() {}

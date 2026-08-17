@@ -1,6 +1,6 @@
 import { init as initTelegram, retrieveLaunchParams, retrieveRawInitData, restoreInitData } from '@telegram-apps/sdk';
 import { apiService } from './api';
-import { getLocalSettings } from '../utils/localSettings';
+import { getLocalSettings, setTelegramTheme } from '../utils/localSettings';
 
 export function isTMA(): boolean {
   if (window.Telegram?.WebApp?.initData) return true;
@@ -90,9 +90,15 @@ export async function initTelegramApp(): Promise<LaunchParams | null> {
   };
 }
 
+/**
+ * Hand Telegram's palette to the theme layer.
+ *
+ * It deliberately does not touch the DOM itself: the values used to be written
+ * as inline custom properties on <html>, which outrank every stylesheet rule
+ * and so made the in-app theme picker a no-op. utils/localSettings owns that
+ * decision now and applies the snapshot only while the user is on "Системна".
+ */
 export function applyTelegramTheme(themeParams: Record<string, string>) {
-  const root = document.documentElement;
-  
   // Map Telegram theme params to CSS variables
   const themeMap: Record<string, string> = {
     bg_color: '--tg-bg-color',
@@ -104,15 +110,14 @@ export function applyTelegramTheme(themeParams: Record<string, string>) {
     secondary_bg_color: '--tg-secondary-bg-color',
   };
 
+  const vars: Record<string, string> = {};
   Object.entries(themeMap).forEach(([tgKey, cssVar]) => {
     if (themeParams[tgKey]) {
-      root.style.setProperty(cssVar, themeParams[tgKey]);
+      vars[cssVar] = themeParams[tgKey];
     }
   });
 
-  // Set data-theme attribute for CSS selectors
-  const isDark = themeParams.bg_color && isDarkColor(themeParams.bg_color);
-  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  setTelegramTheme(vars, Boolean(themeParams.bg_color && isDarkColor(themeParams.bg_color)));
 }
 
 function isDarkColor(color: string): boolean {
@@ -230,9 +235,43 @@ export function hideBackButton() {
   window.Telegram.WebApp.BackButton.hide();
 }
 
+/**
+ * Open a link outside the Mini App.
+ *
+ * Telegram links (t.me/…, including private invite links) must go through
+ * openTelegramLink: window.open() inside the Telegram WebView either opens an
+ * in-app browser showing the web preview of the channel, or is blocked
+ * outright. Everything else, and any client without the bridge, falls back to a
+ * normal new tab.
+ *
+ * Must be called directly from a user-initiated action.
+ */
+export function openExternalLink(url: string): void {
+  const isTelegramLink = /^https:\/\/(t\.me|telegram\.me)\//i.test(url);
+  const openTelegram = window.Telegram?.WebApp?.openTelegramLink;
+
+  if (isTelegramLink && typeof openTelegram === 'function') {
+    openTelegram.call(window.Telegram.WebApp, url);
+    return;
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 /** Inline sharing is available only in Telegram clients that expose this API. */
 export function canUseTelegramInlineSharing(): boolean {
   return isTMA() && typeof window.Telegram?.WebApp?.switchInlineQuery === 'function';
+}
+
+/**
+ * Sharing through the native "forward to..." chooser. Available in every
+ * Telegram client that can open a t.me link, which is all of them.
+ */
+export function canUseTelegramSharing(): boolean {
+  return isTMA() && (
+    typeof window.Telegram?.WebApp?.openTelegramLink === 'function'
+    || canUseTelegramInlineSharing()
+  );
 }
 
 /**
@@ -277,4 +316,38 @@ export function openTelegramInlineQuery(query: string): void {
     throw new Error('Telegram inline sharing is unavailable in this client');
   }
   window.Telegram.WebApp.switchInlineQuery(query, ['users', 'groups', 'channels']);
+}
+
+/**
+ * Link that accompanies a shared translation. t.me/share/url treats `url` as
+ * the thing being shared and `text` as its description, so a valid link has to
+ * be present; the Mini App's own entry point is the natural choice.
+ */
+const SHARE_LINK = (import.meta.env.VITE_SHARE_URL as string | undefined) || 'https://t.me/SlangUA_bot';
+
+/**
+ * Share a translation through Telegram's own chat chooser.
+ *
+ * Replaces switchInlineQuery() as the primary path. switchInlineQuery only
+ * *types* `@bot s_<uuid>` into the composer and then waits for the bot to
+ * answer an inline query; when the bot has no inline mode (or its webhook is
+ * not wired up) the raw token is left sitting in the input box and cannot be
+ * sent - exactly the reported bug. t.me/share/url hands Telegram the finished
+ * text instead, so the chosen chat receives a normal, sendable message.
+ *
+ * `text` must come from the server (POST /share/inline), which is where the
+ * age-restriction and length rules are enforced.
+ *
+ * Must be called directly from a user-initiated action.
+ */
+export function shareTranslationText(text: string): void {
+  const url = `https://t.me/share/url?url=${encodeURIComponent(SHARE_LINK)}&text=${encodeURIComponent(text)}`;
+
+  const openLink = window.Telegram?.WebApp?.openTelegramLink;
+  if (typeof openLink === 'function') {
+    openLink.call(window.Telegram.WebApp, url);
+    return;
+  }
+
+  throw new Error('Telegram sharing is unavailable in this client');
 }

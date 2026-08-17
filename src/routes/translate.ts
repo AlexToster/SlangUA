@@ -2,11 +2,66 @@ import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify/types/instance';
 import { createRateLimiter } from '../plugins/rate-limit.js';
-import { authService } from '../services/auth.service.js';
 import { translationService } from '../services/translation.service.js';
-import { SlangStyle } from '@prisma/client';
+import { SlangStyle, Translation } from '@prisma/client';
 import { SLANG_STYLE_VALUES, AI_PROVIDER_VALUES } from '../constants/index.js';
 import { config } from '../config/index.js';
+import { authenticate } from '../plugins/authenticate.js';
+
+/**
+ * One mapping for the HTTP reason phrase, shared by all handlers in this file.
+ * The three inline ternary chains it replaces each covered a different subset of
+ * statuses, so a 404/409/410 from the service was serialized as
+ * "Internal Server Error" even though the schema declared those codes.
+ */
+const HTTP_ERROR_NAMES: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  409: 'Conflict',
+  410: 'Gone',
+  422: 'Unprocessable Entity',
+  429: 'Too Many Requests',
+  503: 'Service Unavailable',
+};
+
+function httpErrorName(statusCode: number): string {
+  return HTTP_ERROR_NAMES[statusCode] ?? 'Internal Server Error';
+}
+
+/**
+ * The serializer only needs the fields the API exposes, so it is typed
+ * structurally: `TranslationService.translate()` returns a projection
+ * (no userId/previewId/styleVersion), while `saveFromPreview()` returns a full row.
+ */
+type SerializableTranslation = Pick<
+  Translation,
+  'id' | 'originalText' | 'translatedText' | 'slangStyle' | 'aiProvider' | 'favorite' | 'createdAt'
+>;
+
+function serializeTranslation(translation: SerializableTranslation) {
+  return {
+    id: translation.id,
+    originalText: translation.originalText,
+    translatedText: translation.translatedText,
+    slangStyle: translation.slangStyle,
+    aiProvider: translation.aiProvider,
+    favorite: translation.favorite,
+    createdAt: translation.createdAt.toISOString(),
+  };
+}
+
+/** Shape of a persisted translation, shared by the 200 and 409 responses. */
+const translationSchema = z.object({
+  id: z.number(),
+  originalText: z.string(),
+  translatedText: z.string(),
+  slangStyle: z.enum(SLANG_STYLE_VALUES),
+  aiProvider: z.enum(AI_PROVIDER_VALUES),
+  favorite: z.boolean(),
+  createdAt: z.string().datetime(),
+});
 
 export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Create separate rate limiters for preview, save, and persistent translate
@@ -29,34 +84,6 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
   });
 
   // JWT authentication middleware
-  const authenticate = async (request: any, reply: any) => {
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.status(401).send({
-        error: 'Unauthorized',
-        code: 'MISSING_TOKEN',
-        message: 'Authorization header with Bearer token required',
-      });
-    }
-
-    const accessToken = authHeader.substring(7);
-    const payload = await authService.verifyAccessToken(accessToken);
-    
-    if (!payload) {
-      return reply.status(401).send({
-        error: 'Unauthorized',
-        code: 'INVALID_TOKEN',
-        message: 'Invalid or expired access token',
-      });
-    }
-
-    // Attach user to request
-    request.user = {
-      id: payload.userId,
-      telegramId: payload.telegramId,
-    };
-  };
-
   // Request body schema for preview and translate
   // Note: Text validation (1-1000 grapheme clusters, no whitespace-only) is done in service layer
   // using Intl.Segmenter for proper Unicode grapheme cluster counting
@@ -92,10 +119,13 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
       code: z.string(),
       message: z.string(),
     }),
+    // A duplicate save is a conflict, but the row the first save produced is
+    // still the answer the client wants; the service attaches it to the error.
     409: z.object({
       error: z.string(),
       code: z.string(),
       message: z.string(),
+      translation: translationSchema.optional(),
     }),
     410: z.object({
       error: z.string(),
@@ -151,12 +181,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
       const message = err.message || 'Translation failed';
 
       return reply.status(statusCode).send({
-        error: statusCode === 400 ? 'Bad Request' :
-               statusCode === 401 ? 'Unauthorized' :
-               statusCode === 403 ? 'Forbidden' :
-               statusCode === 422 ? 'Unprocessable Entity' :
-               statusCode === 429 ? 'Too Many Requests' :
-               statusCode === 503 ? 'Service Unavailable' : 'Internal Server Error',
+        error: httpErrorName(statusCode),
         code,
         message,
       });
@@ -173,15 +198,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
     schema: {
       body: saveBodySchema,
       response: {
-        200: z.object({
-          id: z.number(),
-          originalText: z.string(),
-          translatedText: z.string(),
-          slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(AI_PROVIDER_VALUES),
-          favorite: z.boolean(),
-          createdAt: z.string().datetime(),
-        }),
+        200: translationSchema,
         ...errorResponses,
       },
     },
@@ -192,26 +209,27 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
 
     try {
       const result = await translationService.saveFromPreview(userId, previewId);
-      return reply.send({
-        ...result.translation,
-        createdAt: result.translation.createdAt.toISOString(),
-      });
+      return reply.send(serializeTranslation(result.translation));
     } catch (error) {
       const err = error as any;
       const statusCode = err.statusCode || 500;
       const code = err.code || 'INTERNAL_ERROR';
       const message = err.message || 'Save failed';
 
+      // A duplicate save is not a lost result: return the row the first save
+      // created so the client can render it instead of re-running the preview.
+      const existing = err.existingTranslation as Translation | undefined;
+      if (statusCode === 409 && existing) {
+        return reply.status(409).send({
+          error: httpErrorName(409),
+          code,
+          message,
+          translation: serializeTranslation(existing),
+        });
+      }
+
       return reply.status(statusCode).send({
-        error: statusCode === 400 ? 'Bad Request' :
-               statusCode === 401 ? 'Unauthorized' :
-               statusCode === 403 ? 'Forbidden' :
-               statusCode === 404 ? 'Not Found' :
-               statusCode === 409 ? 'Conflict' :
-               statusCode === 410 ? 'Gone' :
-               statusCode === 422 ? 'Unprocessable Entity' :
-               statusCode === 429 ? 'Too Many Requests' :
-               statusCode === 503 ? 'Service Unavailable' : 'Internal Server Error',
+        error: httpErrorName(statusCode),
         code,
         message,
       });
@@ -223,15 +241,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
     schema: {
       body: translateBodySchema,
       response: {
-        200: z.object({
-          id: z.number(),
-          originalText: z.string(),
-          translatedText: z.string(),
-          slangStyle: z.enum(SLANG_STYLE_VALUES),
-          aiProvider: z.enum(AI_PROVIDER_VALUES),
-          favorite: z.boolean(),
-          createdAt: z.string().datetime(),
-        }),
+        200: translationSchema,
         ...errorResponses,
       },
     },
@@ -243,10 +253,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
 
     try {
       const result = await translationService.translate(userId, { text, style });
-      return reply.send({
-        ...result,
-        createdAt: result.createdAt.toISOString(),
-      });
+      return reply.send(serializeTranslation(result));
     } catch (error) {
       const err = error as any;
       const statusCode = err.statusCode || 500;
@@ -254,11 +261,7 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
       const message = err.message || 'Translation failed';
 
       return reply.status(statusCode).send({
-        error: statusCode === 400 ? 'Bad Request' :
-               statusCode === 401 ? 'Unauthorized' :
-               statusCode === 422 ? 'Unprocessable Entity' :
-               statusCode === 429 ? 'Too Many Requests' :
-               statusCode === 503 ? 'Service Unavailable' : 'Internal Server Error',
+        error: httpErrorName(statusCode),
         code,
         message,
       });

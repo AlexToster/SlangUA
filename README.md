@@ -41,8 +41,9 @@ SlangUA не є:
 * **GEN_Z** — молодіжний TikTok/Instagram/Discord;
 * **STREET** — вуличний базар;
 * **IT_SLANG** — технічний спіч;
-* **POFENI** — кримінальний жаргон;
-* **KANCLER** — бюрократичний стиль, радянщина.
+* **POFENI** — зеківський жаргон: мова вʼязниці (18+);
+* **KANCLER** — бюрократичний стиль, радянщина;
+* **GALICIAN** — галицька ґвара, львівський діалект.
 
 Не всі стилі однаково трансформують текст.
 
@@ -50,7 +51,7 @@ SlangUA не є:
 
 * **KANCLER** навмисно може збільшувати довжину речення у 2–4 рази.
 * **GEN_Z** намагається зберігати приблизно ту саму довжину тексту.
-* **POFENI** може виглядати грубіше або нагліше.
+* **POFENI** говорить крізь тюремну ієрархію і «поняття», тому виглядає грубіше або нагліше; це інший регістр, ніж **STREET** (двір і вулиця).
 
 ---
 
@@ -139,7 +140,7 @@ Style Engine відповідає лише за побудову системн�
 * Telegram Mini App (TWA)
 * React
 * Vite
-* Tailwind CSS
+* Звичайний CSS — по одному файлу на компонент (Tailwind навмисно не використовується)
 
 ## AI
 
@@ -150,7 +151,9 @@ Style Engine відповідає лише за побудову системн�
 * OpenRouter
 * Adapter Pattern
 
-> Конкретні моделі, ключі, пріоритет провайдерів і таймаути задаються через змінні середовища (див. розділ «Змінні середовища» та `src/config/index.ts` як джерело правди), тому не дублюються тут, щоб не застарівати.
+> Класів адаптерів три, а не п'ять: `OpenAICompatibleAdapter` обслуговує всіх, хто розмовляє форматом OpenAI Chat Completions (OpenAI, OpenRouter, локальна Ollama через `/v1`), а власні класи мають лише Anthropic і Gemini. Провайдер — це набір параметрів у `.env`, тому підключити ще один сумісний ендпоінт (Groq, DeepSeek, vLLM, проксі) можна без нового коду.
+
+> Конкретні моделі, ключі, базові URL, пріоритет провайдерів і таймаути задаються через змінні середовища (див. розділ «Змінні середовища» та `src/config/index.ts` як джерело правди), тому не дублюються тут, щоб не застарівати.
 
 > Список AI-провайдерів відкритий: нові провайдери можуть додаватися без зміни архітектури, завдяки Adapter Pattern.
 
@@ -290,7 +293,7 @@ npm install
 npm run dev
 ```
 
-Production-збірка frontend: `npm run build` (у теці `frontend/`).
+Production-збірка frontend: `npm run build` (у теці `frontend/`) — вона збирає лише app- і node-проєкти TypeScript, як це робить Docker. Типи тестів перевіряє окремий `npm run typecheck`.
 
 ## Змінні середовища
 
@@ -317,14 +320,34 @@ Production-збірка frontend: `npm run build` (у теці `frontend/`).
 | `AUTH_DATE_TTL` | `86400` | TTL Telegram `auth_date` у секундах (захист від replay). |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` | — | Ключі AI-провайдерів (опційні; потрібен хоча б один провайдер). |
 | `AI_MODEL_*` | див. конфіг | Назви моделей для кожного провайдера. |
+| `AI_BASE_URL_OPENAI` | `https://api.openai.com/v1` | Базовий URL OpenAI-сумісного інстансу разом із версією API. Можна спрямувати на будь-який сумісний ендпоінт (Groq, DeepSeek, vLLM, проксі) без зміни коду. |
+| `AI_BASE_URL_OPENROUTER` | `https://openrouter.ai/api/v1` | Те саме для OpenRouter. |
 | `AI_PROVIDER_PRIORITY` | `openai,anthropic,gemini,ollama,openrouter` | Порядок fallback між провайдерами. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Адреса локального Ollama. |
+| `AI_MAX_FALLBACK_ATTEMPTS` | — | Максимум провайдерів на один запит; без значення — стільки, скільки доступно. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Адреса локального Ollama. Власної змінної `AI_BASE_URL_OLLAMA` немає: до цього хоста додається OpenAI-сумісний шлях `/v1`. |
+| `OLLAMA_ENABLED` | — | `true`/`false`. Без значення: увімкнено поза production, вимкнено в production (в Ollama немає API-ключа, за яким можна визначити «налаштований»). |
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` / `CIRCUIT_BREAKER_RESET_MS` | `5` / `60000` | Скільки поспіль помилок відкриває breaker провайдера і на який час. |
 | `TELEGRAM_INLINE_ENABLED` | `false` | Увімкнення Telegram inline-share. |
+| `TELEGRAM_WEBHOOK_SECRET` | — | Обовʼязковий, якщо `TELEGRAM_INLINE_ENABLED=true`: очікуваний `x-telegram-bot-api-secret-token`. |
+| `WEBHOOK_RATE_LIMIT_WINDOW_MS` / `WEBHOOK_RATE_LIMIT_MAX_REQUESTS` | `60000` / `30` | Ліміт запитів на `POST /telegram/webhook`. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Дозволені origin-и для CORS. |
 | `TRUST_PROXY` | `false` | Довіряти заголовкам проксі для визначення IP. |
 | `LOG_LEVEL` | `info` | Рівень логування. |
 
+> Повний, синхронізований зі схемою перелік усіх змінних — у [`.env.example`](.env.example).
+
 > Rate limiting, preview/save/share TTL та інші тонкі налаштування також конфігуруються через env — повний перелік дивіться у [`src/config/index.ts`](src/config/index.ts).
+
+### Frontend (Vite, build-time)
+
+Ці змінні **не входять** до Zod-схеми backend: Vite вбудовує їх у бандл під час збірки (`VITE_*`), тому вони публічні за визначенням — секретів тут бути не може. Джерело правди для типів — [`frontend/src/vite-env.d.ts`](frontend/src/vite-env.d.ts).
+
+| Змінна | За замовчуванням | Опис |
+| ------ | ---------------- | ---- |
+| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | База для запитів до backend. У production передається як build-arg у [`Dockerfile`](Dockerfile). |
+| `VITE_FEEDBACK_URL` | `https://t.me/+1lYdnphwsLBlZWMy` | Посилання на канал обговорення в розділі «Зворотний зв'язок» Налаштувань. Telegram-посилання відкриваються через `openTelegramLink`. |
+| `VITE_SHARE_URL` | `https://t.me/SlangUA_bot` | Посилання, що супроводжує надісланий переклад: `t.me/share/url` вимагає параметр `url`. Вкажіть свого бота, якщо розгортаєте власний. |
+
 
 ---
 
@@ -353,22 +376,26 @@ npm run test:integration
 ## Особливості інтеграційних тестів
 
 - Використовують **тимчасові контейнери** PostgreSQL та Redis (створюються автоматично через Testcontainers)
-- Використовують **локальний мок Ollama-сумісний сервер** (детермінований, без зовнішніх мережевих викликів)
+- Використовують **локальний OpenAI-сумісний мок** на `POST /v1/chat/completions` (детермінований, без зовнішніх мережевих викликів). Він підставляється замість локального Ollama, а через нього — під той самий `OpenAICompatibleAdapter`, яким працює продакшн.
 - **Нікаких зовнішніх викликів** до Telegram, OpenAI, Anthropic, Gemini, реального Ollama або інших сервісів
 - Тести запускаються **послідовно** (серіально), оскільки конфігурація додатка та синглтони сервісів є глобальними для процесу
 - Перед кожним тестом очищаються дані у Redis та PostgreSQL
-- Усі секрети (JWT_SECRET, REFRESH_TOKEN_HMAC_SECRET, TELEGRAM_BOT_TOKEN) — детерміновані тестові значення
+- Усі секрети (`JWT_SECRET`, `REFRESH_TOKEN_HMAC_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `PREVIEW_ROOT_KEY`) — детерміновані тестові значення
 
 ## Структура інтеграційних тестів
 
 ```
-test/integration/
-├── auth.integration.test.ts        # Автентифікація (Telegram, refresh, logout, rate limit)
-├── translate.integration.test.ts   # Переклад (всі стилі, age gate, prompt injection, AI failure)
-├── history.integration.test.ts     # Історія (пагінація, фільтри, власність записів, user/me)
-├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429 shape)
-├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
+test/
+├── integration/
+│   ├── auth.integration.test.ts        # Автентифікація (Telegram, refresh, logout, rate limit)
+│   ├── translate.integration.test.ts   # Переклад (усі стилі, age gate, prompt injection, AI failure)
+│   ├── history.integration.test.ts     # Історія (пагінація, фільтри, favorite, власність записів)
+│   ├── share.integration.test.ts       # Telegram inline share (токени, 18+ заборона)
+│   ├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429, webhook secret)
+│   ├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
+│   ├── setup-test-context.ts           # Per-file setup: контекст, очищення БД і Redis
+│   └── test-context.ts                 # Спільний контекст (app, Prisma, Redis)
 └── helpers/
-    ├── mock-ollama-server.ts       # Детермінований Ollama-сумісний мок
-    └── telegram-initdata.ts        # Генератор підписаних initData
+    ├── mock-ollama-server.ts           # Детермінований OpenAI-сумісний мок (/v1/chat/completions)
+    └── telegram-initdata.ts            # Генератор підписаних initData
 ```

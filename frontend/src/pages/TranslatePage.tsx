@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import clsx from 'clsx';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { canUseTelegramInlineSharing, openTelegramInlineQuery, readTextFromClipboard, triggerHapticFeedback } from '../services/telegram';
+import {
+  canUseTelegramSharing,
+  openTelegramInlineQuery,
+  shareTranslationText,
+  readTextFromClipboard,
+  triggerHapticFeedback,
+} from '../services/telegram';
 import { countGraphemes } from '../utils/text';
 import { consumePreviewAttempt, MAX_AUTOMATIC_PREVIEW_ATTEMPTS } from '../utils/previewAttempts';
-import { StyleSelector } from '../components/StyleSelector';
+import { StyleDropdown } from '../components/StyleDropdown';
 import { TextInput } from '../components/TextInput';
 import { PreviewResult } from '../components/PreviewResult';
 import { Toast } from '../components/Toast';
@@ -24,7 +31,6 @@ export function TranslatePage() {
   const queryClient = useQueryClient();
   const [selectedStyle, setSelectedStyle] = useState<SlangStyle | null>(null);
   const [draftText, setDraftText] = useState('');
-  const [showStyleSheet, setShowStyleSheet] = useState(false);
   const [showAgeGateToast, setShowAgeGateToast] = useState(false);
   const [showPofeniAgeConfirm, setShowPofeniAgeConfirm] = useState(false);
   const [pendingRandomPhrase, setPendingRandomPhrase] = useState<SamplePhrase | null>(null);
@@ -48,8 +54,6 @@ export function TranslatePage() {
   const {
     data: styles = [],
     isLoading: stylesLoading,
-    isError: stylesError,
-    refetch: refetchStyles,
   } = useQuery({
     queryKey: ['styles'],
     queryFn: () => apiService.getStyles(),
@@ -179,12 +183,19 @@ export function TranslatePage() {
 
   const shareMutation = useMutation({
     mutationFn: (source: ShareSource) => apiService.createInlineShare(source),
-    onSuccess: ({ inlineQuery }) => {
+    onSuccess: ({ inlineQuery, shareText }) => {
       try {
-        openTelegramInlineQuery(inlineQuery);
+        // Prefer the server-rendered text: switchInlineQuery only types
+        // `@bot s_<uuid>` into the composer and leaves it unsendable when the
+        // bot cannot answer the inline query.
+        if (shareText) {
+          shareTranslationText(shareText);
+        } else {
+          openTelegramInlineQuery(inlineQuery);
+        }
         triggerHapticFeedback('notification');
       } catch {
-        setToast({ message: 'Telegram не підтримує надсилання inline у цьому клієнті. Скопіюй результат.', type: 'error' });
+        setToast({ message: 'Telegram не підтримує надсилання у цьому клієнті. Скопіюй результат.', type: 'error' });
       }
     },
     onError: (error: any) => {
@@ -289,14 +300,12 @@ export function TranslatePage() {
     setSelectedStyle(style);
     setSavedTranslationId(null);
     setErrorBanner(null);
-    setShowStyleSheet(false);
     updateDefaultStyleMutation.mutate(style);
     triggerHapticFeedback('selection');
   }, [updateDefaultStyleMutation]);
 
   const handleLockedStyleSelect = useCallback((style: SlangStyle) => {
     pendingRestrictedStyleRef.current = style;
-    setShowStyleSheet(false);
     setShowPofeniAgeConfirm(true);
   }, []);
 
@@ -378,7 +387,7 @@ export function TranslatePage() {
   }, [currentPreview, saveMutation]);
 
   const handleShare = useCallback(() => {
-    if (!currentPreview || !canUseTelegramInlineSharing()) return;
+    if (!currentPreview || !canUseTelegramSharing()) return;
     const source: ShareSource = savedTranslationId !== null
       ? { translationId: savedTranslationId }
       : { previewId: currentPreview.previewId };
@@ -409,6 +418,19 @@ export function TranslatePage() {
   const localizedStyles = localizeStyles(styles);
   const selectorStyles = localizedStyles;
 
+  // 18+ results are shareable, but only by a user who confirmed adulthood.
+  // The `ageRestricted` flag comes from the registry, never from a style id;
+  // the server re-checks the same rule, so this is only about hiding the button.
+  const previewStyleIsAgeRestricted = styles.find(s => s.id === currentPreview?.slangStyle)?.ageRestricted === true;
+  const canSharePreview = canUseTelegramSharing()
+    && !!currentPreview
+    && (!previewStyleIsAgeRestricted || profile?.ageConfirmedAdult === true);
+
+  // The accent ring marks the step the user is on. While typing it belongs to the
+  // editor (:focus-within in TextInput.css); once a translation is running or a
+  // result is on screen it moves down to the style+result card.
+  const isOutputActive = previewMutation.isPending || !!currentPreview;
+
   if (stylesLoading) {
     return (
       <div className="translate-page loading" role="status" aria-label="Завантаження стилів">
@@ -419,22 +441,6 @@ export function TranslatePage() {
 
   return (
     <div className="translate-page">
-      <header className="translate-header">
-        <StyleSelector
-          styles={selectorStyles}
-          selectedStyle={selectedStyle}
-          onSelect={handleStyleChange}
-          isOpen={showStyleSheet}
-          onToggle={setShowStyleSheet}
-          isLoading={stylesLoading}
-          isError={stylesError}
-          isAuthenticated={apiService.isAuthenticated()}
-          onRetry={() => void refetchStyles()}
-          lockedStyleIds={profile?.ageConfirmedAdult ? [] : styles.filter(s => s.ageRestricted).map(s => s.id)}
-          onLockedSelect={handleLockedStyleSelect}
-        />
-      </header>
-
       <main className="translate-main">
         <TextInput
           value={draftText}
@@ -449,22 +455,35 @@ export function TranslatePage() {
           placeholder="Напиши щось українською…"
         />
 
-        <PreviewResult
-          preview={currentPreview}
-          isLoading={previewMutation.isPending}
-          isError={previewMutation.isError}
-          errorBanner={errorBanner}
-          onRetry={handleRetry}
-          canRetry={previewAttemptRef.current.count >= MAX_AUTOMATIC_PREVIEW_ATTEMPTS}
-          draftText={draftText}
-          onCopy={handleCopy}
-          onSave={handleSave}
-          canSave={!!currentPreview?.previewId && !saveMutation.isPending}
-          isSaving={saveMutation.isPending}
-          onShare={handleShare}
-          canShare={canUseTelegramInlineSharing() && !!currentPreview && styles.find(s => s.id === currentPreview?.slangStyle)?.ageRestricted !== true}
-          isSharing={shareMutation.isPending}
-        />
+        {/* The style trigger and the result are one card: the trigger is the
+            highlighted header, the contrasting rule below it is the only
+            separator. */}
+        <section className={clsx('translate-output', isOutputActive && 'active')} aria-label="Стиль і результат перекладу">
+          <StyleDropdown
+            styles={selectorStyles}
+            selectedStyle={selectedStyle}
+            onSelect={handleStyleChange}
+            lockedStyleIds={profile?.ageConfirmedAdult ? [] : styles.filter(s => s.ageRestricted).map(s => s.id)}
+            onLockedSelect={handleLockedStyleSelect}
+          />
+
+          <PreviewResult
+            preview={currentPreview}
+            isLoading={previewMutation.isPending}
+            isError={previewMutation.isError}
+            errorBanner={errorBanner}
+            onRetry={handleRetry}
+            canRetry={previewAttemptRef.current.count >= MAX_AUTOMATIC_PREVIEW_ATTEMPTS}
+            draftText={draftText}
+            onCopy={handleCopy}
+            onSave={handleSave}
+            canSave={!!currentPreview?.previewId && !saveMutation.isPending}
+            isSaving={saveMutation.isPending}
+            onShare={handleShare}
+            canShare={canSharePreview}
+            isSharing={shareMutation.isPending}
+          />
+        </section>
       </main>
 
       {toast && (

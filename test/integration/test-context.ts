@@ -91,7 +91,9 @@ export async function truncateDatabase(): Promise<void> {
 export async function flushRedis(): Promise<void> {
   const ctx = getGlobalContext();
   if (!ctx.redisUrl) return;
-  const Redis = (await import('ioredis')).default;
+  // Named import: the CJS default of ioredis is the module object under real
+  // ESM interop, so `.default` is not reliably the client constructor.
+  const { Redis } = await import('ioredis');
   const redis = new Redis(ctx.redisUrl);
   await redis.flushdb();
   await redis.quit();

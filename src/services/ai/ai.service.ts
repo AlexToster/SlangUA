@@ -11,10 +11,11 @@ import { AIProvider } from '@prisma/client';
 import { IAIProvider, TranslateRequest, TranslateResponse } from './types';
 import { providerFactory } from './provider.factory';
 import { config } from '../../config';
+import { logger } from '../../lib/logger';
 
 export interface AIServiceConfig {
   enableFallback: boolean;
-  maxFallbackAttempts: number;
+  maxFallbackAttempts: number | null;
 }
 
 interface CircuitBreakerState {
@@ -33,10 +34,13 @@ export class AIService {
     serviceConfig: Partial<AIServiceConfig> = {}
   ) {
     this.factory = factory;
-    const providers = this.factory.getProviders();
     this.serviceConfig = {
       enableFallback: serviceConfig.enableFallback ?? true,
-      maxFallbackAttempts: serviceConfig.maxFallbackAttempts ?? config.AI_MAX_FALLBACK_ATTEMPTS ?? providers.length,
+      // `null` means "as many attempts as there are providers", resolved per
+      // request. Reading providers.length in the constructor froze the value at
+      // whatever the factory happened to hold at import time.
+      maxFallbackAttempts:
+        serviceConfig.maxFallbackAttempts ?? config.AI_MAX_FALLBACK_ATTEMPTS ?? null,
     };
   }
 
@@ -53,7 +57,6 @@ export class AIService {
     const state = this.getCircuitBreakerState(providerName);
     const now = Date.now();
     const resetMs = config.CIRCUIT_BREAKER_RESET_MS ?? 60000;
-    const threshold = config.CIRCUIT_BREAKER_FAILURE_THRESHOLD ?? 5;
 
     // Check if circuit is open and reset window hasn't elapsed
     if (state.isOpen) {
@@ -61,7 +64,7 @@ export class AIService {
         // Reset window elapsed - half-open state, allow one request through
         state.isOpen = false;
         state.failures = 0;
-        console.info(`Circuit breaker for provider ${providerName} reset (half-open)`);
+        logger.info({ provider: providerName }, 'Circuit breaker reset (half-open)');
         return false;
       }
       return true;
@@ -74,7 +77,7 @@ export class AIService {
     if (state.failures > 0 || state.isOpen) {
       state.failures = 0;
       state.isOpen = false;
-      console.info(`Circuit breaker for provider ${providerName} closed after successful request`);
+      logger.info({ provider: providerName }, 'Circuit breaker closed after successful request');
     }
   }
 
@@ -89,9 +92,9 @@ export class AIService {
 
     if (state.failures >= threshold && !state.isOpen) {
       state.isOpen = true;
-      console.info(
-        `Circuit breaker OPENED for provider ${providerName} after ${state.failures} consecutive failures. ` +
-        `Will skip for ${resetMs}ms.`
+      logger.warn(
+        { provider: providerName, failures: state.failures, resetMs },
+        'Circuit breaker OPENED; provider will be skipped until the reset window elapses',
       );
     }
   }
@@ -102,19 +105,36 @@ export class AIService {
   }
 
   /**
+   * When every breaker is open, probe only the provider that has been failing
+   * the longest instead of walking the whole chain. Retrying all of them
+   * defeated the breaker: an outage cost one full timeout per provider on every
+   * request. One probe still lets the service recover on its own.
+   */
+  private pickRecoveryProbe(providers: IAIProvider[]): IAIProvider {
+    return providers.reduce((oldest, candidate) => {
+      const a = this.getCircuitBreakerState(candidate.provider).lastFailureTime;
+      const b = this.getCircuitBreakerState(oldest.provider).lastFailureTime;
+      return a < b ? candidate : oldest;
+    });
+  }
+
+  /**
    * Translate text with automatic fallback on failure
    */
   async translate(request: TranslateRequest): Promise<TranslateResponse> {
     const eligibleProviders = this.getEligibleProviders();
-    
+
     if (eligibleProviders.length === 0) {
-      // All providers are circuit-open; fall back to all providers as last resort
       const allProviders = this.factory.getProviders();
       if (allProviders.length === 0) {
         throw new Error('No AI providers available. Please configure at least one provider.');
       }
-      console.warn('All providers circuit-open; attempting fallback chain anyway as last resort');
-      return this.translateWithFallback(request, allProviders);
+      const probe = this.pickRecoveryProbe(allProviders);
+      logger.warn(
+        { provider: probe.provider },
+        'All providers circuit-open; probing the longest-failing one',
+      );
+      return this.translateWithFallback(request, [probe]);
     }
 
     return this.translateWithFallback(request, eligibleProviders);
@@ -125,14 +145,12 @@ export class AIService {
     providers: IAIProvider[]
   ): Promise<TranslateResponse> {
     let lastError: Error | undefined;
-    const maxAttempts = Math.min(
-      this.serviceConfig.maxFallbackAttempts,
-      providers.length
-    );
+    const configuredMax = this.serviceConfig.maxFallbackAttempts;
+    const maxAttempts = Math.min(configuredMax ?? providers.length, providers.length);
 
     for (let i = 0; i < maxAttempts; i++) {
       const provider = providers[i];
-      
+
       try {
         const result = await provider.translate(request);
         this.recordSuccess(provider.provider);
@@ -140,19 +158,17 @@ export class AIService {
       } catch (error) {
         lastError = error as Error;
         this.recordFailure(provider.provider);
-        
-        // Log the failure for monitoring
-        console.warn(
-          `AI Provider ${provider.provider} (${provider.model}) failed: ${lastError.message}. ` +
-          `${this.serviceConfig.enableFallback && i < maxAttempts - 1 ? 'Trying next provider...' : 'No more providers available.'}`
+
+        const willRetry = this.serviceConfig.enableFallback && i < maxAttempts - 1;
+        logger.warn(
+          { err: lastError, provider: provider.provider, model: provider.model, willRetry },
+          'AI provider failed',
         );
 
         // If fallback is disabled or this was the last attempt, throw
-        if (!this.serviceConfig.enableFallback || i === maxAttempts - 1) {
+        if (!willRetry) {
           throw lastError;
         }
-        
-        // Continue to next provider
       }
     }
 

@@ -13,11 +13,9 @@ Service (Business Logic)
         ├── Prisma Client
         ├── Redis
         └── AI Adapter
-                ├── OpenAI
+                ├── OpenAI-compatible (OpenAI, OpenRouter, local Ollama)
                 ├── Anthropic
-                ├── Gemini
-                ├── Ollama
-                └── OpenRouter
+                └── Gemini
         ↓
 PostgreSQL
 ```
@@ -62,7 +60,8 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
 - **`AI Service & Adapters`**:
     - **`IAIProvider`**: Interface defining `translate(text, style)` method.
     - **`AIService`**: Implements provider fallback strategy, timeout handling, and retry policy.
-    - **`OpenAIAdapter`**, **`ClaudeAdapter`**, **`GeminiAdapter`**, **`OllamaAdapter`**, **`OpenRouterAdapter`**: Implementation details for each provider.
+    - **`OpenAICompatibleAdapter`**: One parameterized class for every provider that speaks the OpenAI Chat Completions format. Configured instances today: `OPENAI`, `OPENROUTER` and `OLLAMA` (a local server via its `/v1` endpoint). Per-instance options: base URL, model, key requirement, temperature, output-cap field name, extra body fields and extra headers.
+    - **`ClaudeAdapter`**, **`GeminiAdapter`**: The two providers that keep a native SDK — Anthropic for prompt caching, Gemini because its native API has no system role and needs its own error classification.
     - **`ProviderFactory`**: Resolves implementation based on priority and availability.
 - **`History Module`**:
     - Provides paginated access to user-specific translations.
@@ -116,9 +115,10 @@ The `AIService` is managed via a central configuration that defines the operatio
 
 - **Provider Priority**: An ordered list determining which provider to attempt first.
 - **Enable/Disable Flags**: Granular control to toggle specific providers (e.g., disabling a provider during maintenance).
-- **API Keys**: Injected via environment variables (e.g., `OPENAI_API_KEY`).
-- **Timeouts**: Specific duration limits for each provider to prevent hanging requests.
-- **Retry Policy**: Defined number of attempts and backoff intervals for transient error handling.
+- **API Keys**: Injected via environment variables (e.g., `OPENAI_API_KEY`). A provider that authenticates nobody declares `requiresApiKey: false` instead of carrying a placeholder key.
+- **Base URLs**: `AI_BASE_URL_*` per OpenAI-compatible instance, including the API version segment. Ollama has no variable of its own — `/v1` is appended to `OLLAMA_BASE_URL`.
+- **Timeouts**: Specific duration limits for each provider to prevent hanging requests. The same value is passed to the SDK client so an in-flight HTTP request is aborted, not merely abandoned.
+- **Retry Policy**: Defined number of attempts and backoff intervals for transient error handling. Retries belong to `BaseAdapter` alone: every SDK client is constructed with `maxRetries: 0`, otherwise the SDK's own default of 2 multiplies into up to 9 HTTP calls per translation.
 - **Fallback Behavior**: Automatic escalation to the next highest-priority enabled provider upon failure or timeout.
 
 For architectural rationale, see [Architectural Decisions](05-decisions.md).

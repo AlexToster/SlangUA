@@ -62,6 +62,18 @@ export function TextInput({ value, onChange, onPaste, onRandomPhrase, isRandomPh
           aria-invalid={isOverLimit}
           maxLength={maxGraphemes * 2} // Rough fallback
         />
+        {/* Sits inside the editor as a background element in its bottom-right
+            corner, so it no longer competes with the action row for width. It is
+            not interactive, hence pointer-events: none in CSS — clicks in that
+            corner must still land in the textarea. */}
+        <div className={clsx('char-counter', isOverLimit && 'error', isWarningZone && 'warning')}
+             id={isOverLimit ? 'char-limit-error' : isWarningZone ? 'char-limit-warning' : 'char-counter'}
+             data-testid="char-counter"
+             aria-live="polite"
+             aria-atomic="true">
+          {isOverLimit && <AlertCircle size={14} />}
+          <span>{graphemeCount} / {maxGraphemes.toLocaleString()}</span>
+        </div>
       </div>
       <div className="text-input-footer">
         <button
@@ -84,14 +96,6 @@ export function TextInput({ value, onChange, onPaste, onRandomPhrase, isRandomPh
           <Dices size={18} />
           <span>Випадкова фраза</span>
         </button>
-        <div className={clsx('char-counter', isOverLimit && 'error', isWarningZone && 'warning')}
-             id={isOverLimit ? 'char-limit-error' : isWarningZone ? 'char-limit-warning' : 'char-counter'}
-             data-testid="char-counter"
-             aria-live="polite"
-             aria-atomic="true">
-          {isOverLimit && <AlertCircle size={14} />}
-          <span>{graphemeCount} / {maxGraphemes.toLocaleString()}</span>
-        </div>
         {value && (
           <button
             type="button"

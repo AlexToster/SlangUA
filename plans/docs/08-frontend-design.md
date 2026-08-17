@@ -1,5 +1,7 @@
 # Frontend Design Specification — Stage 6
 
+> **Мова документа:** українська — свідомий виняток із правила «`plans/**` англійською» ([CONTRIBUTING.md](../../CONTRIBUTING.md#мова-документації)). Документ фіксує тексти інтерфейсу дослівно, тому їх не перекладають.
+
 ## 1. Призначення й межі
 
 Цей документ є затвердженим дизайном Telegram Mini App для SlangUA та джерелом вимог для Stage 7. Застосунок стилізує введений текст у вибраний український стиль; це не чат, редактор документів чи адміністраторська консоль.
@@ -184,9 +186,9 @@ History відображає лише явно збережені перекла
 
 ### 6.4. Support and about
 
-- **Зворотний зв'язок:** відкриває зовнішнє посилання на підтримку або форму, задану конфігурацією середовища. У першій версії не передавати автоматично текст перекладу, Telegram ID або токени.
+- **Зворотний зв'язок:** окремий розділ Налаштувань із посиланням на канал обговорення (`VITE_FEEDBACK_URL`, типове значення — канал проєкту). Telegram-посилання відкриваються через `openTelegramLink`, решта — новою вкладкою. Не передавати автоматично текст перекладу, Telegram ID або токени.
 - **Про програму:** назва SlangUA, версія клієнта, посилання на правила використання й політику приватності.
-- **Вийти:** викликає `POST /auth/logout`, очищає локальні токени та показує Translate у re-auth стані. Telegram identity не намагаються «вийти» з самого Telegram.
+- **Очистити історію:** `DELETE /history` після підтвердження в діалозі (видаляються всі записи, включно з улюбленими); показує кількість видалених і інвалідує запити `['history']`. Замінює кнопку «Вийти»: у Mini App вихід не має сенсу — identity надає Telegram, і повторний вхід відбувається автоматично при наступному відкритті.
 
 ### 6.5. Зберігання налаштувань
 
@@ -283,7 +285,7 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 - `Надіслати в Telegram` з'являється лише в клієнтах із `Telegram.WebApp.switchInlineQuery` для shareable preview або History result. Share є explicit, не створює публічний URL чи History-запис, зберігає Copy fallback і застосовує server-side age/content/ownership checks за [09-telegram-sharing.md](09-telegram-sharing.md).
 - UI і сервер однаково відхиляють текст понад 1 000 символів.
 - Автоматичний preview не створює записів у History. Збереження є явною дією й не довіряє згенерованому тексту з клієнта.
-- Settings містить тему, haptic, звуки, сповіщення, стиль, 18+ self-attestation, feedback, about і logout; self-attestation також доступна при виборі locked Pofeni у Translate.
+- Settings містить тему, haptic, звуки, сповіщення, стиль, 18+ self-attestation, feedback, about і очищення історії; self-attestation також доступна при виборі locked Pofeni у Translate.
 - **`GET /styles` відфільтровує restricted styles серверно залежно від `ageConfirmedAdult`; Translate selector показує locked «Пофені 18+» тільки як точку входу до self-attestation. 403 `AGE_RESTRICTED_STYLE` лишається recoverable fallback для застарілого локального вибору.**
 - **theme override, sound, haptic feedback зберігаються у localStorage цього Mini App (не Telegram CloudStorage). Server-side лишаються лише `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult`.**
 - Для 400, 401, 403, 422, 429, 503, offline та clipboard-denied є окремі стани й зрозумілі шляхи відновлення.

@@ -20,21 +20,109 @@ const DEFAULT_RESPONSES: Record<string, string> = {
   GEN_Z: 'no cap Test text fr fr 💀',
   STREET: 'yo Test text fam',
   IT_SLANG: 'Test text // TODO: fix this lol',
-  POFENI: 'блин, Test text вообще топ',
+  POFENI: 'Базар по поняттях: Test text.',
   KANCLER: 'Уважаемый пользователь, Test text. С уважением, администрация.',
+  GALICIAN: 'Прошу пана, Test text, борше і файно.',
 };
 
-function generateOllamaResponse(style: string, sourceText: string = 'Test text'): string {
+// The Style Engine never puts the style id into the prompt, and the "Avoid"
+// section of several prompts cross-references OTHER style ids, so matching on
+// ids picks the wrong style. Match a phrase that is unique to each style's
+// Voice line instead (verified against src/style-engine/styles/*/prompt.md).
+const STYLE_MARKERS: ReadonlyArray<readonly [string, string]> = [
+  ['GEN_Z', 'молодь, що живе в інтернеті'],
+  ['STREET', 'школу життя'],
+  ['IT_SLANG', 'український розробник'],
+  ['POFENI', 'тюремної говірки'],
+  ['KANCLER', 'канцелярист, бюрократ'],
+  ['GALICIAN', 'мешканець Галичини'],
+];
+
+export function detectStyle(messages: Array<{ role?: string; content?: string }>): string {
+  for (const message of messages) {
+    const content = message?.content;
+    if (message?.role !== 'system' || !content) continue;
+    const match = STYLE_MARKERS.find(([, marker]) => content.includes(marker));
+    if (match) return match[0];
+  }
+  return 'GEN_Z';
+}
+
+/**
+ * Response in the OpenAI Chat Completions shape. Every provider now speaks this
+ * format through OpenAICompatibleAdapter (Ollama included, via its `/v1`
+ * endpoint), so this mock only serves `/v1/chat/completions`; the native Ollama
+ * routes went away with OllamaAdapter.
+ */
+function generateOpenAIResponse(style: string, sourceText: string = 'Test text'): string {
   const template = DEFAULT_RESPONSES[style] || DEFAULT_RESPONSES.GEN_Z;
   const content = template.replace('Test text', sourceText);
   return JSON.stringify({
+    id: 'chatcmpl-mock',
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
     model: 'test-model',
-    created_at: new Date().toISOString(),
-    message: {
-      role: 'assistant',
-      content,
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: {
+      prompt_tokens: 10,
+      completion_tokens: 20,
+      total_tokens: 30,
     },
-    done: true,
+  });
+}
+
+/**
+ * Body handling for the chat endpoint: failure injection, source-text
+ * extraction and style detection.
+ */
+function handleChatRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  render: (style: string, sourceText: string) => string
+) {
+  let body = '';
+  req.on('data', (chunk) => {
+    body += chunk;
+  });
+  req.on('end', () => {
+    callCount++;
+
+    // Check if we should fail
+    if (config.shouldFail && (!config.failAfterCalls || callCount >= config.failAfterCalls)) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Service unavailable', code: 'AI_PROVIDER_UNAVAILABLE' }));
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(body);
+      const messages = parsed.messages || [];
+      const lastMessage = messages[messages.length - 1]?.content || '';
+
+      // Extract style from the system prompt or user message
+      let sourceText = 'Test text';
+
+      // Try to extract source text from the message
+      const textMatch = lastMessage.match(/Translate this text: "([^"]+)"/);
+      if (textMatch) {
+        sourceText = textMatch[1];
+      }
+
+      const style = detectStyle(messages);
+
+      const response = config.customResponse || render(style, sourceText);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(response);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid request', code: 'INVALID_REQUEST' }));
+    }
   });
 }
 
@@ -44,7 +132,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -52,62 +140,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
-  if (parsedUrl.pathname === '/api/chat' && req.method === 'POST') {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
-    });
-    req.on('end', () => {
-      callCount++;
-
-      // Check if we should fail
-      if (config.shouldFail && (!config.failAfterCalls || callCount >= config.failAfterCalls)) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Service unavailable', code: 'AI_PROVIDER_UNAVAILABLE' }));
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(body);
-        const messages = parsed.messages || [];
-        const lastMessage = messages[messages.length - 1]?.content || '';
-
-        // Extract style from the system prompt or user message
-        let style = 'GEN_Z';
-        let sourceText = 'Test text';
-        
-        // Try to extract source text from the message
-        const textMatch = lastMessage.match(/Translate this text: "([^"]+)"/);
-        if (textMatch) {
-          sourceText = textMatch[1];
-        }
-
-        for (const msg of messages) {
-          if (msg.role === 'system' && msg.content) {
-            if (msg.content.includes('GEN_Z') || msg.content.includes('Gen Z')) style = 'GEN_Z';
-            else if (msg.content.includes('STREET')) style = 'STREET';
-            else if (msg.content.includes('IT_SLANG') || msg.content.includes('IT Slang')) style = 'IT_SLANG';
-            else if (msg.content.includes('POFENI')) style = 'POFENI';
-            else if (msg.content.includes('KANCLER')) style = 'KANCLER';
-          }
-        }
-
-        const response = config.customResponse || generateOllamaResponse(style, sourceText);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(response);
-      } catch {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid request', code: 'INVALID_REQUEST' }));
-      }
-    });
-  } else if (parsedUrl.pathname === '/api/tags' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      models: [{ name: 'test-model', size: 1000000, digest: 'test', details: {} }],
-    }));
-  } else if (parsedUrl.pathname === '/api/version' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ version: '0.1.0' }));
+  if (parsedUrl.pathname === '/v1/chat/completions' && req.method === 'POST') {
+    handleChatRequest(req, res, generateOpenAIResponse);
   } else if (parsedUrl.pathname === '/__admin/reset' && req.method === 'POST') {
     callCount = 0;
     config = { shouldFail: false };

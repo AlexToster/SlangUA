@@ -1,0 +1,168 @@
+/* StyleDropdown Component Styles — downward-opening popover */
+
+.style-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.style-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.style-dropdown-trigger:hover {
+  border-color: var(--color-primary);
+}
+
+.style-dropdown-trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.style-dropdown-trigger.open {
+  border-color: var(--color-primary);
+}
+
+.style-dropdown-trigger-icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.style-dropdown-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Бюрократична радянщина" is the longest style name and the only one that had
+   to be ellipsised at the shared size, so it drops one token step (18px → 16px).
+   Keyed off data-style, set by StyleDropdown for both the trigger and the list. */
+.style-dropdown-label[data-style='KANCLER'],
+.style-dropdown-item-title[data-style='KANCLER'] {
+  font-size: var(--font-size-base);
+}
+
+.style-dropdown-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  transition: transform var(--transition-fast);
+}
+
+.style-dropdown-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Downward popover panel — opens below the trigger and overlays the result */
+.style-dropdown-panel {
+  position: absolute;
+  top: calc(100% + var(--spacing-sm));
+  left: 0;
+  right: 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  max-height: min(60dvh, 26rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--spacing-sm) var(--spacing-md);
+  animation: style-dropdown-pop 0.2s ease;
+}
+
+@keyframes style-dropdown-pop {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.style-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-sm);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.style-dropdown-item:hover {
+  background: var(--color-surface);
+}
+
+/* Keyboard highlight: the list keeps focus, the active option is marked visually. */
+.style-dropdown-panel:focus,
+.style-dropdown-panel:focus-visible {
+  outline: none;
+}
+
+.style-dropdown-item.highlighted {
+  background: var(--color-surface);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.style-dropdown-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.style-dropdown-item.selected {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.style-dropdown-item.locked {
+  color: var(--color-text-secondary);
+}
+
+.style-dropdown-item-icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.style-dropdown-item.locked .style-dropdown-item-icon {
+  color: var(--color-text-secondary);
+}
+
+.style-dropdown-item-title {
+  flex: 1;
+}
+
+.style-dropdown-check {
+  flex-shrink: 0;
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
+.style-dropdown-lock {
+  flex-shrink: 0;
+  margin-left: var(--spacing-sm);
+  padding: 2px var(--spacing-xs);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}

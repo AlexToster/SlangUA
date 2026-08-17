@@ -126,9 +126,17 @@ export class HistoryService {
   }
 
   /**
-   * Toggle favorite flag on a user-owned translation
+   * Set (or, when `favorite` is omitted, toggle) the favorite flag on a
+   * user-owned translation.
+   *
+   * Passing an explicit value is the preferred form: a toggle is not idempotent,
+   * so a retried or double-clicked request flips the flag back and forth.
    */
-  async toggleFavorite(userId: number, translationId: number): Promise<ToggleFavoriteResult | null> {
+  async setFavorite(
+    userId: number,
+    translationId: number,
+    favorite?: boolean
+  ): Promise<ToggleFavoriteResult | null> {
     // First, verify the translation exists and belongs to the user
     const translation = await this.prisma.translation.findFirst({
       where: { id: translationId, userId },
@@ -138,10 +146,11 @@ export class HistoryService {
       return null; // Not found or not owned
     }
 
-    // Toggle the favorite flag
+    const nextValue = favorite === undefined ? !translation.favorite : favorite;
+
     const updated = await this.prisma.translation.update({
       where: { id: translationId },
-      data: { favorite: !translation.favorite },
+      data: { favorite: nextValue },
     });
 
     return {
@@ -153,6 +162,14 @@ export class HistoryService {
       favorite: updated.favorite,
       createdAt: updated.createdAt,
     };
+  }
+
+  /**
+   * @deprecated Use setFavorite() with an explicit value. Kept as a thin alias
+   * so existing callers keep compiling.
+   */
+  async toggleFavorite(userId: number, translationId: number): Promise<ToggleFavoriteResult | null> {
+    return this.setFavorite(userId, translationId);
   }
 
   /**
@@ -173,6 +190,22 @@ export class HistoryService {
     });
 
     return true;
+  }
+
+  /**
+   * Delete every translation owned by the user.
+   *
+   * Returns the number of removed rows so the caller can report it. Idempotent:
+   * clearing an already empty history is a success with a count of 0, never a
+   * 404 — the client asks to end up with an empty history, not to remove a
+   * specific row.
+   */
+  async clearHistory(userId: number): Promise<number> {
+    const { count } = await this.prisma.translation.deleteMany({
+      where: { userId },
+    });
+
+    return count;
   }
 }
 

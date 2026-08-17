@@ -118,22 +118,7 @@ export function createRateLimiter(options: RateLimitOptions = {}) {
   };
 }
 
-/**
- * Fastify plugin to register rate limiting globally or per-route.
- * Usage:
- *   await app.register(rateLimitPlugin, { windowMs: 60000, maxRequests: 100 })
- *   // Then apply to specific routes:
- *   app.post('/route', { preHandler: app.rateLimit() }, handler)
- */
-export const rateLimitPlugin: FastifyPluginAsync<RateLimitOptions> = async (app: FastifyInstance, options: RateLimitOptions) => {
-  const limiter = createRateLimiter(options);
-
-  // Decorate app with rateLimit function for per-route usage
-  app.decorate('rateLimit', (routeOptions?: RateLimitOptions) => {
-    const routeLimiter = createRateLimiter({ ...options, ...routeOptions });
-    return routeLimiter;
-  });
-
-  // Also expose the default limiter
-  app.decorate('defaultRateLimit', limiter);
-};
+// NOTE: a `rateLimitPlugin` that decorated the app with `rateLimit()` /
+// `defaultRateLimit` used to live here. It was never registered - every route
+// builds its own limiter with createRateLimiter() - so it and its FastifyInstance
+// type augmentation were removed rather than left as a second, untested path.

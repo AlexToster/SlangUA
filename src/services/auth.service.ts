@@ -4,6 +4,7 @@ import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { config } from '../config/index.js';
 import { prisma } from '../lib/prisma.js';
 import { getRedisClient } from '../lib/redis.js';
+import { logger } from '../lib/logger.js';
 
 export interface TelegramUser {
   id: number;
@@ -219,7 +220,7 @@ export class AuthService {
         // This degrades to "everyone gets logged out" rather than
         // "logout stops working" — safe failure direction for auth check.
         // Log at warn level since this is expected during Redis outages.
-        console.warn('Redis unavailable during JTI denylist check, failing closed:', redisError);
+        logger.warn({ err: redisError }, 'Redis unavailable during JTI denylist check, failing closed');
         return null;
       }
 
@@ -381,22 +382,33 @@ export class AuthService {
    * Also adds the access token's JTI to a Redis denylist with TTL equal
    * to the remaining lifetime of the access token, so the token is
    * immediately rejected on subsequent requests even before its natural expiry.
+   *
+   * Token problems are thrown with `statusCode: 401` and `code: 'INVALID_TOKEN'`
+   * so the route can tell them apart from infrastructure failures (which must
+   * surface as 500, not as a misleading 401).
    */
   async logout(accessToken: string): Promise<void> {
+    const invalidToken = () => {
+      const error = new Error('Invalid access token') as Error & { code: string; statusCode: number };
+      error.code = 'INVALID_TOKEN';
+      error.statusCode = 401;
+      return error;
+    };
+
     const payload = await this.verifyAccessToken(accessToken);
     if (!payload || !payload.jti) {
-      throw new Error('Invalid access token');
+      throw invalidToken();
     }
 
     // Extract refresh token ID from jti (format: rt_<id>)
     const jtiParts = payload.jti.split('_');
     if (jtiParts.length !== 2 || jtiParts[0] !== 'rt') {
-      throw new Error('Invalid token format');
+      throw invalidToken();
     }
 
     const refreshTokenId = parseInt(jtiParts[1], 10);
     if (isNaN(refreshTokenId)) {
-      throw new Error('Invalid token format');
+      throw invalidToken();
     }
 
     // Invalidate only this specific refresh token
@@ -415,7 +427,7 @@ export class AuthService {
       // The access token will remain valid until natural expiry, but
       // this is acceptable — the refresh token rotation is the primary
       // security boundary. Log at warn level.
-      console.warn('Redis unavailable during JTI denylist add, refresh token still invalidated:', redisError);
+      logger.warn({ err: redisError }, 'Redis unavailable during JTI denylist add, refresh token still invalidated');
     }
   }
 

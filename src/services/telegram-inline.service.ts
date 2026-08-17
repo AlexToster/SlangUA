@@ -1,7 +1,7 @@
 import { config } from '../config/index.js';
 import { sharePayloadService } from './share-payload.service.js';
 
-interface InlineQuery { id: string; from: { id: number }; query: string; }
+export interface InlineQuery { id: string; from: { id: number }; query: string; }
 
 export class TelegramInlineService {
   private async answerInlineQuery(inlineQueryId: string, results: unknown[]) {
@@ -18,8 +18,12 @@ export class TelegramInlineService {
     const payload = await sharePayloadService.get(match[1], String(query.from.id));
     if (!payload) return this.answerInlineQuery(query.id, []);
     await this.answerInlineQuery(query.id, [{
+      // `title` is the label of the result card in Telegram's own picker, not
+      // part of what gets sent. The message body is the translation alone - a
+      // "SlangUA · <style>" header inside it read as the sender's own words and
+      // was rendered as a link to the bot.
       type: 'article', id: match[1], title: `SlangUA · ${payload.style}`,
-      input_message_content: { message_text: `SlangUA · ${payload.style}\n\n${payload.translatedText}` },
+      input_message_content: { message_text: payload.translatedText },
     }]);
   }
 }

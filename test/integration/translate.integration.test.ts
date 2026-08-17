@@ -208,6 +208,23 @@ describe('Translate Integration Tests', () => {
       expect(body).not.toHaveProperty('id');
     });
 
+    it('should successfully preview translate for GALICIAN style', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/translate/preview',
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { text: 'Hello world', style: 'GALICIAN' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.slangStyle).toBe('GALICIAN');
+      expect(body).toHaveProperty('previewId');
+      expect(body).not.toHaveProperty('id');
+      // Proves the mock resolved the GALICIAN prompt, not the GEN_Z fallback.
+      expect(body.translatedText).toContain('борше');
+    });
+
     it('should NOT persist Translation record in database', async () => {
       const initialCount = await prisma.translation.count({ where: { userId } });
 
@@ -638,6 +655,40 @@ describe('Translate Integration Tests', () => {
       expect(translation!.translatedText).toBe(translatedText);
       expect(translation!.slangStyle).toBe(slangStyle);
       expect(translation!.aiProvider).toBe(aiProvider);
+    });
+
+    it('should persist styleVersion on the saved translation row', async () => {
+      // Create a preview
+      const previewResponse = await app.inject({
+        method: 'POST',
+        url: '/api/v1/translate/preview',
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { text: 'Style version test', style: 'GEN_Z' },
+      });
+      expect(previewResponse.statusCode).toBe(200);
+      const previewBody = JSON.parse(previewResponse.body);
+      const previewId = previewBody.previewId;
+
+      // Save from preview
+      const saveResponse = await app.inject({
+        method: 'POST',
+        url: '/api/v1/translate/save',
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { previewId },
+      });
+      expect(saveResponse.statusCode).toBe(200);
+      const saveBody = JSON.parse(saveResponse.body);
+
+      // Verify styleVersion was persisted to the DB row (captured at preview creation time)
+      const translation = await prisma.translation.findUnique({
+        where: { id: saveBody.id },
+      });
+      expect(translation).not.toBeNull();
+      expect(translation!.slangStyle).toBe('GEN_Z');
+      expect(translation!.styleVersion).toBeDefined();
+      expect(translation!.styleVersion).not.toBeNull();
+      expect(typeof translation!.styleVersion).toBe('string');
+      expect((translation!.styleVersion as string).length).toBeGreaterThan(0);
     });
 
     it('should be idempotent - duplicate save returns 409 PREVIEW_ALREADY_SAVED', async () => {

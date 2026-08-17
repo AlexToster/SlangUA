@@ -30,6 +30,13 @@ export default defineConfig({
       RATE_LIMIT_WINDOW_MS: '60000',
       RATE_LIMIT_MAX_REQUESTS: '10',
       GLOBAL_RATE_LIMIT_MAX_REQUESTS: '100',
+      // Telegram webhook limiter: small enough for a test to exhaust it quickly.
+      WEBHOOK_RATE_LIMIT_WINDOW_MS: '60000',
+      WEBHOOK_RATE_LIMIT_MAX_REQUESTS: '5',
+      // The webhook route is only mounted when inline sharing is enabled, and the
+      // secret must match test/integration/global-setup.ts.
+      TELEGRAM_INLINE_ENABLED: 'true',
+      TELEGRAM_WEBHOOK_SECRET: 'test-telegram-webhook-secret-not-real',
       PREVIEW_ROOT_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
       PREVIEW_KEY_VERSION: 'test-v1',
     },

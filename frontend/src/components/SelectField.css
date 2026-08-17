@@ -1,0 +1,108 @@
+/* SelectField - themed replacement for a native <select>.
+   Trigger mirrors the app's input styling; the panel is portalled to <body>
+   with position: fixed, so scrolling ancestors cannot clip it. */
+.select-field {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-width: 140px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  text-align: left;
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  border: 1px solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.select-field:focus-visible,
+.select-field.open {
+  outline: none;
+  border-color: var(--tg-link-color, var(--color-primary));
+  box-shadow: 0 0 0 3px var(--tg-link-color-alpha-20, var(--color-primary-alpha-20));
+}
+
+.select-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select-field-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-field-chevron {
+  flex-shrink: 0;
+  color: var(--tg-hint-color, var(--color-text-muted));
+  transition: transform var(--transition-fast);
+}
+
+.select-field-chevron.open {
+  transform: rotate(180deg);
+}
+
+.select-field-panel {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+  padding: var(--spacing-xs);
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  border: 1px solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.select-field-panel:focus {
+  outline: none;
+}
+
+.select-field-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  text-align: left;
+  color: var(--tg-text-color, var(--color-text));
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.select-field-option.highlighted {
+  background: var(--tg-link-color-alpha-10, var(--color-primary-alpha-10));
+}
+
+.select-field-option.selected {
+  font-weight: 600;
+  color: var(--tg-link-color, var(--color-primary));
+}
+
+.select-field-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-field-check {
+  flex-shrink: 0;
+  color: var(--tg-link-color, var(--color-primary));
+}

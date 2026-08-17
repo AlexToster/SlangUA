@@ -6,6 +6,7 @@ export const STYLE_LABELS: Record<SlangStyle, string> = {
   IT_SLANG: 'АйТішний спіч',
   POFENI: 'Зеківський жаргон',
   KANCLER: 'Бюрократична радянщина',
+  GALICIAN: 'Галицька ґвара',
 };
 
 export function getStyleLabel(style: SlangStyle): string {

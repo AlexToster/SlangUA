@@ -44,6 +44,10 @@ export async function setup() {
   process.env.PREVIEW_KEY_VERSION = 'test-v1';
   process.env.TELEGRAM_BOT_TOKEN = '123456789:TEST_TOKEN_ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   process.env.TELEGRAM_INLINE_ENABLED = 'true';
+  // Config rejects TELEGRAM_INLINE_ENABLED=true without a webhook secret, and the
+  // webhook route compares this value in constant time. Keep it in sync with the
+  // `env` block of vitest.integration.config.mjs (that one reaches the workers).
+  process.env.TELEGRAM_WEBHOOK_SECRET = 'test-telegram-webhook-secret-not-real';
   process.env.AI_PROVIDER_PRIORITY = 'ollama';
   process.env.OPENAI_API_KEY = '';
   process.env.ANTHROPIC_API_KEY = '';

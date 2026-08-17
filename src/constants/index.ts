@@ -10,6 +10,7 @@ export const SLANG_STYLE_VALUES = [
   'IT_SLANG',
   'POFENI',
   'KANCLER',
+  'GALICIAN',
 ] as const satisfies readonly SlangStyle[];
 
 /**
@@ -41,3 +42,16 @@ export const AI_PROVIDER_VALUES = [
  * Use this type for type-safe AI provider handling.
  */
 export type AIProviderValue = (typeof AI_PROVIDER_VALUES)[number];
+
+/**
+ * Hard cap on how many translations one user keeps in history.
+ *
+ * Enforced server-side in TranslationService after every insert: the oldest
+ * non-favorite rows are pruned so the newest HISTORY_MAX_ENTRIES survive.
+ * Favorites are never pruned, so a user who favorites everything can exceed
+ * the cap - that is deliberate, losing a starred translation would be worse.
+ *
+ * GET /history echoes this number as `totalLimit` so the client never has to
+ * hardcode it.
+ */
+export const HISTORY_MAX_ENTRIES = 100;

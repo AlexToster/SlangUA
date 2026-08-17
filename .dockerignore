@@ -7,5 +7,19 @@ frontend/node_modules
 dist
 frontend/dist
 SlangUA.zip
-test
+*.tar.gz
 *.log
+
+# Local deploy scripts hold production server details and must never enter the
+# build context or an image layer. Only deploy/nginx/* is used (see Dockerfile).
+deploy/*.ps1
+deploy/*.sh
+
+# Tests never take part in the production image. The frontend build runs only the
+# app and node TypeScript projects, so a leftover test file in the build context
+# (e.g. an older copy still sitting in /opt/slangua from a previous deploy) can no
+# longer break `npm run build`.
+test
+frontend/src/test
+frontend/src/**/*.test.ts
+frontend/src/**/*.test.tsx

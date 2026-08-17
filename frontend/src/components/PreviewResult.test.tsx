@@ -59,7 +59,7 @@ describe('PreviewResult', () => {
   it('shows success state with preview', () => {
     render(<PreviewResult {...defaultProps} />);
     expect(screen.getByText('Привіт, як справи?')).toBeInTheDocument();
-    expect(screen.getByText('GEN_Z')).toBeInTheDocument();
+    expect(screen.getByText('Молодіжний тікток-сленг')).toBeInTheDocument();
     expect(screen.getByText('OPENAI')).toBeInTheDocument();
   });
   

@@ -39,6 +39,14 @@ const envSchema = z.object({
   AI_MODEL_OLLAMA: z.string().default('llama3.1:8b'),
   AI_MODEL_OPENROUTER: z.string().default('nvidia/nemotron-3-nano-30b-a3b:free'),
 
+  // Base URLs of the OpenAI-compatible instances. One adapter serves all of
+  // them, so pointing a provider at another compatible endpoint (Groq,
+  // DeepSeek, vLLM, a proxy) is a config change, not a code change. The URL
+  // must include the API version segment. Ollama has no variable of its own:
+  // its base URL is derived from OLLAMA_BASE_URL below.
+  AI_BASE_URL_OPENAI: z.string().url().default('https://api.openai.com/v1'),
+  AI_BASE_URL_OPENROUTER: z.string().url().default('https://openrouter.ai/api/v1'),
+
   // AI Provider Priority (comma-separated)
   AI_PROVIDER_PRIORITY: z.string().default('openai,anthropic,gemini,ollama,openrouter'),
 
@@ -59,7 +67,16 @@ const envSchema = z.object({
   CIRCUIT_BREAKER_RESET_MS: z.coerce.number().default(60000),
 
   // Ollama
+  // Host of a local Ollama; the OpenAI-compatible path `/v1` is appended by
+  // provider.factory.ts, because Ollama is now just another instance of the
+  // OpenAI-compatible adapter.
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
+  // Ollama needs no API key, so it cannot be enabled by "is a key present?" like
+  // the other providers. Left unset it follows NODE_ENV: on outside production
+  // (local dev and the integration-test mock), off in production, where a
+  // forgotten localhost provider would otherwise sit in the fallback chain and
+  // burn a timeout on every request. See provider.factory.ts.
+  OLLAMA_ENABLED: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
 
   // Rate Limiting
   GLOBAL_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),

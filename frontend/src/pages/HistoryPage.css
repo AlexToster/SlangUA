@@ -2,19 +2,29 @@
 .history-page {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* Grows with the list inside the app's single scroll container
+     (.app-layout-content). See TranslatePage.css. */
+  flex: 1 0 auto;
+  /* The page must never be wider than the screen: a single overflowing child
+     used to shift the whole layout sideways. */
+  max-width: 100%;
+  min-width: 0;
   background: var(--tg-bg-color, var(--color-bg));
   color: var(--tg-text-color, var(--color-text));
 }
 
-.history-page.loading {
+/* Rendered in place, below the sticky topbar - not as a full-page replacement.
+   A full-page spinner unmounted the search <input> on every committed search
+   term, which closed the on-screen keyboard mid-word. */
+.history-loading {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 1;
+  padding: var(--spacing-xl);
 }
 
-.history-page.loading .loading-spinner {
+.history-loading .loading-spinner {
   width: 40px;
   height: 40px;
   border: 3px solid var(--tg-border-color, var(--color-border));
@@ -28,42 +38,60 @@
   to { transform: rotate(360deg); }
 }
 
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+/* Header + filters travel together. They used to be two independent sticky
+   elements, with the filters pinned at a hard-coded `top: 48px` that no longer
+   matches the (now much larger) title. One sticky wrapper needs no magic
+   number and keeps the search field reachable while the list scrolls. */
+.history-topbar {
   position: sticky;
   top: 0;
-  background: var(--tg-bg-color, var(--color-bg));
   z-index: 10;
+  background: var(--tg-bg-color, var(--color-bg));
+}
+
+/* Title centred on the full width, counter pinned to the left corner on the
+   same line (it used to sit on its own line below the title). Absolute, so the
+   title stays optically centred regardless of how wide the counter grows. */
+.history-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  background: var(--tg-bg-color, var(--color-bg));
 }
 
 .history-header h1 {
   margin: 0;
-  font-size: var(--font-size-xl);
-  font-weight: 700;
 }
 
 .history-stats {
+  position: absolute;
+  left: var(--spacing-lg);
+  top: 50%;
+  transform: translateY(-50%);
   font-size: var(--font-size-sm);
-  color: var(--tg-hint-color, var(--color-text-muted));
+  color: var(--tg-hint-color, var(--color-text-secondary));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .history-filters {
   display: flex;
   gap: var(--spacing-sm);
+  /* min-width: 0 lets the flex children shrink; without it the search input's
+     default intrinsic width (plus the 150px filter) exceeded a phone screen and
+     the whole page scrolled sideways. */
+  min-width: 0;
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--tg-border-color, var(--color-border));
   background: var(--tg-bg-color, var(--color-bg));
-  position: sticky;
-  top: 48px; /* Approximate header height */
-  z-index: 9;
 }
 
 .history-search {
   flex: 1;
+  min-width: 0;
   padding: var(--spacing-sm) var(--spacing-md);
   font-family: inherit;
   font-size: var(--font-size-base);
@@ -84,23 +112,13 @@
   color: var(--tg-hint-color, var(--color-text-muted));
 }
 
-.history-filter {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-family: inherit;
-  font-size: var(--font-size-base);
-  color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: border-color var(--transition-fast);
-  min-width: 160px;
-}
-
-.history-filter:focus {
-  outline: none;
-  border-color: var(--tg-link-color, var(--color-primary));
-  box-shadow: 0 0 0 3px var(--tg-link-color-alpha-20, var(--color-primary-alpha-20));
+/* The filter is a SelectField (themed listbox) - a native <select> opened an
+   unthemed system popup. Only the sizing lives here; the descendant selector
+   keeps it above SelectField.css regardless of stylesheet order. */
+.history-filters .select-field {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 150px;
 }
 
 .history-empty {
@@ -108,7 +126,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-xxl) var(--spacing-lg);
+  padding: var(--spacing-xl) var(--spacing-lg);
   text-align: center;
   color: var(--tg-hint-color, var(--color-text-muted));
   flex: 1;
@@ -128,12 +146,14 @@
   line-height: var(--line-height-relaxed);
 }
 
+/* No own scroller: the app scrolls in .app-layout-content, and a nested
+   overflow container here made the sticky topbar and the bottom navigation
+   fight over which element scrolls. */
 .history-list {
   list-style: none;
   margin: 0;
   padding: var(--spacing-md) var(--spacing-lg) var(--spacing-xl);
-  flex: 1;
-  overflow-y: auto;
+  min-width: 0;
 }
 
 .history-item {
@@ -174,6 +194,10 @@
   letter-spacing: 0.05em;
   border-radius: var(--radius-sm);
   white-space: nowrap;
+  /* Default look, so a style without its own colour token (GALICIAN has none)
+     still renders as a badge instead of bare text. */
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  color: var(--tg-text-color, var(--color-text));
 }
 
 .history-style-gen_z { background: var(--color-gen-z-alpha-15); color: var(--color-gen-z); }
@@ -181,6 +205,7 @@
 .history-style-it_slang { background: var(--color-it-slang-alpha-15); color: var(--color-it-slang); }
 .history-style-pofeni { background: var(--color-pofeni-alpha-15); color: var(--color-pofeni); }
 .history-style-kancler { background: var(--color-kancler-alpha-15); color: var(--color-kancler); }
+.history-style-galician { background: var(--color-galician-alpha-15); color: var(--color-galician); }
 
 .history-time {
   font-size: var(--font-size-xs);
@@ -191,25 +216,36 @@
 .history-entry-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .history-original,
 .history-translated {
   margin: 0;
-  font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
   word-wrap: break-word;
+  /* A single long token (URL, pasted hash) must wrap instead of widening the
+     card past the screen. */
+  overflow-wrap: anywhere;
 }
 
+/* The translation is what the entry is about, so it carries the emphasis and the
+   original is the quiet reference. The two used to be the other way round. */
 .history-original {
-  color: var(--tg-text-color, var(--color-text));
+  font-size: var(--font-size-lg);
+  color: var(--tg-hint-color, var(--color-text-secondary));
+  font-style: italic;
 }
 
+/* A rule between the source text and its translation - without it the two ran
+   together in one block. */
 .history-translated {
-  color: var(--tg-hint-color, var(--color-text-muted));
-  font-style: italic;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--tg-border-color, var(--color-border));
+  font-size: var(--font-size-xl);
+  font-weight: 500;
+  color: var(--tg-text-color, var(--color-text));
 }
 
 .history-entry-actions {
@@ -278,11 +314,14 @@
 }
 
 .history-load-more {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
-  width: 100%;
+  /* `width: 100%` plus horizontal margins added up to 100% + 48px and pushed the
+     page wider than the viewport — the whole layout then scrolled sideways.
+     `width: auto` on a stretched flex item already accounts for the margins. */
+  width: auto;
   padding: var(--spacing-md);
   font-family: inherit;
   font-size: var(--font-size-base);
@@ -325,34 +364,30 @@
   .history-header {
     padding: var(--spacing-sm) var(--spacing-md);
   }
-  
-  .history-header h1 {
-    font-size: var(--font-size-lg);
+
+  .history-stats {
+    left: var(--spacing-md);
+    font-size: var(--font-size-xs);
   }
-  
+
+  /* Deliberately still a row: the topbar is sticky, and stacking the two
+     controls stole a third of the screen from the list. */
   .history-filters {
-    flex-direction: column;
     padding: var(--spacing-sm) var(--spacing-md);
   }
-  
-  .history-filter {
-    width: 100%;
-    min-width: auto;
+
+  .history-filters .select-field {
+    min-width: 120px;
   }
-  
+
   .history-list {
     padding: var(--spacing-sm) var(--spacing-md) var(--spacing-lg);
   }
-  
+
   .history-entry {
     padding: var(--spacing-sm);
   }
-  
-  .history-original,
-  .history-translated {
-    font-size: var(--font-size-xs);
-  }
-  
+
   .history-load-more {
     margin: 0 var(--spacing-md) var(--spacing-lg);
     padding: var(--spacing-sm) var(--spacing-md);

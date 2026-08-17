@@ -34,6 +34,13 @@ export interface TranslateResponse {
 export interface ProviderConfig {
   enabled: boolean;
   apiKey?: string;
+  /**
+   * Whether this provider needs an API key to be considered available.
+   * Defaults to true. A local OpenAI-compatible server (Ollama, vLLM,
+   * llama.cpp) authenticates nobody, so it sets this to false instead of
+   * carrying a fake key just to pass `isAvailable()`.
+   */
+  requiresApiKey?: boolean;
   timeout: number;
   maxRetries: number;
   retryDelayMs: number;
@@ -48,6 +55,17 @@ export interface IAIProvider {
    * Unique provider identifier (matches Prisma AIProvider enum)
    */
   readonly provider: AIProvider;
+
+  /**
+   * Instance identifier used in logs and operation names.
+   *
+   * Today it is always the lowercased `provider`, but it is a separate field
+   * on purpose: `provider` is the value persisted in `Translation.aiProvider`,
+   * while `id` names one configured instance. Two instances of the same
+   * provider (say, two Gemini keys) would share `provider` and differ by `id`,
+   * and that has to stay a config change rather than a refactor.
+   */
+  readonly id: string;
 
   /**
    * Model name used by this provider

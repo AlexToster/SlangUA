@@ -11,6 +11,7 @@ import type {
   ShareSource,
   ApiError,
   SlangStyle,
+  FavoriteUpdate,
 } from '../types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
@@ -156,17 +157,28 @@ class ApiService {
 
   // History
   async getHistory(params?: { cursor?: string; limit?: number; favorite?: boolean; search?: string }): Promise<HistoryResponse> {
-    const response = await this.client.get<HistoryResponse>('/history', { params });
+    // Drop undefined entries so an inactive filter never reaches the query string.
+    const query = Object.fromEntries(
+      Object.entries(params ?? {}).filter(([, value]) => value !== undefined)
+    );
+    const response = await this.client.get<HistoryResponse>('/history', { params: query });
     return response.data;
   }
 
-  async toggleFavorite(id: number, data: { favorite: boolean }): Promise<Translation> {
-    const response = await this.client.patch<Translation>(`/history/${id}/favorite`, data);
+  async setFavorite(id: number, favorite: boolean): Promise<Translation> {
+    const body: FavoriteUpdate = { favorite };
+    const response = await this.client.patch<Translation>(`/history/${id}/favorite`, body);
     return response.data;
   }
 
   async deleteTranslation(id: number): Promise<void> {
     await this.client.delete(`/history/${id}`);
+  }
+
+  /** Removes every saved translation of the current user. Idempotent. */
+  async clearHistory(): Promise<{ deletedCount: number }> {
+    const response = await this.client.delete<{ deletedCount: number }>('/history');
+    return response.data;
   }
 }
 

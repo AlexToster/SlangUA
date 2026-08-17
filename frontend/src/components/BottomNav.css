@@ -1,0 +1,84 @@
+/* BottomNav Component Styles — tab bar */
+:root {
+  --bottom-nav-height: 60px;
+}
+
+/* Sits in the flow as the last flex item of .app-layout (a shell of fixed
+   height), so it is always on screen no matter how the page scrolls. It used to
+   be `position: fixed`, which the Telegram WebView could scroll away.
+
+   Visually it copies the merged "style trigger + result" card from the translate
+   screen (.translate-output): same surface, same contrast rule, only the frame
+   around the whole bar is thicker than the lines that split the tabs. Unlike
+   that card it may clip its children (`overflow: hidden`) — nothing opens out of
+   the bar — so the rounded top corners can live on the container itself. */
+.bottom-nav {
+  position: relative;
+  z-index: var(--z-dropdown);
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  width: 100%;
+  height: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
+  padding-bottom: var(--safe-area-bottom);
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  border: 3px solid var(--color-divider-strong);
+  border-bottom: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+}
+
+.bottom-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  padding: 0 var(--spacing-xs);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Tab separators — deliberately thinner than the frame around the bar.
+   `+` keeps the outer edges clean. */
+.bottom-nav-item + .bottom-nav-item {
+  border-left: 1px solid var(--color-divider-strong);
+}
+
+/* Highlighted the same way as the style trigger on the translate screen:
+   tinted primary background, accent text, heavier weight. */
+.bottom-nav-item.active {
+  background: var(--color-primary-alpha-15);
+  color: var(--tg-link-color, var(--color-primary));
+  font-weight: 600;
+}
+
+.bottom-nav-item:active {
+  background: var(--color-primary-alpha-20);
+}
+
+.bottom-nav-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* The primary tab carries no icon: the word itself is the target, sized to fill
+   its half of the bar. clamp() keeps it as large as the narrowest phone allows
+   without overflowing wider screens. */
+.bottom-nav-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(var(--font-size-lg), 6.5vw, var(--font-size-2xl));
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+/* Icon-only tabs: no label, just the glyph. */
+.bottom-nav-icon {
+  flex-shrink: 0;
+}

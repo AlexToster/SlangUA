@@ -16,12 +16,22 @@ export abstract class BaseAdapter implements IAIProvider {
   abstract readonly provider: AIProvider;
   abstract readonly model: string;
 
+  /**
+   * Instance identifier. Defaults to the lowercased provider name; the
+   * OpenAI-compatible adapter overrides it, because one class serves several
+   * configured instances.
+   */
+  get id(): string {
+    return this.provider.toLowerCase();
+  }
+
   protected readonly config: ProviderConfig;
 
   constructor(providerConfig: Partial<ProviderConfig> = {}) {
     this.config = {
       enabled: providerConfig.enabled ?? true,
       apiKey: providerConfig.apiKey,
+      requiresApiKey: providerConfig.requiresApiKey ?? true,
       timeout: providerConfig.timeout ?? 30000,
       maxRetries: providerConfig.maxRetries ?? config.AI_MAX_RETRIES,
       retryDelayMs: providerConfig.retryDelayMs ?? config.AI_RETRY_DELAY_MS,
@@ -30,10 +40,16 @@ export abstract class BaseAdapter implements IAIProvider {
   }
 
   /**
-   * Check if provider is configured and available
+   * Check if provider is configured and available.
+   *
+   * A provider that authenticates nobody (a local OpenAI-compatible server)
+   * declares `requiresApiKey: false` instead of carrying a placeholder key.
    */
   isAvailable(): boolean {
-    return this.config.enabled && !!this.config.apiKey;
+    if (!this.config.enabled) {
+      return false;
+    }
+    return this.config.requiresApiKey === false || !!this.config.apiKey;
   }
 
   /**
@@ -68,7 +84,11 @@ export abstract class BaseAdapter implements IAIProvider {
   }
 
   /**
-   * Execute a function with retry logic
+   * Execute a function with retry logic and exponential backoff.
+   *
+   * This is the single implementation for every provider: adapters override only
+   * `isNonRetryableError()` to classify their SDK's errors. `operationName` is
+   * kept for call-site readability and future logging.
    */
   protected async withRetry<T>(
     fn: () => Promise<T>,

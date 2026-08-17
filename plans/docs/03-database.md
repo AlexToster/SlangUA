@@ -137,8 +137,9 @@ The following entities represent the persistent state of the SlangUA system, man
 - **GEN_Z**: Modern youth slang.
 - **STREET**: Urban/street style.
 - **IT_SLANG**: Professional/tech-oriented slang.
-- **POFENI**: Ukrainian prison/criminal slang ("зеківська/бандитська розмовна мова").
+- **POFENI**: Ukrainian prison speech ("зеківський жаргон") — how people talk inside a penal colony and how those who served and came out keep talking. Distinct from **STREET**: prison hierarchy and "поняття", not the yard. Age-restricted (18+); enforced in `TranslationService`, not in the database.
 - **KANCLER**: Ukrainian bureaucratic/official register ("канцелярський").
+- **GALICIAN**: Authentic Galician regional dialect ("галицька ґвара") — added after the MVP refactor via the `add_galician_enum` migration (`ALTER TYPE "SlangStyle" ADD VALUE 'GALICIAN'`).
 
 ### Enum: AIProvider
 - **OPENAI**: OpenAI models.

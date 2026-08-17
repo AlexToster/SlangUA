@@ -1,0 +1,33 @@
+/* AppLayout Component Styles
+
+   Fixed-height shell: the shell itself never scrolls, only
+   .app-layout-content does, and the navigation is a normal flex item below it.
+   The nav used to be `position: fixed` with the content padded to clear it —
+   which the Telegram WebView did not always honour while scrolling (the bar
+   scrolled out of view). A non-scrolling shell cannot lose it. */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* The single scroll container of the app. Page roots therefore must not create
+   their own scrollers (see the page stylesheets). */
+.app-layout-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}

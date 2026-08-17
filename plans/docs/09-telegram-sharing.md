@@ -16,7 +16,7 @@ The backend endpoint, encrypted payload store and webhook handler are implemente
 4. The backend resolves only a result owned by the authenticated user, creates a short-lived encrypted share payload, and returns an opaque inline query token.
 5. The Mini App calls `switchInlineQuery(token, ['users', 'bots', 'groups', 'channels'])`.
 6. Telegram opens the selected chat in inline mode. The bot receives the token, resolves it server-side, and returns exactly one inline article result.
-7. The user explicitly selects that result to send it. The message contains the translated text and its style label; it does not contain the original input by default.
+7. The user explicitly selects that result to send it. The message contains the translated text only — no app name, no style label, and not the original input. An `SlangUA · <style>` header used to be prepended; Telegram rendered the app name as a link to the bot inside what looked like the user's own message, so it was removed from the message body. The style label survives only as the title of the inline result card in Telegram's picker, which is never sent.
 
 Copy remains the universal fallback. Saving to History remains independent: sharing never creates a `Translation` record.
 
@@ -26,7 +26,7 @@ Copy remains the universal fallback. Saving to History remains independent: shar
 - The share token is a cryptographically random opaque UUID; it contains no input text, translated text, user ID, or style.
 - Share payloads are AES-256-GCM encrypted in Redis, are bound to the originating SlangUA user and Telegram user, are never logged, and expire after 10 minutes.
 - The inline bot must verify that `inlineQuery.from.id` belongs to the user who created the payload. A leaked token must not let another Telegram account retrieve the text.
-- `POFENI` is **not shareable in the first version**. A recipient cannot be age-gated before an inline message is sent. `POST /share/inline` returns `403 AGE_RESTRICTED_SHARE`; the UI explains that this 18+ result can be copied but not shared.
+- `POFENI` and any other `ageRestricted` style is shareable **only by a user who has confirmed adulthood** (`User.ageConfirmedAdult`). A recipient still cannot be age-gated, so this is a deliberate, documented narrowing of the original "never shareable" rule: the sender takes responsibility through the same self-attestation that unlocked the style. `POST /share/inline` reads the flag from the profile — `request.user` carries only `{ id, telegramId }` — and returns `403 AGE_RESTRICTED_SHARE` when it is false, including the case where a previously confirmed user withdrew the confirmation. The UI hides the share button in exactly that case; the server check is the real gate.
 - Saving a preview deletes its Redis preview payload. Therefore the share endpoint accepts either a still-live `previewId` or a persisted `translationId` owned by the caller. This preserves sharing after Save without exposing History to another user.
 
 ## 4. Telegram and deployment prerequisites
@@ -59,10 +59,12 @@ or
 Success (200):
 
 ```json
-{ "inlineQuery": "s_<opaque-token>", "expiresAt": "2026-08-08T12:00:00.000Z" }
+{ "inlineQuery": "s_<opaque-token>", "shareText": "<the finished message>", "expiresAt": "2026-08-08T12:00:00.000Z" }
 ```
 
-Errors: `400` invalid body; `401` unauthenticated; `403 AGE_RESTRICTED_SHARE`; `404` source not found or not owned; `410` preview expired; `422 SHARE_TEXT_TOO_LONG`; `429` rate limit; `503` Telegram integration unavailable.
+`shareText` is the message body rendered server-side (the translation and nothing else), so the client never composes what gets sent; the Mini App hands it to Telegram's own share sheet.
+
+Errors: `400` invalid body; `401` unauthenticated; `403 AGE_RESTRICTED_SHARE` (age-restricted style without `ageConfirmedAdult`); `404` source not found or not owned; `410` preview expired; `422 SHARE_TEXT_TOO_LONG`; `429` rate limit; `503` Telegram integration unavailable.
 
 The endpoint must use a separate `share` rate limit, initially 10 requests/minute per user. It must not call an LLM, persist a History record, or accept raw `originalText`/`translatedText` from the client.
 
@@ -70,8 +72,8 @@ The endpoint must use a separate `share` rate limit, initially 10 requests/minut
 
 The handler accepts only the `s_<opaque-token>` query format. It resolves the encrypted payload, verifies the Telegram sender, and returns exactly one `InlineQueryResultArticle` with:
 
-- title: `SlangUA · <style title>`;
-- `input_message_content.message_text`: style label plus translated text only;
+- title: `SlangUA · <style title>` — the label of the result card in Telegram's picker, which is not part of the sent message;
+- `input_message_content.message_text`: the translated text only, with no app name or style header;
 - no original text, user ID, provider, preview ID, or internal metadata;
 - zero cache time for user-bound content.
 
@@ -86,12 +88,12 @@ This is especially relevant to KANCLER, whose result may be 2–4× longer than 
 ## 7. Acceptance criteria for the implementation task
 
 - No preview or History record becomes public before an explicit Share action.
-- A successful inline result contains exactly the translation and style label that the user saw.
+- A successful inline result contains exactly the translation the user saw, with no header.
 - A user can share a saved result after its preview TTL has expired, using an owned `translationId`.
 - An inline token cannot be resolved by a different Telegram user.
-- POFENI sharing is rejected server-side and has a clear client explanation.
+- POFENI sharing is rejected server-side unless the caller has `ageConfirmedAdult: true`, and the client hides the button in the same case.
 - Expired previews, unsupported clients, disabled bot integration, rate limits, and oversized KANCLER output have recoverable UI states.
-- Tests cover ownership, expiry, token opacity, no History side effect, POFENI rejection, and the 3,800-cluster boundary.
+- Tests cover ownership, expiry, token opacity, no History side effect, the header-free `shareText`, POFENI acceptance for a confirmed adult and rejection after the confirmation is withdrawn, and the 3,800-cluster boundary.
 
 ## 8. Implementation order
 

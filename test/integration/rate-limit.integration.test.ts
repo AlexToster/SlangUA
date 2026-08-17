@@ -255,13 +255,94 @@ describe('Rate Limit Integration Tests', () => {
     });
   });
 
-  it('globally rate-limits the Telegram webhook while leaving health unmetered', async () => {
-    const webhook = await app.inject({ method: 'POST', url: '/api/v1/telegram/webhook', payload: {} });
-    expect(webhook.statusCode).toBe(200);
-    expect(webhook.headers).toHaveProperty('x-ratelimit-limit');
+  describe('Telegram webhook', () => {
+    // Read from the environment so the test cannot drift from the value the app
+    // parsed into config. Both are set by vitest.integration.config.mjs.
+    const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';
+    const webhookLimit = Number(process.env.WEBHOOK_RATE_LIMIT_MAX_REQUESTS ?? '30');
 
-    const health = await app.inject({ method: 'GET', url: '/health' });
-    expect(health.statusCode).toBe(200);
-    expect(health.headers).not.toHaveProperty('x-ratelimit-limit');
+    it('rejects a webhook call without the shared secret header', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/telegram/webhook',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('rejects a webhook call with a wrong shared secret header', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/telegram/webhook',
+        headers: { 'x-telegram-bot-api-secret-token': `${webhookSecret}-wrong` },
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('accepts an authenticated webhook call, meters it, and leaves health unmetered', async () => {
+      expect(webhookSecret.length).toBeGreaterThan(0);
+
+      const webhook = await app.inject({
+        method: 'POST',
+        url: '/api/v1/telegram/webhook',
+        headers: { 'x-telegram-bot-api-secret-token': webhookSecret },
+        payload: {},
+      });
+      expect(webhook.statusCode).toBe(200);
+      expect(webhook.headers).toHaveProperty('x-ratelimit-limit');
+
+      const health = await app.inject({ method: 'GET', url: '/health' });
+      expect(health.statusCode).toBe(200);
+      expect(health.headers).not.toHaveProperty('x-ratelimit-limit');
+    });
+
+    it('returns 429 once the webhook limiter window is exhausted', async () => {
+      for (let i = 0; i < webhookLimit; i++) {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/telegram/webhook',
+          headers: { 'x-telegram-bot-api-secret-token': webhookSecret },
+          payload: {},
+        });
+        expect(response.statusCode).toBe(200);
+      }
+
+      const limited = await app.inject({
+        method: 'POST',
+        url: '/api/v1/telegram/webhook',
+        headers: { 'x-telegram-bot-api-secret-token': webhookSecret },
+        payload: {},
+      });
+
+      expect(limited.statusCode).toBe(429);
+      const body = JSON.parse(limited.body);
+      expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
+      expect(limited.headers).toHaveProperty('retry-after');
+      expect(limited.headers['x-ratelimit-limit']).toBe(String(webhookLimit));
+    });
+
+    it('meters unauthenticated webhook calls too (401 still consumes the limiter)', async () => {
+      for (let i = 0; i < webhookLimit; i++) {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/v1/telegram/webhook',
+          payload: {},
+        });
+        expect(response.statusCode).toBe(401);
+      }
+
+      const limited = await app.inject({
+        method: 'POST',
+        url: '/api/v1/telegram/webhook',
+        headers: { 'x-telegram-bot-api-secret-token': webhookSecret },
+        payload: {},
+      });
+
+      expect(limited.statusCode).toBe(429);
+      expect(JSON.parse(limited.body).code).toBe('RATE_LIMIT_EXCEEDED');
+    });
   });
 });

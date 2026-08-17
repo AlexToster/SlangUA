@@ -103,7 +103,9 @@
 }
 
 .preview-text {
-  font-size: var(--font-size-base);
+  /* Same token as .text-input: the result must never look smaller than the
+     text the user typed. */
+  font-size: var(--font-size-editor);
   line-height: var(--line-height-relaxed);
   color: var(--tg-text-color, var(--color-text));
   white-space: pre-wrap;
@@ -301,10 +303,6 @@
 
 /* Responsive adjustments */
 @media (max-width: 480px) {
-  .preview-text {
-    font-size: var(--font-size-sm);
-  }
-  
   .preview-meta {
     font-size: 11px;
   }

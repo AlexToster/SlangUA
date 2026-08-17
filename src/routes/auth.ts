@@ -265,6 +265,11 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           code: z.string(),
           message: z.string(),
         }),
+        500: z.object({
+          error: z.string(),
+          code: z.string(),
+          message: z.string(),
+        }),
       },
     },
     // Require JWT authentication
@@ -295,12 +300,23 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
       clearSessionCookies(reply);
       return reply.status(204).send();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Logout failed';
-      
-      return reply.status(401).send({
-        error: 'Unauthorized',
+      // Only a bad/expired token is a 401. A database or Redis failure is not the
+      // client's fault and must not be reported as an auth problem, nor echo the
+      // raw error message back.
+      const statusCode = (error as { statusCode?: number } | null)?.statusCode;
+      if (statusCode === 401) {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          code: 'INVALID_TOKEN',
+          message: 'Access token is invalid or expired',
+        });
+      }
+
+      request.log.error({ err: error }, 'Logout failed');
+      return reply.status(500).send({
+        error: 'Internal Server Error',
         code: 'LOGOUT_FAILED',
-        message,
+        message: 'Logout could not be completed. Please try again.',
       });
     }
   });

@@ -1,36 +1,40 @@
 /* TextInput Component Styles */
+
+/* One card. The editor and its action row used to be two detached blocks (the
+   border sat on .text-input-container and the buttons floated below it); they
+   are now a single bordered surface split by a contrasting rule. */
 .text-input-wrapper {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  border-radius: var(--radius-lg);
+  background: var(--tg-secondary-bg-color, var(--color-surface));
+  border: 2px solid var(--tg-border-color, var(--color-border));
+  overflow: hidden;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .text-input-container {
   position: relative;
-  border-radius: var(--radius-lg);
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 2px solid var(--tg-border-color, var(--color-border));
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.text-input-container:focus-within {
+.text-input-wrapper:focus-within {
   border-color: var(--tg-link-color, var(--color-primary));
   box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20));
 }
 
-.text-input-wrapper.over-limit .text-input-container {
+.text-input-wrapper.over-limit {
   border-color: var(--tg-destructive-color, var(--color-error));
 }
 
-.text-input-wrapper.over-limit .text-input-container:focus-within {
+.text-input-wrapper.over-limit:focus-within {
   box-shadow: 0 0 0 3px var(--tg-destructive-color-alpha-20, var(--color-error-alpha-20));
 }
 
-.text-input-wrapper.warning-zone .text-input-container {
+.text-input-wrapper.warning-zone {
   border-color: var(--tg-warning-color, var(--color-warning));
 }
 
-.text-input-wrapper.warning-zone .text-input-container:focus-within {
+.text-input-wrapper.warning-zone:focus-within {
   box-shadow: 0 0 0 3px var(--tg-warning-color-alpha-20, var(--color-warning-alpha-20));
 }
 
@@ -39,8 +43,9 @@
   min-height: 120px;
   max-height: 200px;
   padding: var(--spacing-md);
+  padding-bottom: calc(var(--spacing-md) + var(--font-size-xs) + var(--spacing-xs));
   font-family: inherit;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-editor);
   line-height: var(--line-height-relaxed);
   color: var(--tg-text-color, var(--color-text));
   background: transparent;
@@ -59,11 +64,14 @@
   cursor: not-allowed;
 }
 
+/* The action row lives inside the card; the contrasting rule is the only thing
+   separating it from the editor above. */
 .text-input-footer {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: 0 var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 2px solid var(--color-divider-strong);
 }
 
 .text-input-paste-btn,
@@ -76,6 +84,10 @@
   font-family: inherit;
   font-size: var(--font-size-base);
   font-weight: 500;
+  /* "Випадкова фраза" must stay on one line: as a shrinkable flex item it used
+     to wrap and make the whole action row two lines tall. */
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--tg-link-color, var(--color-primary));
   background: transparent;
   border: 1px solid var(--tg-link-color, var(--color-primary));
@@ -115,7 +127,11 @@
   font-variant-numeric: tabular-nums;
   color: var(--tg-hint-color, var(--color-text-muted));
   transition: color var(--transition-fast);
-  margin-left: auto;
+  position: absolute;
+  bottom: var(--spacing-xs);
+  right: var(--spacing-sm);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .char-counter.warning {
@@ -134,8 +150,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  margin-left: auto;
+  width: 42px;
+  height: 42px;
   padding: 0;
   color: var(--tg-hint-color, var(--color-text-muted));
   background: transparent;
@@ -177,7 +194,6 @@
 @media (max-width: 480px) {
   .text-input {
     min-height: 100px;
-    font-size: var(--font-size-sm);
   }
   
   .text-input-paste-btn span {
@@ -192,6 +208,7 @@
 
   .text-input-footer {
     gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
   }
   
   .char-counter {

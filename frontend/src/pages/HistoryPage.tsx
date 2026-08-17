@@ -1,12 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiService } from '../services/api';
-import { triggerHapticFeedback } from '../services/telegram';
-import { canUseTelegramInlineSharing, openTelegramInlineQuery } from '../services/telegram';
+import {
+  triggerHapticFeedback,
+  canUseTelegramSharing,
+  shareTranslationText,
+  openTelegramInlineQuery,
+} from '../services/telegram';
 import { Send } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import { Toast } from '../components/Toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { SelectField, type SelectFieldOption } from '../components/SelectField';
 import { ErrorBanner } from '../components/ErrorBanner';
 import type { Translation } from '../types/api';
 import { getStyleLabel } from '../utils/styleLabels';
@@ -14,19 +20,35 @@ import './HistoryPage.css';
 
 const PAGE_SIZE = 20;
 
+type FavoriteFilter = 'all' | 'favorite';
+
+const FAVORITE_FILTER_OPTIONS: SelectFieldOption<FavoriteFilter>[] = [
+  { value: 'all', label: 'Усі' },
+  { value: 'favorite', label: 'Тільки обране' },
+];
+
+/**
+ * Shown only until the first response arrives - GET /history reports the real
+ * cap as `totalLimit` (HISTORY_MAX_ENTRIES on the server).
+ */
+const HISTORY_LIMIT_FALLBACK = 100;
+
 export function HistoryPage() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  const [favoriteFilter, setFavoriteFilter] = useState<'all' | 'favorite'>('all');
+  const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<Translation | null>(null);
 
-  // Debounce search
+  // Debounce search. 500ms instead of 300ms: every committed value swaps the
+  // query key, and a request in flight on every other keystroke made the list
+  // flicker while typing.
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-    }, 300);
+    }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -38,16 +60,38 @@ export function HistoryPage() {
       cursor: pageParam,
       limit: PAGE_SIZE,
       search: debouncedSearch || undefined,
-      favorite: favoriteFilter === 'favorite',
+      // 'all' must not send the param at all, otherwise favorites are filtered out.
+      favorite: favoriteFilter === 'all' ? undefined : true,
     }),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: apiService.isAuthenticated(),
+    // The search term is part of the query key, so each committed term used to
+    // start from "no data" -> the page fell back to the full-screen spinner,
+    // the search <input> was unmounted and the on-screen keyboard closed
+    // mid-word. Keeping the previous page's data mounted fixes that.
+    placeholderData: keepPreviousData,
   });
 
-  // Toggle favorite mutation
-  const toggleFavoriteMutation = useMutation({
+  // Style registry drives the age-restricted sharing rule (same source as TranslatePage).
+  const { data: styles = [] } = useQuery({
+    queryKey: ['styles'],
+    queryFn: () => apiService.getStyles(),
+    enabled: apiService.isAuthenticated(),
+  });
+
+  // Needed for the same rule: an 18+ result may be shared only by a user who
+  // confirmed adulthood. Same query key as TranslatePage, so it is served from
+  // cache when the user arrives from the main screen.
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => apiService.getProfile(),
+    enabled: apiService.isAuthenticated(),
+  });
+
+  // Favorite mutation: always an explicit set, never a toggle.
+  const setFavoriteMutation = useMutation({
     mutationFn: ({ id, favorite }: { id: number; favorite: boolean }) =>
-      apiService.toggleFavorite(id, { favorite }),
+      apiService.setFavorite(id, favorite),
     onSuccess: (_, variables) => {
       setToast({ message: variables.favorite ? 'Додано в обране' : 'Видалено з обраного', type: 'success' });
       triggerHapticFeedback('selection');
@@ -73,12 +117,19 @@ export function HistoryPage() {
 
   const shareMutation = useMutation({
     mutationFn: (translationId: number) => apiService.createInlineShare({ translationId }),
-    onSuccess: ({ inlineQuery }) => {
+    onSuccess: ({ inlineQuery, shareText }) => {
       try {
-        openTelegramInlineQuery(inlineQuery);
+        // Prefer the finished text: switchInlineQuery only types `@bot s_<uuid>`
+        // into the composer and leaves it unsendable when the bot cannot answer
+        // the inline query.
+        if (shareText) {
+          shareTranslationText(shareText);
+        } else {
+          openTelegramInlineQuery(inlineQuery);
+        }
         triggerHapticFeedback('notification');
       } catch {
-        setToast({ message: 'Telegram не підтримує надсилання inline у цьому клієнті. Скопіюй результат.', type: 'error' });
+        setToast({ message: 'Telegram не підтримує надсилання у цьому клієнті. Скопіюй результат.', type: 'error' });
       }
     },
     onError: (error: any) => {
@@ -143,59 +194,77 @@ export function HistoryPage() {
   }, [refetch]);
 
   const handleToggleFavorite = useCallback((translation: Translation) => {
-    toggleFavoriteMutation.mutate({ id: translation.id, favorite: !translation.favorite });
-  }, [toggleFavoriteMutation]);
+    setFavoriteMutation.mutate({ id: translation.id, favorite: !translation.favorite });
+  }, [setFavoriteMutation]);
 
   const handleDelete = useCallback((translation: Translation) => {
-    if (window.confirm('Видалити цей переклад з історії?')) {
-      deleteMutation.mutate(translation.id);
-    }
-  }, [deleteMutation]);
+    setPendingDelete(translation);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!pendingDelete) return;
+    deleteMutation.mutate(pendingDelete.id, {
+      onSettled: () => setPendingDelete(null),
+    });
+  }, [deleteMutation, pendingDelete]);
+
+  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+
+  // 18+ results are shareable only for a confirmed adult — the flag comes from
+  // the registry, not a style id, and the server re-checks the same rule.
+  const canShareTranslation = useCallback((translation: Translation) => {
+    if (!canUseTelegramSharing()) return false;
+    const ageRestricted = styles.find((style) => style.id === translation.slangStyle)?.ageRestricted === true;
+    return !ageRestricted || profile?.ageConfirmedAdult === true;
+  }, [styles, profile]);
 
   const handleShare = useCallback((translation: Translation) => {
-    if (canUseTelegramInlineSharing() && translation.slangStyle !== 'POFENI') {
+    if (canShareTranslation(translation)) {
       shareMutation.mutate(translation.id);
     }
-  }, [shareMutation]);
+  }, [canShareTranslation, shareMutation]);
 
   const translations = historyData?.pages.flatMap((page) => page.data) || [];
   const totalCount = historyData?.pages[0]?.totalCount || 0;
+  // The cap is server-owned (HISTORY_MAX_ENTRIES); the fallback only covers the
+  // very first render, before any response has arrived.
+  const totalLimit = historyData?.pages[0]?.totalLimit ?? HISTORY_LIMIT_FALLBACK;
 
-  if (isLoading && !historyData) {
-    return (
-      <div className="history-page loading" role="status" aria-label="Завантаження історії">
-        <div className="loading-spinner" aria-hidden="true" />
-      </div>
-    );
-  }
-
+  // No early full-page return while loading: it unmounted the search <input>
+  // on every committed search term, which closed the on-screen keyboard
+  // mid-word. The spinner is rendered in place instead.
   return (
     <div className="history-page">
-      <header className="history-header">
-        <h1>Історія</h1>
-        <div className="history-stats">
-          {totalCount > 0 && <span>{totalCount} переклад{totalCount === 1 ? '' : totalCount < 5 ? 'и' : 'ів'}</span>}
-        </div>
-      </header>
+      <div className="history-topbar">
+        <header className="history-header">
+          <h1 className="page-title">Історія</h1>
+          <div className="history-stats" aria-label="Збережено перекладів">
+            <span>{totalCount}/{totalLimit}</span>
+          </div>
+        </header>
 
-      <div className="history-filters">
-        <input
-          type="search"
-          className="history-search"
-          placeholder="Пошук в історії…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          aria-label="Пошук в історії"
-        />
-        <select
-          className="history-filter"
-          value={favoriteFilter}
-          onChange={(e) => setFavoriteFilter(e.target.value as 'all' | 'favorite')}
-          aria-label="Фільтр"
-        >
-          <option value="all">Усі</option>
-          <option value="favorite">Тільки обране</option>
-        </select>
+        <div className="history-filters">
+          <input
+            type="search"
+            className="history-search"
+            placeholder="Пошук в історії…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Пошук в історії"
+          />
+          {/*
+            The type argument is explicit: a bare setState is
+            Dispatch<SetStateAction<FavoriteFilter>>, whose parameter includes the
+            updater function, so inference cannot narrow T past its `string`
+            constraint and the prop check fails.
+          */}
+          <SelectField<FavoriteFilter>
+            value={favoriteFilter}
+            options={FAVORITE_FILTER_OPTIONS}
+            onChange={setFavoriteFilter}
+            label="Фільтр"
+          />
+        </div>
       </div>
 
       {errorBanner && (
@@ -205,6 +274,12 @@ export function HistoryPage() {
           onRetry={handleRetry}
           onDismiss={clearErrorBanner}
         />
+      )}
+
+      {isLoading && !historyData && (
+        <div className="history-loading" role="status" aria-label="Завантаження історії">
+          <div className="loading-spinner" aria-hidden="true" />
+        </div>
       )}
 
       {translations.length === 0 && !isLoading && (
@@ -233,7 +308,7 @@ export function HistoryPage() {
                 <p className="history-translated">{translation.translatedText}</p>
               </div>
               <div className="history-entry-actions">
-                {canUseTelegramInlineSharing() && translation.slangStyle !== 'POFENI' && (
+                {canShareTranslation(translation) && (
                   <button
                     className="history-share-btn"
                     onClick={() => handleShare(translation)}
@@ -285,6 +360,18 @@ export function HistoryPage() {
             'Завантажити ще'
           )}
         </button>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Видалити цей переклад з історії?"
+          confirmLabel="Так"
+          cancelLabel="Скасувати"
+          danger
+          busy={deleteMutation.isPending}
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
+        />
       )}
 
       {toast && (
