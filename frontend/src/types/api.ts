@@ -77,11 +77,13 @@ export interface FavoriteUpdate {
 }
 
 export interface InlineShareResult {
+  /** Opaque token for the inline fallback (`switchInlineQuery`). Never displayed. */
   inlineQuery: string;
   /**
-   * The finished message rendered by the server ("SlangUA · <style>\n\n<text>").
-   * Optional so an older API build still type-checks; the client falls back to
-   * the inline-query path when it is missing.
+   * The finished message rendered by the server — the translation and nothing
+   * else, with no `SlangUA · <style>` header. This is the primary share path:
+   * the client hands it to Telegram's own chat chooser. Optional so an older API
+   * build still type-checks; the client falls back to `inlineQuery` without it.
    */
   shareText?: string;
   expiresAt: string;

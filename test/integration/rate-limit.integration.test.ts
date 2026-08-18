@@ -23,6 +23,15 @@ describe('Rate Limit Integration Tests', () => {
   let prisma: any;
   let accessToken: string;
 
+  /**
+   * The token-minting endpoints have their own budget, separate from the generic
+   * per-user limit. Read it instead of hardcoding a count, so the suite follows
+   * vitest.integration.config.mjs rather than silently passing when a limiter is
+   * wired to the wrong variable.
+   */
+  const authLimit = Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS ?? '20');
+  const refreshLimit = Number(process.env.REFRESH_RATE_LIMIT_MAX_REQUESTS ?? '20');
+
   beforeAll(async () => {
     // Initialize test context (singleton - runs once)
     await import('./setup-test-context.js').then(m => m.setup());
@@ -70,18 +79,18 @@ describe('Rate Limit Integration Tests', () => {
     it('should return 429 after exceeding rate limit', async () => {
       const initData = generateValidInitData({ user: { id: 666666002, first_name: 'Rate', last_name: 'Limit2', username: 'ratelimit2' } });
 
-      // Make requests up to the limit (default is 10 per window)
-      for (let i = 0; i < 10; i++) {
+      // Make requests up to the endpoint's own limit
+      for (let i = 0; i < authLimit; i++) {
         const response = await app.inject({
           method: 'POST',
           url: '/api/v1/auth/telegram',
           payload: { initData },
         });
-        // First 10 should succeed (or at least not be rate limited)
+        // Everything inside the window should succeed (or at least not be rate limited)
         expect(response.statusCode).not.toBe(429);
       }
 
-      // 11th request should be rate limited
+      // One past the limit should be rate limited
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/telegram',
@@ -116,8 +125,8 @@ describe('Rate Limit Integration Tests', () => {
     });
 
     it('should return 429 after exceeding rate limit', async () => {
-      // Make requests up to the limit
-      for (let i = 0; i < 10; i++) {
+      // Make requests up to the endpoint's own limit
+      for (let i = 0; i < refreshLimit; i++) {
         const response = await app.inject({
           method: 'POST',
           url: '/api/v1/auth/refresh',

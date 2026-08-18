@@ -1,6 +1,39 @@
 import { z } from 'zod';
 
-const envSchema = z.object({
+/**
+ * Secrets that must never keep their `.env.example` value in production.
+ *
+ * Every placeholder in the example file is valid by *shape* - the dummy
+ * PREVIEW_ROOT_KEY really does decode to 32 bytes, the example JWT secret
+ * really is longer than 32 characters - so shape validation alone lets a
+ * "copy .env.example and edit later" deploy boot on secrets that are public in
+ * this repository. The check below is the only thing standing between that
+ * mistake and a signing key everyone can read.
+ */
+const PRODUCTION_FORBIDDEN_SECRETS = [
+  'JWT_SECRET',
+  'REFRESH_TOKEN_HMAC_SECRET',
+  'PREVIEW_ROOT_KEY',
+  'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_WEBHOOK_SECRET',
+] as const;
+
+/** Marker carried by every textual placeholder in `.env.example`. */
+const PLACEHOLDER_MARKER = /example-only|replace-me/i;
+
+/**
+ * Placeholders with no marker to look for. PREVIEW_ROOT_KEY has to be base64 of
+ * 32 bytes, so its example value is the raw byte sequence 0x00..0x1F.
+ */
+const PLACEHOLDER_VALUES = new Set([
+  'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=',
+]);
+
+function isPlaceholderSecret(value: string): boolean {
+  return PLACEHOLDER_MARKER.test(value) || PLACEHOLDER_VALUES.has(value.trim());
+}
+
+export const envSchema = z.object({
   // Server
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
@@ -107,6 +140,15 @@ const envSchema = z.object({
   GLOBAL_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+
+  // Auth Rate Limiting (separate from the generic per-user limit)
+  // Both endpoints are keyed by IP, because neither has an authenticated user
+  // yet, and both mint tokens - so they get their own, much tighter budget
+  // instead of sharing the 100/min that history and translate live on.
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  AUTH_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(20),
+  REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  REFRESH_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(20),
   
   // Preview Rate Limiting (separate from persistent translate)
   PREVIEW_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
@@ -153,6 +195,23 @@ const envSchema = z.object({
       message: 'TELEGRAM_WEBHOOK_SECRET is required when TELEGRAM_INLINE_ENABLED is true',
       path: ['TELEGRAM_WEBHOOK_SECRET'],
     });
+  }
+
+  // Only production: development and the test suites are meant to run on
+  // placeholders, and failing there would make the example file unusable.
+  if (data.NODE_ENV !== 'production') return;
+
+  for (const key of PRODUCTION_FORBIDDEN_SECRETS) {
+    const value = data[key];
+    if (typeof value === 'string' && isPlaceholderSecret(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        // The offending value is a known public placeholder, but it is still a
+        // secret-shaped variable: report the name only, never the value.
+        message: `${key} still holds the .env.example placeholder, which is public. Generate a real value before deploying to production.`,
+        path: [key],
+      });
+    }
   }
 });
 

@@ -135,13 +135,13 @@ Implement the Telegram Mini App.
 - InitData authentication
 - Theme support (Sync with Telegram theme)
 - Viewport handling
-- Main Button usage
 - Haptic Feedback
-- Deep Links support
 - Backend API integration
-- Explicit Telegram inline sharing for eligible previews and saved History results
+- Explicit Telegram sharing for eligible previews and saved History results
 
 *After every completed feature perform manual verification inside the Telegram client.*
+
+Two items were dropped from this stage rather than left as open promises: `MainButton` (the app drives its own in-flow buttons, and a floating native button duplicated them) and deep-link support (nothing in the product needs an inbound link, and a link that resolves to a result would contradict the sharing rule in [09](docs/09-telegram-sharing.md)).
 
 **Deliverable:**
 Working Telegram Mini App.

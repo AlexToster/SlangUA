@@ -42,9 +42,12 @@ model Translation {
   @@index([userId])
   @@index([createdAt])
   @@index([userId, createdAt, id])
-  // pg_trgm GIN indexes for full-text search are created via raw SQL migration
-  // @@index([originalText], map: "Translation_originalText_trgm_idx", type: Gin)
-  // @@index([translatedText], map: "Translation_translatedText_trgm_idx", type: Gin)
+  // Trigram GIN indexes behind the ILIKE '%term%' history search. Declared here
+  // rather than in raw SQL only: the first pair lived in migration
+  // 20260804171200 alone and the next generated migration dropped them as drift.
+  // The pg_trgm extension itself is created by the migration SQL.
+  @@index([originalText(ops: raw("gin_trgm_ops"))], map: "Translation_originalText_trgm_idx", type: Gin)
+  @@index([translatedText(ops: raw("gin_trgm_ops"))], map: "Translation_translatedText_trgm_idx", type: Gin)
 }
 
 model RefreshToken {

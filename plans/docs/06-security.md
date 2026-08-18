@@ -17,7 +17,11 @@ See [Backend Architecture](01-backend.md) for the integration of the Auth Module
 
 Redis is used for request‑frequency counters per `userId` or `IP` with sliding‑window limits. This prevents API and AI‑provider abuse.
 
-Redis is a required runtime dependency. If it cannot connect at startup or becomes unavailable, rate-limited requests fail closed with `503 RATE_LIMITER_UNAVAILABLE`; the service never claims to run with rate limiting disabled. A coarse global IP limiter (`GLOBAL_RATE_LIMIT_*`) covers all routes except `/health`, while sensitive routes also have narrower user-based limits.
+Redis is a required runtime dependency. If it cannot connect at startup or becomes unavailable, rate-limited requests fail closed with `503 RATE_LIMITER_UNAVAILABLE`; the service never claims to run with rate limiting disabled. A coarse global IP limiter (`GLOBAL_RATE_LIMIT_*`) covers all routes except `/health`, while sensitive routes also have narrower user-based limits. The two token-minting routes are keyed by IP rather than user, because no authenticated user exists yet, and they carry their own tighter budget (`AUTH_RATE_LIMIT_*` for `POST /auth/telegram`, `REFRESH_RATE_LIMIT_*` for `POST /auth/refresh`, 20 req/min each by default) instead of the generic per-user allowance.
+
+## Secrets
+
+Secrets reach the process through the environment only, and the Zod schema in `src/config/index.ts` refuses to boot on an invalid one. Shape validation is not enough on its own: every placeholder in `.env.example` is valid by shape — the dummy `PREVIEW_ROOT_KEY` really does decode to 32 bytes — so a "copy the example and edit it later" deployment used to run on secrets that are public in this repository. With `NODE_ENV=production` the schema additionally rejects those placeholder values for `JWT_SECRET`, `REFRESH_TOKEN_HMAC_SECRET`, `PREVIEW_ROOT_KEY`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`. The error names the variable and never echoes its value. Development and the test suites are unaffected, since they are meant to run on placeholders.
 
 For a full description of Redis responsibilities, see [Database Design](03-database.md#redis-responsibilities).
 

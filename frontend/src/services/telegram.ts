@@ -205,36 +205,6 @@ export function triggerHapticFeedback(type: 'impact' | 'notification' | 'selecti
   }
 }
 
-export function showMainButton(text: string, onClick: () => void, options?: { isVisible?: boolean; isActive?: boolean; color?: string; textColor?: string }) {
-  if (!isTMA() || !window.Telegram?.WebApp?.MainButton) return;
-
-  const btn = window.Telegram.WebApp.MainButton;
-  btn.setText(text);
-  btn.onClick(onClick);
-  
-  if (options?.color) btn.setParams({ color: options.color });
-  if (options?.textColor) btn.setParams({ textColor: options.textColor });
-  if (options?.isVisible !== false) btn.show();
-  if (options?.isActive !== false) btn.enable();
-  else btn.disable();
-}
-
-export function hideMainButton() {
-  if (!isTMA() || !window.Telegram?.WebApp?.MainButton) return;
-  window.Telegram.WebApp.MainButton.hide();
-}
-
-export function showBackButton(onClick: () => void) {
-  if (!isTMA() || !window.Telegram?.WebApp?.BackButton) return;
-  window.Telegram.WebApp.BackButton.onClick(onClick);
-  window.Telegram.WebApp.BackButton.show();
-}
-
-export function hideBackButton() {
-  if (!isTMA() || !window.Telegram?.WebApp?.BackButton) return;
-  window.Telegram.WebApp.BackButton.hide();
-}
-
 /**
  * Open a link outside the Mini App.
  *

@@ -111,7 +111,7 @@ Layer rules, enforced by review rather than tooling:
 
 There are no repository or use-case layers. `plans/docs/05-decisions.md` records this as a proactive choice for a solo-developer MVP, not an accidental shortcut.
 
-`src/app.ts` boot order matters: Zod compilers → CORS (origins split from `CORS_ALLOWED_ORIGINS`, `credentials: true`) → `await connectRedis()` → `await initializeStyleEngine()` → global per-IP rate limiter as an `onRequest` hook (skips `/health`) → error handler → `GET /health` (unmetered) → all six route groups under prefix `/api/v1`. SIGTERM/SIGINT disconnect Redis and close the app. Redis is awaited before serving because the API must not run LLM routes without a working rate limiter.
+`src/app.ts` boot order matters: Zod compilers → CORS (origins split from `CORS_ALLOWED_ORIGINS`, `credentials: true`) → `await connectRedis()` → `await initializeStyleEngine()` → global per-IP rate limiter as an `onRequest` hook (skips `/health`) → error handler → `GET /health` (unmetered liveness) and `GET /health/ready` (metered readiness: a one-row Prisma read plus Redis `PING` in parallel, 503 `degraded` if either fails) → all six route groups under prefix `/api/v1`. SIGTERM/SIGINT disconnect Redis and close the app. Redis is awaited before serving because the API must not run LLM routes without a working rate limiter.
 
 The central error handler maps: Zod/Fastify validation → 400 `VALIDATION_ERROR`; expired or invalid JWT → 401 `TOKEN_INVALID`; `RATE_LIMIT_EXCEEDED` → 429; `RATE_LIMITER_UNAVAILABLE` → 503; then 404 `NOT_FOUND`, 403 `FORBIDDEN`, 422 `SEMANTIC_VALIDATION_ERROR`, 503 `AI_PROVIDERS_UNAVAILABLE`, and a 500 `INTERNAL_ERROR` fallback that only leaks the raw message in `development`.
 
@@ -153,7 +153,7 @@ All routes are under `/api/v1`. JSON only. Auth is a `Bearer` access token unles
 
 - **`POST /translate/preview`** — JWT. Body `{ text, style }`. `text` is trimmed, must be 1–1000 **grapheme clusters** measured with `Intl.Segmenter('uk')`, rejected if whitespace-only, and sanitized against prompt injection. Returns `{ originalText, translatedText, slangStyle, providerId, previewId }` — a UUID, and **no database row**. Side effect: an AES-256-GCM encrypted payload in Redis with a 10-minute TTL. Errors: 400 `EMPTY_TEXT` / `INVALID_TEXT_LENGTH` / `STYLE_UNAVAILABLE`; 401; 403 `AGE_RESTRICTED_STYLE`; 422 `PROMPT_INJECTION_DETECTED`; 429 (12/min/user); 503 `AI_PROVIDER_UNAVAILABLE`.
 - **`POST /translate/save`** — JWT. Body `{ previewId }` **only**. Verifies ownership and TTL, then persists the exact preview text (WYSIWYG). No LLM call. Returns the full `Translation`. Errors: 400; 401; 404 `PREVIEW_NOT_FOUND`; 409 `PREVIEW_ALREADY_SAVED`; 410 `PREVIEW_EXPIRED`; 429 (10/min/user).
-- **`POST /translate`** — JWT. Same request DTO; translates **and** persists in one call. Returns the full `Translation`. Same error family plus its own 10/min limit. Currently unused by the UI.
+- **`POST /translate`** — JWT. Same request DTO; translates **and** persists in one call. Returns the full `Translation`. Same error family plus its own 10/min limit. **No client caller by design**: the Mini App goes through preview/save so it can show a result before deciding to keep it. The endpoint stays as the one-shot contract for non-Mini-App callers; do not reintroduce a client for it as a silent alternative to preview/save.
 - **`POST /share/inline`** — JWT. Body is exactly one of `{ previewId }` or `{ translationId }`. Returns `{ inlineQuery: "s_<uuid>", shareText, expiresAt }`, where `shareText` is the translation alone. No LLM call, no History write. Errors: 400; 401; 403 `AGE_RESTRICTED_SHARE` (age-restricted style without `ageConfirmedAdult`); 404 `SHARE_SOURCE_NOT_FOUND`; 410; 422 `SHARE_TEXT_TOO_LONG`; 429 (10/min); 503 `TELEGRAM_INLINE_UNAVAILABLE`.
 - **`POST /telegram/webhook`** — no JWT; authenticated by the `x-telegram-bot-api-secret-token` header. Returns 404 when inline sharing is disabled. Handles `inline_query` updates and always answers `{ ok: true }`.
 
@@ -165,6 +165,11 @@ All routes are under `/api/v1`. JSON only. Auth is a `Bearer` access token unles
 - **`DELETE /history/:id`** — JWT. 204, or 404 when missing/not owned.
 - **`GET /user/me`** — JWT. Returns the profile including `ageConfirmedAdult`.
 - **`PATCH /user/me`** — JWT, strict body. Accepts only `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult`. Telegram-sourced identity fields (`telegramId`, `username`, `firstName`, `lastName`, `languageCode`) are immutable; unknown fields are rejected with 400.
+
+### Ops (outside `/api/v1`, outside the versioned contract)
+
+- **`GET /health`** — no auth, **unmetered**. Liveness: `{ status: 'ok', timestamp }` from the process alone. The one route the global limiter skips, so a probe can never be throttled into reporting a false outage.
+- **`GET /health/ready`** — no auth, metered by the global IP limiter. Readiness: a one-row Prisma read and a Redis `PING` in parallel; 200 `{ status: 'ok', checks: { database: 'up', redis: 'up' }, timestamp }`, or 503 with `status: 'degraded'` and `'down'` on whichever failed. Probe errors are logged at `warn` and never returned in the body. Consumed by the `api` healthcheck in `docker-compose.production.yml`.
 
 Rate limits are separate Redis key prefixes per concern: `ratelimit:global` (100/min per IP, all routes except `/health`), plus `auth`, `refresh`, `translate`, `preview` (12/min), `save` (10/min), `share` (10/min), `history`, `user`, `styles`, `webhook` (30/min). Every response carries `X-RateLimit-Limit/Remaining/Reset`; a 429 also carries `Retry-After`.
 
@@ -236,9 +241,9 @@ Refresh tokens are opaque 32-byte random values, stored **only** as HMAC-SHA256 
 
 ## 11. Telegram-native sharing
 
-Sharing is an explicit, user-initiated action on a finished result, and the only channel in v1 is **Telegram inline mode**. Three implementations are explicitly forbidden: putting the translated text in a deep link, using the generic browser share sheet, and silently creating any public URL.
+Sharing is an explicit, user-initiated action on a finished result, and it happens **only inside Telegram**. The primary channel is Telegram's own chat chooser: the server renders the finished message and the client hands it to `openTelegramLink('https://t.me/share/url?...')`. Inline mode is the fallback for clients without that bridge. Three implementations are explicitly forbidden: putting the translated text in a deep link, using the generic browser share sheet, and silently creating any public URL. Nothing but the message text may travel in a share intent — no token, no `previewId`, no app-internal link a recipient could resolve.
 
-Flow: a completed preview offers Copy / Send in Telegram / Save as distinct actions → "Send" appears only when `Telegram.WebApp.switchInlineQuery` exists and the result is eligible → the client calls `POST /share/inline` with `previewId` or `translationId` → the backend resolves an owned result, writes a short-lived encrypted payload and returns an opaque token → the client calls `switchInlineQuery(token, ['users','bots','groups','channels'])` → the bot receives the token, resolves it server-side, and answers with exactly one `InlineQueryResultArticle` → the user explicitly picks it.
+Flow: a completed preview offers Copy / Send in Telegram / Save as distinct actions → "Send" appears only when Telegram exposes a sharing bridge (`openTelegramLink` or `switchInlineQuery`) and the result is eligible → the client calls `POST /share/inline` with `previewId` or `translationId` → the backend resolves an owned result, writes a short-lived encrypted payload and returns both the rendered `shareText` and an opaque `inlineQuery` token → with `shareText` the client opens `t.me/share/url` and Telegram delivers a normal, sendable message to the chat the user picks; without it the client falls back to `switchInlineQuery(token, ['users','bots','groups','channels'])`, the bot resolves the token server-side and answers with exactly one `InlineQueryResultArticle` for the user to pick. The order is deliberate: `switchInlineQuery` only *types* `@bot s_<uuid>` into the composer, so with no inline mode configured the raw token sits in the input box and cannot be sent at all.
 
 The token is a random UUID containing no text, user id or style. Payloads are bound to **both** the SlangUA user and the Telegram user, and the inline handler verifies `inlineQuery.from.id` against the payload creator, so a leaked token is useless to another account. Invalid, expired and foreign tokens all return zero results, and the handler must not reveal which condition applied. `answerInlineQuery` is called with `cache_time: 0` and `is_personal: true`.
 
@@ -246,7 +251,7 @@ The rendered message is the translated text alone. The `SlangUA · <style title>
 
 Two policy limits: **an `ageRestricted` result is shareable only by a user with `ageConfirmedAdult: true`** — `POST /share/inline` reads the flag from the profile and returns 403 `AGE_RESTRICTED_SHARE` otherwise (a recipient still cannot be age-gated, so the sender carries it through the same self-attestation that unlocked the style; the UI only hides the button). And the server counts the **final rendered message** in grapheme clusters, rejecting anything above a conservative **3800** with 422 `SHARE_TEXT_TOO_LONG` — never truncating silently. That limit matters most for KANCLER's 2–4× expansion.
 
-Deployment prerequisites before the client button can be trusted: inline mode enabled in BotFather, a configured bot token with an HTTPS webhook (or a deliberately operated long-polling worker) handling `inline_query`, and a bot username/domain consistent with the Mini App deployment.
+Deployment prerequisites: the primary path needs nothing configured on the bot side beyond the Mini App itself. The **fallback** needs all of inline mode enabled in BotFather, a configured bot token with an HTTPS webhook (or a deliberately operated long-polling worker) handling `inline_query`, and a bot username/domain consistent with the Mini App deployment. If neither path is available, Copy remains the fallback — never a public URL.
 
 ---
 
@@ -315,16 +320,21 @@ Frontend, in `frontend/`:
 npm install
 npm run dev                 # :5173, proxies /api to :3000
 npm run lint                # oxlint
-npm run test -- --run       # vitest + jsdom
+npm test                    # vitest run — jsdom component tests
+npm run test:watch          # vitest in watch mode
 npm run typecheck           # tsc -b — app, node and test projects
 npm run build               # tsc -b tsconfig.app.json tsconfig.node.json && vite build
 ```
+
+Both suites also run in CI (`.github/workflows/ci.yml`) on every push and pull request to `main`: one job for the backend (`npx prisma generate`, then typecheck → smoke → unit → integration, using the runner's Docker daemon for Testcontainers) and one for the frontend (lint → typecheck → tests → build). Two jobs rather than one so a frontend-only change does not wait on container startup. CI is a safety net, not a substitute for running the checks before opening a PR.
+
+Frontend component tests live next to their components as `src/**/*.test.tsx` and cover `StyleDropdown` (keyboard navigation, `aria-activedescendant`, locked styles routed to the age-gate handler), `ConfirmDialog`, `BottomNav`, `Toast` (including the five-second auto-dismiss under fake timers) and `ErrorBanner` (per-code retry labels). jsdom implements no layout, so `src/test/setup.ts` stubs `Element.prototype.scrollIntoView`.
 
 `build` deliberately leaves the test project out: the production image must not fail over a test file, and the Docker build context can contain stale ones (a server deploy that overlays an archive on the target directory without deleting removed files leaves them behind). `.dockerignore` therefore drops `frontend/src/**/*.test.*` outright, so the image never depends on the deploy procedure being careful. Deployment scripts themselves live outside the repository — they hold production server details — and only `deploy/nginx/` is versioned here.
 
 **Integration tests are hermetic by design.** Testcontainers spins up throwaway `postgres:16-alpine` and `redis:7-alpine` instances, runs `prisma migrate deploy`, and starts an in-process Ollama-compatible mock with deterministic canned replies per style. There are **no external network calls** — not to Telegram, OpenAI, Anthropic, Gemini, a real Ollama, or anything else. All secrets are deterministic test values. Tests run serially (`fileParallelism: false`) because the app config and service singletons are process-global, and Redis plus Postgres are cleaned between tests. Consequently, **real-provider output quality is never tested**.
 
-Coverage today: auth (HMAC failure, expired `auth_date`, malformed initData, cookie rotation, replay of a rotated-out token, refresh after logout, rate limits), translate (all styles, age gate, prompt injection, AI failure, grapheme boundaries including emoji/ZWJ/flag/skin-tone sequences, cache hits, no cross-user or cross-style cache reuse, per-endpoint rate limits, WYSIWYG persistence, duplicate save), history (keyset pagination with tied timestamps, cursor round-trip, filters, ownership, delete, `totalLimit`, server-side pruning at the cap and the favorites exemption) and `PATCH /user/me` immutability. Share coverage is thin — one happy path, one ownership case, and one asserting the server-rendered `shareText` never leaks the inline token.
+Coverage today: auth (HMAC failure, expired `auth_date`, malformed initData, cookie rotation, replay of a rotated-out token, refresh after logout, rate limits), translate (all styles, age gate, prompt injection, AI failure, grapheme boundaries including emoji/ZWJ/flag/skin-tone sequences, cache hits, no cross-user or cross-style cache reuse, per-endpoint rate limits, WYSIWYG persistence, duplicate save), history (keyset pagination with tied timestamps, cursor round-trip, filters, ownership, delete, `totalLimit`, server-side pruning at the cap and the favorites exemption), `PATCH /user/me` immutability, and the two health endpoints (readiness reporting both stores up, `/health` unmetered while `/health/ready` is metered). Share coverage is thin — one happy path, one ownership case, and one asserting the server-rendered `shareText` never leaks the inline token.
 
 **Known environment limitation.** If `node_modules` was installed on Windows, the Linux-native binaries for `oxlint` and `rolldown` are absent, so frontend lint and Vitest cannot run from a Linux container against that same tree. Pure-JS tools like `tsc` work fine. Integration tests additionally need Docker. When any of these cannot run, say so rather than reporting success.
 
@@ -351,7 +361,7 @@ A condensed do-not-break list, useful as a review checklist:
 3. Rate limiting fails closed. No Redis, no service.
 4. Style resolution never falls back silently. Unknown or disabled → throw → 400 with the available styles.
 5. The Style Engine stays a library with the `loadStyle(styleId): Promise<LoadedStyle>` contract, no filesystem paths in the signature, no Prisma/Redis/HTTP access.
-6. Sharing is Telegram inline mode only — no deep links carrying text, no browser share sheet, no implicitly created public URL.
+6. Sharing stays inside Telegram — `t.me/share/url` first, inline mode as fallback; no deep links carrying text, no browser share sheet, no implicitly created public URL, nothing but the message text in a share intent.
 7. Refresh tokens exist only as HMAC hashes in Postgres and only travel in an HttpOnly cookie guarded by double-submit CSRF.
 8. Preview and share payloads stay encrypted, key-versioned, unlogged, and keyed by HMAC so no plaintext appears in Redis keys.
 9. Length limits are counted in Unicode grapheme clusters (1000 for input, 3800 for a rendered share message) and are never silently truncated.
@@ -393,6 +403,19 @@ The audit of `604d880` on 2026-08-15 found 25 items. A remediation pass the same
 24. POFENI was self-contradicting: its `prompt.md` recommended «хата» and «бабло» while the appended `Avoid these words:` block (built from its own `forbidden` list) banned them. The prompt was rewritten around prison speech plus the post-release register, examples were corrected, and the registry version was bumped `1.0.1 → 1.1.0` — mandatory, because `styleVersion` is part of the preview-cache HMAC key, so a warm cache would otherwise keep serving old-prompt output.
 25. All `console.*` outside `src/config` replaced with structured pino logging.
 
+### Fixed on 2026-08-17 (audit follow-up)
+
+A second remediation pass, split into six groups. All of it lives in the working tree; none of it is committed.
+
+- **Dead client code removed.** `translateDirect` (no caller — see §7 for why the endpoint stays), `showMainButton`/`hideMainButton` and the equally unused `showBackButton`/`hideBackButton`. `MainButton` typings in `telegram.d.ts` were kept: they describe the host SDK, not a product promise. `MainButton` and deep links were dropped from ROADMAP Stage 7 with the reason recorded in place, so the decisions are not re-litigated.
+- **Sharing documentation matched to the code.** `t.me/share/url` via `openTelegramLink` is documented as the primary path and `switchInlineQuery` as the fallback, in `AGENTS.md` §2, `plans/docs/09-telegram-sharing.md`, and §11 above. Doc 09 also promised `410` for an expired share source, while `src/routes/share.ts` answers `404 SHARE_SOURCE_NOT_FOUND` for missing, expired and not-owned alike — deliberately, so a caller cannot probe which condition it hit. The document now says so.
+- **Docs 01 and 02 rewritten** to describe the real backend modules (auth cookie/CSRF model, preview/save split, `HISTORY_MAX_ENTRIES`) and the real frontend boot sequence and layering; `README.md` documents the history cap and the favorites exemption.
+- **Frontend component tests added** — see §14 — plus a `scrollIntoView` stub in `src/test/setup.ts` and an `engines.node` range on `frontend/package.json` derived from the installed vite and oxlint rather than copied from the root.
+- **CI added** (`.github/workflows/ci.yml`), documented in `CONTRIBUTING.md` and `README.md`. It lints only the frontend, because `oxlint` and `.oxlintrc.json` exist only there and the root has no `lint` script.
+- **Health and hygiene.** `GET /health/ready` with an integration test and §8 of `plans/docs/04-api.md`; an `api` healthcheck in `docker-compose.production.yml`; the `Dockerfile` pinned through one global `ARG NODE_IMAGE`; `.gitattributes` enforcing `eol=lf`; `test-rate-limit.ps1` deleted as superseded by `test/integration/rate-limit.integration.test.ts`.
+
+**Not yet verified on Windows** (the sandbox cannot run any of it): `npx prisma generate` — until it runs, a root `tsc` reports phantom errors on the `providerId` rename — then `prisma migrate deploy` for `20260817090000_provider_id_free_form` and `20260817120000_restore_trgm_indexes`, `npm run test:unit`, `npm run test:integration`, frontend `npm run lint` and `npm test` (the five new test files have never executed), `npm run build` in both trees, and a `docker build` to confirm the pinned base-image tag pulls. Frontend `tsc -b` and the Style Engine smoke test did pass in the sandbox.
+
 ### Closed after the audit
 
 - **`.env` in git history — history rewritten, rotation declined.** `main` and `origin/main` are clean; only local `refs/original/*` filter-branch backups still reach the old commits. The repository was private throughout and was deleted and recreated after the leak was noticed, so the owner decided the keys need no rotation. Settled — do not re-raise. See `plans/docs/10-repository-hygiene.md`.
@@ -405,7 +428,8 @@ The audit of `604d880` on 2026-08-15 found 25 items. A remediation pass the same
 - Share coverage is still thin (one happy path, one ownership case, one rendered-`shareText` case), and real-provider output quality is never tested by design.
 - `package-lock.json` was not regenerated after the dependency removals — run `npm install` once on the development machine; a Linux run would resolve different optional native packages.
 - POFENI's rewritten `prompt.md` still needs a native-speaker read for register and word choice. Nothing automated can judge it.
-- `slangua-deploy.tar.gz` is still in the working tree. It is untracked (so it was left alone) and `*.tar.gz` is now gitignored.
+- `slangua-deploy.tar.gz` is still in the working tree. It is untracked (so it was left alone) and `*.tar.gz` is now gitignored. The same goes for `deploy-build.log`, covered by `*.log`.
+- Nothing from either remediation pass is committed. The working tree carries both, so a `git stash` or a careless checkout would lose it.
 
 ---
 

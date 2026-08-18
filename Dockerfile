@@ -1,4 +1,10 @@
-FROM node:22-bookworm-slim AS backend-build
+# Pinned to an exact patch on purpose: a floating `node:22` tag changes the
+# runtime between two builds of the same commit. Bump it here — the ARG is used
+# by every Node stage below, so they can never drift apart. Must stay >= 22.12.0
+# to satisfy `engines.node` in frontend/package.json.
+ARG NODE_IMAGE=node:22.23.2-bookworm-slim
+
+FROM ${NODE_IMAGE} AS backend-build
 
 WORKDIR /app
 
@@ -18,7 +24,7 @@ COPY src ./src
 
 RUN npm run build
 
-FROM node:22-bookworm-slim AS frontend-build
+FROM ${NODE_IMAGE} AS frontend-build
 
 WORKDIR /app
 
@@ -32,7 +38,7 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 RUN npm run build
 
-FROM node:22-bookworm-slim AS api
+FROM ${NODE_IMAGE} AS api
 
 WORKDIR /app
 ENV NODE_ENV=production

@@ -1,0 +1,13 @@
+# Every text blob in this repository is stored with LF. Desktop editors and some
+# tooling on Windows write CRLF, and a file with mixed endings turns diffs and
+# `git blame` into noise, so the rule is enforced here instead of relying on a
+# manual sweep before each commit. Existing blobs are already LF, so enabling
+# this changes nothing in history.
+* text=auto eol=lf
+
+# Binary: never normalized, never diffed as text.
+*.png binary
+*.ico binary
+*.jpg binary
+*.webp binary
+*.tar.gz binary

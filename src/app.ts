@@ -8,7 +8,8 @@ import { historyRoutes } from './routes/history.js';
 import { userRoutes } from './routes/user.js';
 import { stylesRoutes } from './routes/styles.js';
 import { shareRoutes } from './routes/share.js';
-import { connectRedis, disconnectRedis } from './lib/redis.js';
+import { connectRedis, disconnectRedis, getRedisClient } from './lib/redis.js';
+import { prisma } from './lib/prisma.js';
 import { createRateLimiter } from './plugins/rate-limit.js';
 import { initializeStyleEngine } from './style-engine/loader.js';
 import cors from '@fastify/cors';
@@ -62,6 +63,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // A coarse IP limit covers every public route, including future routes and the
   // Telegram webhook. Authenticated endpoints retain their stricter per-user limits.
+  // Only the liveness probe is exempt: it touches nothing. `/health/ready` stays
+  // limited because it queries Postgres and pings Redis, and a probe interval of
+  // seconds is orders of magnitude below the limit anyway.
   app.addHook('onRequest', async (request, reply) => {
     if (request.url.split('?')[0] === '/health') return;
     await globalRateLimiter(request, reply);
@@ -161,9 +165,44 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  // Health check route (ops utility, not in API docs) - no rate limiting
+  // Liveness probe (ops utility, not in API docs) - no rate limiting.
+  // Answers as long as the process is running; says nothing about dependencies.
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
+  });
+
+  // Readiness probe: 200 only while both backing stores answer. Without Redis the
+  // rate limiter fails closed and every LLM-capable route returns 503, so an
+  // instance in that state must be taken out of rotation rather than kept serving.
+  app.get('/health/ready', async (request: FastifyRequest, reply: FastifyReply) => {
+    const check = async (name: 'database' | 'redis', probe: () => Promise<unknown>) => {
+      try {
+        await probe();
+        return true;
+      } catch (err) {
+        request.log.warn({ err, check: name }, 'Readiness check failed');
+        return false;
+      }
+    };
+
+    const [database, redis] = await Promise.all([
+      // A one-row indexed read rather than `$queryRaw('SELECT 1')`: it proves the
+      // connection round-trips without putting raw SQL outside a migration, and it
+      // stays cheap as the table grows (unlike a count). An empty table returns
+      // null, which is still a healthy answer.
+      check('database', () => prisma.user.findFirst({ select: { id: true } })),
+      check('redis', () => getRedisClient().ping()),
+    ]);
+
+    const ready = database && redis;
+    return reply.status(ready ? 200 : 503).send({
+      status: ready ? 'ok' : 'degraded',
+      checks: {
+        database: database ? 'up' : 'down',
+        redis: redis ? 'up' : 'down',
+      },
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // Register route plugins with /api/v1 prefix

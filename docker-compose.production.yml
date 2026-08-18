@@ -41,6 +41,17 @@ services:
       DATABASE_URL: postgresql://slangua:${POSTGRES_PASSWORD}@db:5432/slangua?schema=public
       REDIS_URL: redis://redis:6379
     command: sh -c "npx prisma migrate deploy && node dist/app.js"
+    # Readiness, not liveness: the container is only "healthy" while Postgres and
+    # Redis answer, because with Redis down the rate limiter fails closed and every
+    # translate request returns 503. `node -e` is used instead of curl/wget — the
+    # slim base image ships neither, and Node 22 has a global fetch(). start_period
+    # covers `prisma migrate deploy` before the server starts listening.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     depends_on:
       db:
         condition: service_healthy

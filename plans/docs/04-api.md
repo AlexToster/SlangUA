@@ -40,7 +40,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   }
   ```
   The response also sets `slangua_refresh` (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and a readable `slangua_csrf` cookie.
-- **Error codes**: `400` (missing/invalid `initData`), `401` (HMAC failure or expired `auth_date`), `429` (rate limit exceeded), `503` (rate limiter unavailable)
+- **Error codes**: `400` (missing/invalid `initData`), `401` (HMAC failure or expired `auth_date`), `429` (rate limit exceeded — own IP-keyed budget, `AUTH_RATE_LIMIT_*`, 20 req/min by default), `503` (rate limiter unavailable)
 
 ### `POST /auth/refresh`
 - **Request body**: `{}`; the opaque refresh token is sent only in the `slangua_refresh` HttpOnly cookie. The client must send the matching `X-CSRF-Token` header from `slangua_csrf`.
@@ -50,7 +50,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
   { "accessToken": "string (JWT)" }
   ```
   - Refresh token is rotated: old record invalidated, new `RefreshToken` created with new `hashedToken` and `expiresAt`; the replacement is set only in the HttpOnly cookie.
-- **Error codes**: `400` (missing refresh cookie), `401` (invalid/expired/revoked token), `403` (CSRF validation), `429` (rate-limited), `503` (rate limiter unavailable)
+- **Error codes**: `400` (missing refresh cookie), `401` (invalid/expired/revoked token), `403` (CSRF validation), `429` (rate-limited — own IP-keyed budget, `REFRESH_RATE_LIMIT_*`, 20 req/min by default), `503` (rate limiter unavailable)
 
 ### `POST /auth/logout`
 - **Auth**: JWT required
@@ -181,6 +181,8 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
 
 - **Note**: The server performs the translation and persists the result. The client must not send `translatedText` for persistence; the server generates and stores its own translation result. This endpoint is independent of the preview/save flow.
 
+- **Client usage**: none. The Mini App translates exclusively through preview/save, so it can show a result before deciding to keep it. `translateDirect` was removed from `frontend/src/services/api.ts` in 2026-08 because it was never called and duplicated the flow with different semantics. The endpoint itself stays: it is the one-shot contract for non-Mini-App callers, is covered by its own tests and its own rate limit, and removing it would be a breaking API change made for no reason. A future client that adds a caller must not reintroduce it as a silent alternative to preview/save on the same screen.
+
 ### `POST /share/inline`
 - **Auth**: JWT required.
 - **Request body**: exactly one source, `{ "previewId": "UUID" }` or `{ "translationId": integer }`; raw text is never accepted.
@@ -304,7 +306,7 @@ Clears the whole history of the authenticated user, favorites included. Scoped t
 - **Idempotent**: clearing an already empty history is a success with `deletedCount: 0`, never a `404`. The client asks for an empty history as an end state, not for the removal of a specific row — which is also why this endpoint returns a body instead of `204`.
 - **Error codes**: `401` missing/invalid JWT; `429` history rate limit; `503 RATE_LIMITER_UNAVAILABLE`
 
-## 5. User routes
+## 6. User routes
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -339,7 +341,7 @@ Clears the whole history of the authenticated user, favorites included. Scoped t
 - **Success response (200)**: Updated `User` profile (same shape as `GET /user/me`)
 - **Error codes**: `400 VALIDATION_ERROR` (unknown or wrongly typed fields) and `400 IMMUTABLE_FIELD` (attempt to modify a Telegram-sourced field); `401` missing/invalid JWT; `404 USER_NOT_FOUND`; `429` user rate limit; `503 RATE_LIMITER_UNAVAILABLE`
 
-## 6. Service Responsibilities
+## 7. Service Responsibilities
 
 This section describes the Service-layer responsibilities for each module, consistent with the Backend Layering established in [Backend Architecture](01-backend.md#backend-layering) (Fastify Route → Service → Prisma Client). Route-layer responsibilities (validation, response formatting) are covered there and not repeated here.
 
@@ -408,11 +410,31 @@ This section describes the Service-layer responsibilities for each module, consi
   - `GET /user/me` → `User` profile (telegramId, username, firstName, lastName, languageCode, createdAt, preferences)
   - `PATCH /user/me` → Updated `User` profile (same shape)
 
-## 7. Cross-references
+## 8. Ops endpoints
+
+These two live outside `/api/v1` and outside the versioned contract: they exist for orchestrators and deploy scripts, not for the Mini App. No auth, no request body, no cursor.
+
+| Method | Path | Metered | Purpose |
+|--------|------|---------|---------|
+| `GET` | `/health` | No | Liveness — the process is up |
+| `GET` | `/health/ready` | Yes (global per-IP limit) | Readiness — Postgres and Redis both answer |
+
+### `GET /health`
+- **Success (200)**: `{ "status": "ok", "timestamp": "ISO-8601" }`
+- Answers from the process alone and is the one route the global rate limiter skips, so a probe can never be throttled into reporting a false outage.
+
+### `GET /health/ready`
+- **Success (200)**: `{ "status": "ok", "checks": { "database": "up", "redis": "up" }, "timestamp": "ISO-8601" }`
+- **Not ready (503)**: same shape with `"status": "degraded"` and `"down"` on whichever dependency failed. Individual probe errors are logged at `warn` with the check name; the response body never carries error text, so it cannot leak a connection string.
+- Checks are a one-row indexed read on `User` through Prisma and `PING` against Redis, run in parallel. Not `$queryRaw('SELECT 1')`: raw SQL belongs in migrations, and a one-row read proves the same round-trip while staying cheap as the table grows. Redis is treated as fatal rather than degraded on purpose: with it unreachable the rate limiter fails closed and every metered route returns `503 RATE_LIMITER_UNAVAILABLE`, so the instance belongs out of rotation.
+- Unlike liveness it stays behind the coarse per-IP limiter, because it touches both stores. A probe interval measured in seconds is orders of magnitude below the budget.
+- Consumed by the `api` service healthcheck in `docker-compose.production.yml` via `node -e "fetch(...)"` — the slim base image ships neither curl nor wget.
+
+## 9. Cross-references
 
 See [Backend Architecture](01-backend.md) for module responsibilities, [Database Design](03-database.md) for entity and enum definitions, and [Security](06-security.md) for authentication and rate-limiting rules.
 
-## 8. Out of scope / deferred
+## 10. Out of scope / deferred
 
 Full OpenAPI/Swagger spec generation deferred to Stage 5 implementation (generated from TypeBox/Zod schemas), not hand-written here.
 

@@ -150,11 +150,6 @@ class ApiService {
     return response.data;
   }
 
-  async translateDirect(text: string, style: SlangStyle): Promise<Translation> {
-    const response = await this.client.post<Translation>('/translate', { text, style });
-    return response.data;
-  }
-
   // History
   async getHistory(params?: { cursor?: string; limit?: number; favorite?: boolean; search?: string }): Promise<HistoryResponse> {
     // Drop undefined entries so an inactive filter never reaches the query string.

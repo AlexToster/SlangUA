@@ -30,6 +30,13 @@ export default defineConfig({
       RATE_LIMIT_WINDOW_MS: '60000',
       RATE_LIMIT_MAX_REQUESTS: '10',
       GLOBAL_RATE_LIMIT_MAX_REQUESTS: '100',
+      // The token-minting endpoints have their own budget in production; keep it
+      // small here so a test can exhaust it. The suites read these values rather
+      // than hardcoding a count.
+      AUTH_RATE_LIMIT_WINDOW_MS: '60000',
+      AUTH_RATE_LIMIT_MAX_REQUESTS: '10',
+      REFRESH_RATE_LIMIT_WINDOW_MS: '60000',
+      REFRESH_RATE_LIMIT_MAX_REQUESTS: '10',
       // Telegram webhook limiter: small enough for a test to exhaust it quickly.
       WEBHOOK_RATE_LIMIT_WINDOW_MS: '60000',
       WEBHOOK_RATE_LIMIT_MAX_REQUESTS: '5',

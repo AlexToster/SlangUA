@@ -88,8 +88,12 @@ async function buildSnapshot(): Promise<StyleEngineSnapshot> {
     const blocks = [
       baseRules,
       prompt,
-      `Use these words where natural: ${lexicon.preferred.join(', ')}`,
-      `Avoid these words: ${lexicon.forbidden.join(', ')}`,
+      // An empty list must never reach the model: "Avoid these words:" with
+      // nothing after it is noise at best, and an invitation to invent the list
+      // at worst. Three styles shipped with an empty `forbidden` and carried
+      // that dangling line into every prompt.
+      ...(lexicon.preferred.length > 0 ? [`Use these words where natural: ${lexicon.preferred.join(', ')}`] : []),
+      ...(lexicon.forbidden.length > 0 ? [`Avoid these words: ${lexicon.forbidden.join(', ')}`] : []),
       ...examples.map((example) => `Example: "${example.before}" → "${example.after}"`),
     ];
     styles[styleId] = { systemPrompt: blocks.join('\n\n') };

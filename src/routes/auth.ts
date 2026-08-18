@@ -54,15 +54,16 @@ function clearSessionCookies(reply: any): void {
 }
 
 export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
-  // Create rate limiter for auth endpoint - use config defaults (can be overridden in tests)
+  // Token-minting endpoints, keyed by IP (no authenticated user exists yet), so
+  // they carry their own tighter budget rather than the generic per-user limit.
   const authRateLimiter = createRateLimiter({
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
+    windowMs: config.AUTH_RATE_LIMIT_WINDOW_MS,
+    maxRequests: config.AUTH_RATE_LIMIT_MAX_REQUESTS,
     keyPrefix: 'ratelimit:auth'
   });
   const refreshRateLimiter = createRateLimiter({
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
+    windowMs: config.REFRESH_RATE_LIMIT_WINDOW_MS,
+    maxRequests: config.REFRESH_RATE_LIMIT_MAX_REQUESTS,
     keyPrefix: 'ratelimit:refresh'
   });
 
@@ -98,7 +99,6 @@ export const authRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
         }),
       },
     },
-    // Apply rate limiting: stricter limit for auth endpoint
     preHandler: authRateLimiter,
   }, async (request, reply) => {
     const { initData } = request.body as { initData: string };

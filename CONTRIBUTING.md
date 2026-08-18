@@ -21,17 +21,19 @@
 
 ```bash
 npm run test:typecheck      # перевірка типів
-npm test                    # typecheck + smoke + integration (потрібен Docker)
+npm test                    # typecheck + smoke + unit + integration (потрібен Docker)
 ```
 
 **Frontend (тека `frontend/`):**
 
 ```bash
 npm run lint
-npm run test -- --run
+npm test                    # vitest run (одноразово); npm run test:watch — у режимі спостереження
 npm run typecheck           # tsc -b, включно з тестовим проєктом
 npm run build               # без тестового проєкту — як у Docker
 ```
+
+Ті самі команди виконує CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) на кожен push і PR у `main`: окрема job для backend (з `npx prisma generate` перед перевірками і Docker для integration-тестів) і окрема для frontend. Локальний прогін перед PR все одно потрібен — CI ловить те, що ви забули, а не замінює перевірку.
 
 Обсяг перевірок — пропорційно до ризику зміни (див. [AGENTS.md](AGENTS.md)). Невдалий тест спочатку ізолюйте: не маскуйте його зміною очікування чи вимкненням без доказів, що контракт змінився навмисно.
 
@@ -47,3 +49,8 @@ npm run build               # без тестового проєкту — як 
 
 - Ніколи не комітьте `.env` чи реальні секрети. Використовуйте `.env.example` як шаблон.
 - Нові змінні середовища додавайте у Zod-схему [`src/config/index.ts`](src/config/index.ts) і згадуйте в розділі «Змінні середовища» README.
+
+## Кінці рядків
+
+Усі текстові файли в репозиторії зберігаються з `LF`. Це закріплено в [`.gitattributes`](.gitattributes) (`* text=auto eol=lf`), тому Git нормалізує кінці рядків при коміті навіть якщо редактор на Windows записав `CRLF`. Не додавайте `core.autocrlf=true` локально й не комітьте файли з `CRLF` в обхід нормалізації — перевірити стан можна через `git ls-files --eol`.
+

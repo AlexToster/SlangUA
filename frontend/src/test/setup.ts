@@ -43,6 +43,10 @@ globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
+// jsdom implements no layout, so scrollIntoView() is simply absent. Components
+// that keep a highlighted option in view (StyleDropdown) would throw on it.
+Element.prototype.scrollIntoView = vi.fn();
+
 // Mock Telegram WebApp
 Object.defineProperty(window, 'Telegram', {
   value: {

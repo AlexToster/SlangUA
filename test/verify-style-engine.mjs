@@ -13,6 +13,22 @@ const styles = ['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI', 'KANCLER', 'GALICIAN'];
 for (const style of styles) {
   const loaded = await loadStyle(style);
   assert.ok(loaded.systemPrompt.trim().length > 0, `${style} prompt must not be empty`);
+
+  /**
+   * A style with an empty lexicon list is not a broken prompt, which is why it
+   * went unnoticed: gen_z, it_slang and kancler shipped with `forbidden: []`,
+   * and the prompt simply carried a dangling "Avoid these words:" line with no
+   * words after it. Both halves are checked - the data and the rendered prompt.
+   */
+  const lexiconPath = join(styleEngineDir, 'styles', style.toLowerCase(), 'lexicon.json');
+  const lexicon = JSON.parse(await readFile(lexiconPath, 'utf8'));
+
+  for (const list of ['preferred', 'forbidden']) {
+    assert.ok(Array.isArray(lexicon[list]) && lexicon[list].length > 0, `${style} lexicon.${list} must not be empty`);
+    assert.ok(loaded.systemPrompt.includes(lexicon[list][0]), `${style} prompt must carry its ${list} lexicon`);
+  }
+
+  assert.doesNotMatch(loaded.systemPrompt, /(Use these words where natural|Avoid these words):\s*$/m, `${style} prompt must not contain an empty lexicon block`);
 }
 
 const upper = await loadStyle('GEN_Z');

@@ -51,11 +51,14 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
     - Validates `WebAppData` using HMAC-SHA256 (Telegram Secret).
     - After successful HMAC verification, `auth_date` must be validated against a configurable TTL (configured via an environment variable) to mitigate replay attacks.
     - Requests with an expired `auth_date` must be rejected.
-    - Manages JWT Access and Hashed Refresh tokens (stored in PostgreSQL with expiration).
+    - Returns the JWT access token in the response body and keeps it in frontend memory only. The refresh token never appears in JSON: it is set as the HttpOnly `slangua_refresh` cookie, stored HMAC-hashed in PostgreSQL with an expiry, and rotated on every refresh.
+    - Pairs that cookie with a readable `slangua_csrf` cookie; `POST /auth/refresh` requires the matching `X-CSRF-Token` header (double-submit), so a cross-site request cannot mint tokens.
+    - Access tokens carry a `jti` naming the `RefreshToken` record they came from, which makes per-device logout possible without touching other sessions.
     - Extensible `AuthStrategy` for future providers.
 - **`Translation Module`**:
     - Validates input text (length, content) and performs basic prompt injection protection.
     - Manages "Slang Styles" (e.g., "Gen-Z", "Street", "IT-Slang").
+    - Serves the Mini App through the preview/save split: `POST /translate/preview` calls the AI and returns an unsaved result held in encrypted Redis, `POST /translate/save` persists it by `previewId` alone. `POST /translate` remains as the one-shot translate-and-persist contract for non-Mini-App callers.
     - Orchestrates AI calls and database logging.
 - **`AI Service & Adapters`**:
     - **`IAIProvider`**: Interface defining `translate(request)` plus the instance's `id` — a lowercase string matching `PROVIDER_ID_PATTERN`, persisted as `Translation.providerId`.
@@ -67,25 +70,28 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
 - **`History Module`**:
     - Provides paginated access to user-specific translations.
     - Handles "Favorite" flagging and search.
+    - Caps a user's history at `HISTORY_MAX_ENTRIES` (100, a server constant — not configurable per deployment) by pruning the oldest non-favorite rows after every insert. Favorites are never pruned, so a user who stars everything can exceed the cap. `GET /history` echoes the cap as `totalLimit` so the client never hardcodes it.
 - **`User Module`**:
     - Basic profile management (settings, preferences).
 
 ## Communication Flow
 
 1. **Handshake**: Frontend retrieves `initData` from Telegram, sends to `/api/v1/auth/telegram`.
-2. **Session**: Backend verifies data, checks/creates user in PostgreSQL, stores hashed Refresh Token, returns JWTs.
-3. **Translation Request**:
+2. **Session**: Backend verifies the HMAC and `auth_date`, checks/creates the user in PostgreSQL, stores the hashed refresh token, and answers with the access token in the body plus the `slangua_refresh` (HttpOnly) and `slangua_csrf` cookies.
+3. **Preview Request**:
     - User selects "Gen-Z" style and types "Привіт".
-    - Frontend sends POST `/api/v1/translate` with payload and JWT.
+    - Frontend sends POST `/api/v1/translate/preview` with payload and JWT.
 4. **AI Processing**:
     - Backend validates input and sanities against prompt injection.
     - `AIService` selects the primary provider (e.g., the `openai` instance of `OpenAICompatibleAdapter`).
     - Generates system prompt based on selected style.
     - Calls OpenAI API.
-5. **Persistence & Response**:
-    - Backend saves both original and slang version to PostgreSQL.
-    - Returns JSON response to Frontend.
+5. **Preview & Save**:
+    - Backend encrypts the result into Redis under a 10-minute TTL and returns it with an opaque `previewId`. Nothing is persisted yet.
+    - If the user keeps the result, the frontend sends POST `/api/v1/translate/save` with that `previewId` and no text; the backend writes the History record from the payload it stored itself.
 6. **Rate Limiting**: Redis tracks request frequency per user ID to prevent abuse.
+
+`POST /api/v1/translate` collapses steps 3–5 into one call that translates and persists at once. It stays available for callers outside the Mini App; see [API](04-api.md).
 
 ```mermaid
 sequenceDiagram
@@ -93,21 +99,27 @@ sequenceDiagram
     participant App as React WebApp
     participant API as Fastify Backend
     participant AI as AI Provider (OpenAI)
+    participant Cache as Redis
     participant DB as PostgreSQL
 
     User->>App: Opens App
     App->>API: POST /api/v1/auth/telegram (initData)
-    API->>API: Verify HMAC
+    API->>API: Verify HMAC + auth_date
     API->>DB: Upsert User & Store Hashed Refresh Token
-    API-->>App: JWT Access + Refresh
+    API-->>App: Access token (body) + refresh & CSRF cookies
     User->>App: Enters text + style
-    App->>API: POST /api/v1/translate (text, style) + JWT
+    App->>API: POST /api/v1/translate/preview (text, style) + JWT
     API->>API: Validate & Sanitize Input
     API->>AI: Request Translation (Fallback Strategy)
     AI-->>API: Slang Result
-    API->>DB: Save History Record
-    API-->>App: Translation Result
+    API->>Cache: Store encrypted preview (10 min TTL)
+    API-->>App: Translation Result + previewId
     App-->>User: Show Slang
+    User->>App: Taps Save
+    App->>API: POST /api/v1/translate/save (previewId) + JWT
+    API->>Cache: Resolve & delete preview
+    API->>DB: Save History Record
+    API-->>App: Saved Translation
 ```
 
 ## AI Provider Configuration

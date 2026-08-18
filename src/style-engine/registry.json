@@ -3,7 +3,7 @@
     "id": "gen_z",
     "title": "Молодіжний тікток-сленг",
     "enabled": true,
-    "version": "1.0.1",
+    "version": "1.0.2",
     "ageRestricted": false
   },
   "street": {
@@ -17,7 +17,7 @@
     "id": "it_slang",
     "title": "АйТІшний спіч",
     "enabled": true,
-    "version": "1.0.1",
+    "version": "1.0.2",
     "ageRestricted": false
   },
   "pofeni": {
@@ -31,7 +31,7 @@
     "id": "kancler",
     "title": "Бюрократична радянщина",
     "enabled": true,
-    "version": "1.0.1",
+    "version": "1.0.2",
     "ageRestricted": false
   },
   "galician": {

@@ -73,7 +73,7 @@ SlangUA не є:
 
 * переклад українського тексту у різні стилі;
 * Telegram Mini App (TWA);
-* історія перекладів.
+* історія перекладів — до 100 записів на користувача (константа `HISTORY_MAX_ENTRIES` на сервері, не змінюється через env). Після кожного збереження найстаріші записи понад ліміт видаляються, але **улюблені не обрізаються ніколи**, тому користувач, який усе позначає зірочкою, може перевищити ліміт. `GET /history` повертає цей ліміт як `totalLimit`, щоб клієнт не зашивав число в себе.
 
 ## Архітектурні особливості
 
@@ -312,6 +312,8 @@ Production-збірка frontend: `npm run build` (у теці `frontend/`) — 
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота для перевірки `initData`. |
 | `PREVIEW_ROOT_KEY` | Base64-кодований 32-байтовий ключ для шифрування preview-кешу. |
 
+> Значення-заглушки з [`.env.example`](.env.example) (усі з позначкою `example-only`, а також демонстраційний `PREVIEW_ROOT_KEY`) відхиляються під час запуску при `NODE_ENV=production`. Копію прикладу неможливо задеплоїти як є.
+
 ### Ключові опційні (зі значеннями за замовчуванням)
 
 | Змінна | За замовчуванням | Опис |
@@ -336,6 +338,8 @@ Production-збірка frontend: `npm run build` (у теці `frontend/`) — 
 | `TELEGRAM_INLINE_ENABLED` | `false` | Увімкнення Telegram inline-share. |
 | `TELEGRAM_WEBHOOK_SECRET` | — | Обовʼязковий, якщо `TELEGRAM_INLINE_ENABLED=true`: очікуваний `x-telegram-bot-api-secret-token`. |
 | `WEBHOOK_RATE_LIMIT_WINDOW_MS` / `WEBHOOK_RATE_LIMIT_MAX_REQUESTS` | `60000` / `30` | Ліміт запитів на `POST /telegram/webhook`. |
+| `AUTH_RATE_LIMIT_WINDOW_MS` / `AUTH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Ліміт на `POST /auth/telegram` за IP — окремий від загального `RATE_LIMIT_*`, бо ендпоінт видає токени. |
+| `REFRESH_RATE_LIMIT_WINDOW_MS` / `REFRESH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Те саме для `POST /auth/refresh`. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Дозволені origin-и для CORS. |
 | `TRUST_PROXY` | `false` | Довіряти заголовкам проксі для визначення IP. |
 | `LOG_LEVEL` | `info` | Рівень логування. |
@@ -375,12 +379,16 @@ npm run test:typecheck
 # Smoke-тест: production build + перевірка Style Engine
 npm run test:smoke
 
-# Модульні тести AI-шару: пул ключів, ротація, fallback (Docker не потрібен)
+# Модульні тести без Docker: AI-шар (пул ключів, ротація, fallback) і Zod-схема конфігурації
 npm run test:unit
 
 # Інтеграційні тести (потрібен Docker)
 npm run test:integration
 ```
+
+Frontend має власний набір (тека `frontend/`): `npm test` — одноразовий прогін vitest + Testing Library, `npm run test:watch` — режим спостереження, `npm run lint`, `npm run typecheck`, `npm run build`.
+
+Ті самі команди виконує GitHub Actions на кожен push і PR у `main` — [`.github/workflows/ci.yml`](.github/workflows/ci.yml), окремі jobs для backend (з Docker для інтеграційних тестів) і frontend.
 
 ## Особливості інтеграційних тестів
 
@@ -401,6 +409,7 @@ test/
 │   ├── history.integration.test.ts     # Історія (пагінація, фільтри, favorite, власність записів)
 │   ├── share.integration.test.ts       # Telegram inline share (токени, 18+ заборона)
 │   ├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429, webhook secret)
+│   ├── health.integration.test.ts      # /health (liveness, без метрики) і /health/ready (DB + Redis)
 │   ├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
 │   ├── setup-test-context.ts           # Per-file setup: контекст, очищення БД і Redis
 │   └── test-context.ts                 # Спільний контекст (app, Prisma, Redis)
