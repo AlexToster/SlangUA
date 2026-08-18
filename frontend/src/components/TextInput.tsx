@@ -72,7 +72,10 @@ export function TextInput({ value, onChange, onPaste, onRandomPhrase, isRandomPh
              aria-live="polite"
              aria-atomic="true">
           {isOverLimit && <AlertCircle size={14} />}
-          <span>{graphemeCount} / {maxGraphemes.toLocaleString()}</span>
+          {/* Locale is pinned to uk-UA: bare toLocaleString() follows the host
+              locale, so the same build showed "1 000" on a Ukrainian machine and
+              "1,000" under en-US (which is also what broke this in CI). */}
+          <span>{graphemeCount} / {maxGraphemes.toLocaleString('uk-UA')}</span>
         </div>
       </div>
       <div className="text-input-footer">
