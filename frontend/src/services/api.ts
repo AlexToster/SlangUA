@@ -12,14 +12,30 @@ import type {
   ApiError,
   SlangStyle,
   FavoriteUpdate,
+  AdminSession,
+  AdminOverview,
+  AdminProviderList,
+  AdminMetrics,
+  AdminErrorFeed,
 } from '../types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+
+/** Requests that carry the admin step-up token, and only those. */
+function isAdminPath(url: string | undefined): boolean {
+  return (url ?? '').startsWith('/admin');
+}
 
 class ApiService {
   private client: AxiosInstance;
   private accessToken: string | null = null;
   private refreshPromise: Promise<string> | null = null;
+  /**
+   * Admin step-up token. Memory only - never localStorage, never a cookie: a
+   * reload should cost the operator a password, and nothing on disk should be
+   * enough to reopen the panel.
+   */
+  private adminToken: string | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -34,6 +50,11 @@ class ApiService {
       if (this.accessToken && config.headers) {
         config.headers.Authorization = `Bearer ${this.accessToken}`;
       }
+      // Scoped deliberately: the admin token must never ride along on a
+      // translate or history call.
+      if (this.adminToken && config.headers && isAdminPath(config.url)) {
+        config.headers['X-Admin-Token'] = this.adminToken;
+      }
       return config;
     });
 
@@ -41,8 +62,18 @@ class ApiService {
       (response) => response,
       async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const status = error.response?.status;
+        const admin = isAdminPath(originalRequest?.url);
 
-        if (error.response?.status === 401 && !originalRequest._retry && this.accessToken) {
+        // On /admin/* a 401 means the *admin session* is gone, not the JWT -
+        // refreshing would not help and the caller must re-ask for the password.
+        // The interesting case is 404: the admin gate answers 404 to an expired
+        // access token too (that is what keeps the panel invisible), so one
+        // refresh-and-retry is what distinguishes a stale token from "you are
+        // not an admin".
+        const retriable = admin ? status === 404 : status === 401;
+
+        if (retriable && !originalRequest._retry && this.accessToken) {
           originalRequest._retry = true;
 
           try {
@@ -69,6 +100,9 @@ class ApiService {
 
   clearTokens() {
     this.accessToken = null;
+    // The admin session belongs to the Telegram identity that opened it; losing
+    // that identity must close the panel too.
+    this.adminToken = null;
   }
 
   getAccessToken(): string | null {
@@ -173,6 +207,67 @@ class ApiService {
   /** Removes every saved translation of the current user. Idempotent. */
   async clearHistory(): Promise<{ deletedCount: number }> {
     const response = await this.client.delete<{ deletedCount: number }>('/history');
+    return response.data;
+  }
+
+  // Admin
+  /** True while a step-up token is held in memory. Says nothing about the server. */
+  hasAdminSession(): boolean {
+    return this.adminToken !== null;
+  }
+
+  /** Exchanges the admin password for a step-up token kept in memory. */
+  async openAdminSession(password: string): Promise<AdminSession> {
+    const response = await this.client.post<AdminSession>('/admin/session', { password });
+    this.adminToken = response.data.token;
+    return response.data;
+  }
+
+  /**
+   * Closes the panel. The local token is dropped even if the server call fails,
+   * so "lock" always locks from the operator's point of view.
+   */
+  async closeAdminSession(): Promise<void> {
+    try {
+      await this.client.delete('/admin/session');
+    } finally {
+      this.adminToken = null;
+    }
+  }
+
+  async getAdminOverview(): Promise<AdminOverview> {
+    const response = await this.client.get<AdminOverview>('/admin/overview');
+    return response.data;
+  }
+
+  /**
+   * Switches an AI provider off or back on. Returns the whole chain, because one
+   * switch changes what the rest of it means.
+   */
+  async setAdminProvider(
+    providerId: string,
+    disabled: boolean,
+    reason?: string | null
+  ): Promise<AdminProviderList> {
+    const response = await this.client.patch<AdminProviderList>(
+      `/admin/providers/${encodeURIComponent(providerId)}`,
+      { disabled, reason: reason ?? null }
+    );
+    return response.data;
+  }
+
+  /** Request volume per minute and per UTC day, plus today's heaviest users. */
+  async getAdminMetrics(): Promise<AdminMetrics> {
+    const response = await this.client.get<AdminMetrics>('/admin/metrics');
+    return response.data;
+  }
+
+  /**
+   * The last few 5xx responses. No `limit` is sent: the server's own cap is the
+   * right answer, and it reports it in `max`.
+   */
+  async getAdminErrors(): Promise<AdminErrorFeed> {
+    const response = await this.client.get<AdminErrorFeed>('/admin/errors');
     return response.data;
   }
 }

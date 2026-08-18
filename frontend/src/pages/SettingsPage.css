@@ -100,6 +100,17 @@
   color: var(--tg-text-color, var(--color-text));
 }
 
+/* Second line under a label, for rows whose name does not say enough on its own.
+   Block-level because the label is an inline span and both would otherwise share
+   one line. */
+.settings-item-description {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
 .settings-item-control {
   flex-shrink: 0;
   /* Wide enough for the longest style name, narrow enough to leave the label

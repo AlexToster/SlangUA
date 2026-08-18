@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { triggerHapticFeedback, openExternalLink } from '../services/telegram';
 import { getLocalSettings, setLocalSettings, applyTheme, LOCAL_SETTINGS_STORAGE_KEY } from '../utils/localSettings';
 import { Toast } from '../components/Toast';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PasswordPrompt } from '../components/PasswordPrompt';
 import { SelectField, type SelectFieldOption } from '../components/SelectField';
 import type { UserProfile, SlangStyle, Style } from '../types/api';
 import { getStyleLabel } from '../utils/styleLabels';
@@ -27,10 +29,13 @@ const AUTO_STYLE_VALUE = '';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
   const [localSettings, setLocalSettingsState] = useState(() => getLocalSettings());
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
+  const [showAdminPrompt, setShowAdminPrompt] = useState(false);
+  const [adminPromptError, setAdminPromptError] = useState<string | null>(null);
 
   // Fetch profile
   const { data: profile, isLoading, refetch } = useQuery({
@@ -78,6 +83,43 @@ export function SettingsPage() {
     onError: (error: any) => {
       setShowClearHistoryConfirm(false);
       handleApiError(error);
+    },
+  });
+
+  // Admin step-up. The password is never stored anywhere: it goes straight from
+  // the dialog into this call, and only the returned token is kept (in memory,
+  // inside apiService).
+  const adminLoginMutation = useMutation({
+    mutationFn: (password: string) => apiService.openAdminSession(password),
+    onSuccess: () => {
+      setShowAdminPrompt(false);
+      setAdminPromptError(null);
+      triggerHapticFeedback('notification');
+      navigate('/admin');
+    },
+    onError: (error: any) => {
+      const status = error?.response?.status;
+      if (status === 401) {
+        // Deliberately vague: the server answers the same 401 for a wrong
+        // password and for a lockout, and guessing which one it was is exactly
+        // the information an attacker wants.
+        setAdminPromptError('Невірний пароль або тимчасове блокування. Спробуйте пізніше.');
+        return;
+      }
+      if (status === 429) {
+        setAdminPromptError('Забагато спроб. Зачекайте кілька хвилин.');
+        return;
+      }
+      if (status === 404) {
+        // The panel is invisible to non-admins, so this is what a revoked
+        // allowlist entry looks like from the client side.
+        setShowAdminPrompt(false);
+        setAdminPromptError(null);
+        setToast({ message: 'Адмінпанель недоступна', type: 'error' });
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+        return;
+      }
+      setAdminPromptError('Не вдалося увійти. Спробуйте ще раз.');
     },
   });
 
@@ -189,6 +231,22 @@ export function SettingsPage() {
 
   const handleAbout = useCallback(() => {
     setToast({ message: `SlangUA v${__APP_VERSION__}\nПереклад української сленговою мовою`, type: 'info' });
+  }, []);
+
+  const handleAdminOpen = useCallback(() => {
+    // A session already held in memory means the password was entered earlier in
+    // this app run; asking again would be theatre.
+    if (apiService.hasAdminSession()) {
+      navigate('/admin');
+      return;
+    }
+    setAdminPromptError(null);
+    setShowAdminPrompt(true);
+  }, [navigate]);
+
+  const handleAdminCancel = useCallback(() => {
+    setShowAdminPrompt(false);
+    setAdminPromptError(null);
   }, []);
 
   // Age-restricted styles stay out of the "default style" list until the age is
@@ -371,8 +429,43 @@ export function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {/* Rendered only for the deployment's own operator. The flag comes from
+            the server (`/user/me`), and the panel itself answers 404 to anyone
+            else - so this is convenience, not the access control. */}
+        {profile?.isAdmin && (
+          <section className="settings-section">
+            <h2 className="settings-section-title">Адміністрування</h2>
+
+            <div className="settings-item">
+              <div className="settings-item-info">
+                <span className="settings-item-label">Адмінка</span>
+                <span className="settings-item-description">Потрібен пароль</span>
+              </div>
+              <div className="settings-item-control">
+                <button
+                  className="settings-btn settings-btn-secondary"
+                  onClick={handleAdminOpen}
+                  aria-label="Відкрити адмінпанель"
+                >
+                  Відкрити
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
+      {showAdminPrompt && (
+        <PasswordPrompt
+          title="Вхід в адмінку"
+          text="Введіть пароль адміністратора. Сесія закриється сама після періоду неактивності."
+          busy={adminLoginMutation.isPending}
+          error={adminPromptError}
+          onSubmit={(password) => adminLoginMutation.mutate(password)}
+          onCancel={handleAdminCancel}
+        />
+      )}
       {showClearHistoryConfirm && (
         <ConfirmDialog
           title="Очистити всю історію?"

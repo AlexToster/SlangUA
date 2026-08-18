@@ -1,0 +1,356 @@
+/* AdminPage styles.
+   Same skeleton as SettingsPage (sticky header, page-level padding, no own
+   scroller - the app scrolls in .app-layout-content), so the panel does not read
+   as a different application. Buttons and the spinner come from global.css. */
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  max-width: 100%;
+  min-width: 0;
+  background: var(--tg-bg-color, var(--color-bg));
+  color: var(--tg-text-color, var(--color-text));
+}
+
+.admin-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  background: var(--tg-bg-color, var(--color-bg));
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.admin-header h1 {
+  margin: 0;
+}
+
+.admin-main {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-md);
+}
+
+.admin-loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-xl) 0;
+}
+
+.admin-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--tg-border-color, var(--color-border));
+  border-top-color: var(--tg-link-color, var(--color-primary));
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.admin-section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.admin-section-title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: var(--line-height-tight);
+  color: var(--tg-text-color, var(--color-text));
+}
+
+.admin-provider-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A provider row is now a stack: name + badge, an optional switch-off note, and
+   the action. It was a single flex line while the panel was read-only. */
+.admin-provider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+}
+
+.admin-provider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.admin-provider-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: var(--tg-hint-color, var(--color-text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.admin-provider-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* A row-level action is secondary to the page actions at the bottom, so it reads
+   one step quieter - but never below a 36px tap target. */
+.admin-provider-actions .btn {
+  min-height: 36px;
+  padding: 0 var(--spacing-md);
+  font-size: var(--font-size-sm);
+}
+
+.admin-alert {
+  margin: 0 0 var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-error-alpha-20);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.admin-provider:last-child {
+  border-bottom: none;
+}
+
+.admin-provider-name {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  /* Provider ids are latin identifiers; a monospace face keeps the column even. */
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.admin-badge {
+  flex-shrink: 0;
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-badge-up {
+  /* Mixed inline: global.css defines --color-success-alpha-10 but no -20 step. */
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
+}
+
+.admin-badge-warn {
+  background: var(--color-error-alpha-20);
+  color: var(--color-error);
+}
+
+.admin-badge-off {
+  background: var(--color-surface);
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+.admin-note {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+/* Two columns: term on the left, value on the right, one row per fact. */
+.admin-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-xs) var(--spacing-md);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.admin-facts dt {
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+.admin-facts dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.admin-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: space-between;
+  margin-top: var(--spacing-lg);
+}
+
+.admin-subtitle {
+  margin: var(--spacing-md) 0 var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+/* A retry link inside a section-level notice: the page actions at the bottom
+   stay the only real buttons, so this reads as text you can tap. */
+.admin-inline-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.admin-metrics-lead {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The minute series as bars. No chart library on purpose: one number per minute
+   over one hour is a row of divs, and a dependency for it would be the largest
+   thing on this page. */
+.admin-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 64px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.admin-bar {
+  flex: 1 1 0;
+  /* An idle minute still draws a baseline, so the axis reads as time passing
+     rather than as missing data. */
+  min-height: 2px;
+  border-radius: 1px;
+  background: var(--tg-link-color, var(--color-primary));
+}
+
+.admin-bar-error {
+  background: var(--color-error);
+}
+
+.admin-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-size: var(--font-size-sm);
+  color: var(--tg-hint-color, var(--color-text-secondary));
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table {
+  width: 100%;
+  margin-top: var(--spacing-md);
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table caption {
+  margin-bottom: var(--spacing-xs);
+  text-align: left;
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+.admin-table th,
+.admin-table td {
+  padding: var(--spacing-xs) 0;
+  text-align: right;
+  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+}
+
+.admin-table thead th {
+  font-weight: 600;
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+.admin-table th:first-child,
+.admin-table tbody th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.admin-top-users {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-top-users li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+}
+
+.admin-top-users li:last-child {
+  border-bottom: none;
+}
+
+.admin-top-user-id {
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+.admin-error-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-error {
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+}
+
+.admin-error:last-child {
+  border-bottom: none;
+}
+
+.admin-error-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+.admin-error-code {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--color-error);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-error-route {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--tg-text-color, var(--color-text));
+  overflow-wrap: anywhere;
+}
+
+.admin-error-kind,
+.admin-error-message,
+.admin-error-meta {
+  margin: 2px 0 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.admin-error-kind {
+  font-weight: 600;
+}
+
+.admin-error-message,
+.admin-error-meta {
+  color: var(--tg-hint-color, var(--color-text-secondary));
+}

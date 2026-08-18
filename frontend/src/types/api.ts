@@ -23,6 +23,12 @@ export interface UserProfile {
   defaultSlangStyle: SlangStyle | null;
   notificationsEnabled: boolean;
   ageConfirmedAdult: boolean;
+  /**
+   * Derived server-side from the deployment allowlist, not stored on the user.
+   * It only decides whether the admin entry point is rendered - the panel itself
+   * answers 404 to anyone the server does not recognise as an admin.
+   */
+  isAdmin: boolean;
   createdAt: string;
 }
 
@@ -98,3 +104,106 @@ export interface ApiError {
 export interface AuthTokens {
   accessToken: string;
 }
+
+/** Answer of `POST /admin/session`. The token is held in memory only. */
+export interface AdminSession {
+  token: string;
+  /** Idle deadline; slides forward with every admin request. */
+  expiresAt: string;
+  /** Hard deadline; never moves, so the panel always closes eventually. */
+  absoluteExpiresAt: string;
+}
+
+export interface AdminProviderStatus {
+  id: string;
+  /** False while the circuit breaker holds the provider open. */
+  available: boolean;
+  /** False when the deployment has no API key for it. */
+  configured: boolean;
+  /** Position in the fallback chain; lower is tried first. */
+  priority: number;
+  /** True while an operator has switched the provider off; outranks the breaker. */
+  disabled: boolean;
+  /** ISO moment the switch was flipped, when the record carries one. */
+  disabledAt: string | null;
+  /** Telegram id of the operator who flipped it, when known. */
+  disabledBy: string | null;
+  disabledReason: string | null;
+}
+
+export interface AdminOverview {
+  admin: {
+    telegramId: string;
+    sessionExpiresAt: string;
+    sessionAbsoluteExpiresAt: string;
+  };
+  providers: AdminProviderStatus[];
+  generatedAt: string;
+}
+
+/** Answer to a kill-switch change: the whole chain, not just the row that moved. */
+export interface AdminProviderList {
+  providers: AdminProviderStatus[];
+  generatedAt: string;
+}
+
+/** One minute of traffic. Idle minutes are present as zeros, not omitted. */
+export interface AdminMetricsMinute {
+  /** ISO start of the minute. */
+  startedAt: string;
+  requests: number;
+  /** Responses with status >= 500. */
+  errors: number;
+}
+
+/** One UTC day. The panel labels the date as UTC rather than reformatting it. */
+export interface AdminMetricsDay {
+  /** `YYYY-MM-DD`, UTC. */
+  date: string;
+  requests: number;
+  errors: number;
+  /** Distinct authenticated users seen that day. */
+  users: number;
+  averagePerUser: number;
+}
+
+/** Internal user id only - the server never sends a Telegram id here. */
+export interface AdminMetricsTopUser {
+  userId: string;
+  requests: number;
+}
+
+/** Answer of `GET /admin/metrics`. `daily` is newest first, so today is `daily[0]`. */
+export interface AdminMetrics {
+  generatedAt: string;
+  retentionDays: number;
+  perMinute: {
+    minutes: number;
+    series: AdminMetricsMinute[];
+  };
+  daily: AdminMetricsDay[];
+  topUsers: AdminMetricsTopUser[];
+}
+
+/** One entry of the error feed. Never carries request or translation text. */
+export interface AdminErrorEntry {
+  at: string;
+  method: string;
+  /** Route pattern, not the concrete path. */
+  route: string;
+  statusCode: number;
+  code: string | null;
+  message: string | null;
+  userId: number | null;
+  /** Fastify request id - the handle for finding the full entry in the logs. */
+  requestId: string | null;
+}
+
+/** Answer of `GET /admin/errors`. `max` and retention come from the server. */
+export interface AdminErrorFeed {
+  generatedAt: string;
+  max: number;
+  retentionSeconds: number;
+  entries: AdminErrorEntry[];
+}
+

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { initTelegramApp, applyTelegramTheme, setupTelegramThemeListener, setupSafeAreaInsets } from './services/telegram';
 import { initThemeFromStorage } from './utils/localSettings';
 import TranslatePage from './pages/TranslatePage';
@@ -10,6 +10,10 @@ import SettingsPage from './pages/SettingsPage';
 import LoadingScreen from './components/LoadingScreen';
 import AppLayout from './components/AppLayout';
 import './styles/global.css';
+
+// The only lazily loaded page: almost nobody is an admin, so the panel has no
+// business in the bundle everyone downloads.
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,6 +96,17 @@ function App() {
               <Route path="/" element={<TranslatePage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              {/* Kept inside AppLayout so the bottom nav is still there to leave
+                  with. The page redirects to /settings unless a step-up token is
+                  held in memory, and the API answers 404 to everyone else. */}
+              <Route
+                path="/admin"
+                element={
+                  <Suspense fallback={<LoadingScreen />}>
+                    <AdminPage />
+                  </Suspense>
+                }
+              />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
