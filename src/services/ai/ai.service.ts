@@ -263,6 +263,27 @@ export class AIService {
   }
 
   /**
+   * Does the operator still permit traffic to at least one configured provider?
+   *
+   * Split out of translate() for callers that must answer "is translation open
+   * at all?" *before* they can serve a request without touching a provider — the
+   * warm preview cache in TranslationService. Without that check, killing the
+   * last provider during an incident would still hand cached output to whoever
+   * happened to have a matching entry inside the preview TTL, which is not the
+   * behaviour the panel promises.
+   *
+   * Deliberately ignores the circuit breakers: a breaker heals itself, and a
+   * cached answer is exactly what should still be served through an outage.
+   * Only the human decision counts here. A Redis failure propagates, as
+   * everywhere the switch is read — resolving it to "nothing is disabled" would
+   * serve traffic the operator forbade.
+   */
+  async hasPermittedProviders(): Promise<boolean> {
+    const disabled = await this.switchService.list();
+    return this.factory.getProviders().some((provider) => !disabled.has(provider.id));
+  }
+
+  /**
    * Get all available providers
    */
   getAvailableProviders(): IAIProvider[] {

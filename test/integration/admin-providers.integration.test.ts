@@ -285,6 +285,11 @@ describe('Admin provider kill-switch integration tests', () => {
       await patchProvider(LIVE_PROVIDER, { disabled: true, reason: 'incident' });
 
       const during = await preview();
+      // Byte-identical request to the warm-up above on purpose: it is a preview
+      // cache hit, and the switch has to outrank the cache too. Otherwise a
+      // provider killed mid-incident keeps serving its own cached output for the
+      // rest of the preview TTL, and the operator cannot tell whether the flip
+      // took effect.
       expect(during.statusCode).toBe(503);
       // The same code an outage produces: an operator decision needs no new error
       // code, and the client already knows this one.

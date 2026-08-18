@@ -99,7 +99,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
   - Stores encrypted preview result in Redis (TTL 10 min) keyed by HMAC of `userId:normalizedText:style:styleVersion` for deduplication.
   - Returns cryptographically random `previewId` for subsequent save.
 
-- **Caching**: Identical requests (same userId, normalized text, style, styleVersion) return cached previewId without LLM call.
+- **Caching**: Identical requests (same userId, normalized text, style, styleVersion) return cached previewId without LLM call. The cache is not a way around the checks that guard the endpoint: the age gate, the prompt-injection check and the operator kill-switch all run *before* the lookup, so a warm entry cannot serve an 18+ style to a user whose confirmation was revoked, and cannot answer `200` while every configured provider is switched off (that case is `503 AI_PROVIDER_UNAVAILABLE`, exactly like an outage). Circuit-breaker state is deliberately *not* consulted here — a cached answer is what should still be served through a real outage.
 
 ### `POST /translate/save`
 - **Request DTO**:

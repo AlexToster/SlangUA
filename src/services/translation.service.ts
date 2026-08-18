@@ -223,6 +223,42 @@ export class TranslationService {
   }
 
   /**
+   * The 503 the client already knows. One factory so the operator-switch path
+   * and a real outage stay byte-identical: the user is never told which of the
+   * two happened, or which provider, or why.
+   */
+  private providerUnavailableError(): Error & { code: string; statusCode: number } {
+    const error = new Error('All AI providers are currently unavailable. Please try again later.') as Error & { code: string; statusCode: number };
+    error.code = 'AI_PROVIDER_UNAVAILABLE';
+    error.statusCode = 503;
+    return error;
+  }
+
+  /**
+   * Refuse the request when an operator has switched every configured provider
+   * off. Runs *before* the preview-cache lookup, for the same reason the age gate
+   * and the injection check do: a warm cache must not become a way around a
+   * decision a human made. Otherwise killing the last provider mid-incident would
+   * still serve cached output for the rest of the preview TTL, and the operator
+   * could not tell whether the switch had taken effect.
+   *
+   * Fails closed. An unreadable switch is not permission to answer.
+   */
+  private async assertTranslationPermitted(): Promise<void> {
+    let permitted: boolean;
+    try {
+      permitted = await aiService.hasPermittedProviders();
+    } catch (err) {
+      logger.error({ err }, '[TranslationService] Could not read the provider kill-switch');
+      permitted = false;
+    }
+
+    if (!permitted) {
+      throw this.providerUnavailableError();
+    }
+  }
+
+  /**
    * Call the AI layer. Expects text that has already been normalized, age-gated
    * and checked for prompt injection by the caller. Does NOT persist anything.
    */
@@ -241,10 +277,7 @@ export class TranslationService {
       // Log the raw provider error server-side for diagnostics
       logger.error({ err: error }, '[TranslationService] All AI providers failed');
       // Throw generic message to client (no raw SDK details)
-      const err = new Error('All AI providers are currently unavailable. Please try again later.') as Error & { code: string; statusCode: number };
-      err.code = 'AI_PROVIDER_UNAVAILABLE';
-      err.statusCode = 503;
-      throw err;
+      throw this.providerUnavailableError();
     }
 
     return {
@@ -282,6 +315,9 @@ export class TranslationService {
     // revoked while a cached entry is still inside its TTL.
     await this.assertAgeAllowed(userId, styleMetadata);
     const sanitizedText = this.assertNoPromptInjection(normalizedText);
+
+    // An operator switch that shut everything off outranks the cache too.
+    await this.assertTranslationPermitted();
 
     // Check cache for identical request (HMAC-based deduplication)
     const cachedPreviewId = await previewCacheService.checkCacheHit(
@@ -461,6 +497,9 @@ export class TranslationService {
     // See translatePreview() - a cache hit must not skip either check.
     await this.assertAgeAllowed(userId, styleMetadata);
     const sanitizedText = this.assertNoPromptInjection(normalizedText);
+
+    // Same reason as in translatePreview(): the switch outranks the cache.
+    await this.assertTranslationPermitted();
 
     // Check cache for identical request (HMAC-based deduplication)
     const cachedPreviewId = await previewCacheService.checkCacheHit(

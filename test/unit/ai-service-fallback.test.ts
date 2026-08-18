@@ -204,4 +204,52 @@ describe('AIService operator kill-switch', () => {
       },
     ]);
   });
+
+  describe('hasPermittedProviders', () => {
+    // The seam TranslationService uses to decide whether a warm preview cache may
+    // answer at all. It must describe operator intent only - never breaker state.
+    it('is true while at least one configured provider is permitted', async () => {
+      const service = makeService(
+        [fakeProvider('openai', async () => ok('openai')), fakeProvider('ollama', async () => ok('ollama'))],
+        ['openai'],
+      );
+
+      expect(await service.hasPermittedProviders()).toBe(true);
+    });
+
+    it('is false once every configured provider is switched off', async () => {
+      const service = makeService(
+        [fakeProvider('openai', async () => ok('openai'))],
+        ['openai'],
+      );
+
+      expect(await service.hasPermittedProviders()).toBe(false);
+    });
+
+    it('ignores a stale switch on an id this build no longer configures', async () => {
+      // A switch left behind by a removed instance must not close translation for
+      // the providers that are still configured and permitted.
+      const service = makeService([fakeProvider('ollama', async () => ok('ollama'))], ['groq']);
+
+      expect(await service.hasPermittedProviders()).toBe(true);
+    });
+
+    it('propagates a Redis failure instead of answering "nothing is disabled"', async () => {
+      const brokenSwitch = {
+        list: async () => {
+          throw new Error('Redis is down');
+        },
+        disable: async () => noRecord,
+        enable: async () => undefined,
+      } as unknown as ProviderSwitchService;
+      const service = new AIService(
+        fakeFactory([fakeProvider('ollama', async () => ok('ollama'))]),
+        {},
+        brokenSwitch,
+      );
+
+      // Fails closed: the caller turns this into 503, never into a served request.
+      await expect(service.hasPermittedProviders()).rejects.toThrow(/Redis is down/);
+    });
+  });
 });
