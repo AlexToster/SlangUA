@@ -54,7 +54,8 @@ export type BuiltinProviderId = (typeof BUILTIN_PROVIDER_IDS)[number];
  * Hard cap on how many translations one user keeps in history.
  *
  * Enforced server-side in TranslationService after every insert: the oldest
- * non-favorite rows are pruned so the newest HISTORY_MAX_ENTRIES survive.
+ * non-favorite rows are pruned so the newest HISTORY_MAX_ENTRIES survive. The
+ * just-inserted row is exempt as well - it is what the prune makes room for.
  * Favorites are never pruned, so a user who favorites everything can exceed
  * the cap - that is deliberate, losing a starred translation would be worse.
  *

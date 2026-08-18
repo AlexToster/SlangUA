@@ -418,7 +418,7 @@ export class TranslationService {
     // Delete preview data after successful save (keeps idempotency marker)
     await previewCacheService.deletePreview(previewId, previewData);
 
-    await this.pruneHistory(userId);
+    await this.pruneHistory(userId, translation.id);
 
     // Return full translation record
     return {
@@ -489,7 +489,7 @@ export class TranslationService {
           },
         });
 
-        await this.pruneHistory(userId);
+        await this.pruneHistory(userId, translation.id);
 
         return {
           id: translation.id,
@@ -520,7 +520,7 @@ export class TranslationService {
       },
     });
 
-    await this.pruneHistory(userId);
+    await this.pruneHistory(userId, translation.id);
 
     // Return full translation record
     return {
@@ -541,18 +541,26 @@ export class TranslationService {
    * and a client could simply not send it. Favorites are exempt on purpose -
    * silently deleting something the user starred is worse than going over.
    *
+   * `justSavedId` is the row this prune is making room for and is always
+   * excluded. Without it, a user whose whole history is starred had the only
+   * non-favorite row - the translation they had just saved - deleted as "the
+   * oldest non-favorite", so a 200 answer left nothing behind in history. The
+   * parameter is required rather than optional so a new call site cannot
+   * reintroduce that.
+   *
    * A failure here must never fail the save the user asked for, so it is logged
    * and swallowed; the next insert retries the prune.
    */
-  private async pruneHistory(userId: number): Promise<void> {
+  private async pruneHistory(userId: number, justSavedId: number): Promise<void> {
     try {
       const total = await this.prisma.translation.count({ where: { userId } });
       const excess = total - HISTORY_MAX_ENTRIES;
       if (excess <= 0) return;
 
       const stale = await this.prisma.translation.findMany({
-        where: { userId, favorite: false },
-        orderBy: { createdAt: 'asc' },
+        where: { userId, favorite: false, id: { not: justSavedId } },
+        // id breaks ties so rows sharing a timestamp are pruned deterministically.
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: excess,
         select: { id: true },
       });

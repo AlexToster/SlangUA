@@ -257,7 +257,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
   ```
   - `Translation` fields per [Database Design](03-database.md#entity-translation)
   - `totalCount` counts all records matching `favorite` and `search`, independent of the current cursor
-  - `totalLimit` echoes the server-owned cap on stored translations (`HISTORY_MAX_ENTRIES`, 100). It is constant per deployment and exists so the UI can render `5/100` without hardcoding the number. After every insert the service prunes the oldest **non-favorite** rows back to the cap; favorites are never pruned, so a user who favorites everything can hold more than `totalLimit`
+  - `totalLimit` echoes the server-owned cap on stored translations (`HISTORY_MAX_ENTRIES`, 100). It is constant per deployment and exists so the UI can render `5/100` without hardcoding the number. After every insert the service prunes the oldest **non-favorite** rows back to the cap; favorites are never pruned, so a user who favorites everything can hold more than `totalLimit`. The row the insert just created is excluded from the prune as well — it is what the prune is making room for, and when every other row is starred it would otherwise be the only candidate, leaving a `200` answer with nothing behind it in history
 
 - **Error codes**: `400 VALIDATION_ERROR` (bad `favorite`/`limit` value) or `400 INVALID_CURSOR` (cursor not produced by this API); `401` missing/invalid JWT; `429` history rate limit; `503 RATE_LIMITER_UNAVAILABLE`
 
