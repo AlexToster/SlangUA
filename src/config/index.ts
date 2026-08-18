@@ -217,11 +217,15 @@ export const envSchema = z.object({
   // would be a hash of a password published in this repository. There is
   // therefore no placeholder to detect - the superRefine rule below covers the
   // real failure mode instead.
+  //
+  // The message names single quotes on purpose: the hash carries three `$`, and
+  // Docker Compose interpolates `env_file` values, so the most likely way to
+  // reach this error is a correct hash pasted unquoted into a deployed .env.
   ADMIN_PASSWORD_HASH: z
     .string()
     .refine(
       (value) => value.trim() === '' || isScryptHash(value),
-      'ADMIN_PASSWORD_HASH must have the form scrypt$N=<n>,r=<r>,p=<p>$<salt base64>$<key base64>; generate it with scripts/hash-admin-password.mjs',
+      'ADMIN_PASSWORD_HASH must have the form scrypt$N=<n>,r=<r>,p=<p>$<salt base64>$<key base64>; generate it with scripts/hash-admin-password.mjs and put it in .env inside single quotes - unquoted, Docker Compose interpolates $N and $p out of an otherwise correct hash',
     )
     .default(''),
   // Idle window: slides forward on every admin request.
@@ -267,7 +271,7 @@ export const envSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message:
-        'ADMIN_PASSWORD_HASH is required when ADMIN_TELEGRAM_IDS is set. Generate it with: node scripts/hash-admin-password.mjs >> .env',
+        "ADMIN_PASSWORD_HASH is required when ADMIN_TELEGRAM_IDS is set. Generate it with: node scripts/hash-admin-password.mjs, then add it to .env in single quotes: ADMIN_PASSWORD_HASH='scrypt$N=...'",
       path: ['ADMIN_PASSWORD_HASH'],
     });
   }

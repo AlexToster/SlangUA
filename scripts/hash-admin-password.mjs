@@ -7,6 +7,16 @@
  *   node scripts/hash-admin-password.mjs >> .env    # appends the ready env line
  *   node scripts/hash-admin-password.mjs --raw      # prints the bare hash only
  *
+ * The hash always carries three `$`. Docker Compose interpolates the values it
+ * reads through `env_file`, so in any .env a container consumes the value has to
+ * be single-quoted - ADMIN_PASSWORD_HASH='scrypt$N=...' - otherwise `$N` and
+ * `$p` are substituted away and the app refuses to boot on a hash that is in
+ * fact correct. Both parsers strip single quotes, so the quoted form is what
+ * dotenv wants locally too. `$$` is not an alternative: dotenv does not unescape
+ * it. The `>> .env` form above is bash; PowerShell 5.1 writes UTF-16LE through
+ * `>>`, which makes the whole file unreadable to dotenv - copy the line by hand
+ * there.
+ *
  * The password is read from stdin only - never from argv, which would leave it
  * in the shell history and in the process list. Nothing is written to disk and
  * nothing is logged: the plaintext exists in this short-lived process and
@@ -134,6 +144,10 @@ async function main() {
   if (interactive) {
     process.stderr.write(
       '\nCopy the line above into .env (it replaces the existing ADMIN_PASSWORD_HASH, if any).\n' +
+        "Wrap the value in single quotes - ADMIN_PASSWORD_HASH='scrypt$N=...' - whenever that\n" +
+        '.env is read by Docker Compose: unquoted, $N and $p are interpolated away and the app\n' +
+        'refuses to boot. Single quotes are stripped by dotenv too, so the quoted form is safe\n' +
+        'everywhere.\n' +
         'The hash is not a secret in the same sense as the password, but it still belongs in .env only.\n',
     );
   }
