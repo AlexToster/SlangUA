@@ -107,7 +107,9 @@ export function AdminPage() {
     [data]
   );
 
-  const series = metrics.data?.perMinute.series ?? [];
+  // Memoized, not just read: `?? []` builds a fresh array on every render, which
+  // would make the two derived memos below recompute on every render as well.
+  const series = useMemo(() => metrics.data?.perMinute.series ?? [], [metrics.data]);
 
   /** Totals over the whole minute series - the header figure of that section. */
   const hourTotals = useMemo(

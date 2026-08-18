@@ -17,6 +17,11 @@ concurrency:
 permissions:
   contents: read
 
+# Both jobs pin actions/checkout and actions/setup-node at v5 — the first majors
+# whose JS runtime is Node 24. The v4 line still targets Node 20, which the
+# runners force onto Node 24 with a deprecation warning today and remove on
+# 2026-09-16. No input changes came with either bump; setup-node v5 only dropped
+# its dummy NODE_AUTH_TOKEN fallback, which needs `registry-url` to matter here.
 jobs:
   backend:
     name: Backend
@@ -24,9 +29,9 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -65,9 +70,9 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
