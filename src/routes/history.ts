@@ -113,9 +113,12 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
       }),
       // Optional body. `{ "favorite": true|false }` sets the value and is
       // idempotent; an omitted body keeps the legacy toggle behaviour.
+      // `.nullish()`, not `.optional()`: Fastify hands a bodyless PATCH to the
+      // validator as `null`, which `.optional()` (undefined only) rejects with
+      // a 400 — the toggle form was unreachable.
       body: z.object({
         favorite: z.boolean(),
-      }).optional(),
+      }).nullish(),
       response: {
         200: z.object({
           id: z.number(),
@@ -147,7 +150,7 @@ export const historyRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance)
   }, async (request, reply) => {
     const userId = request.user!.id;
     const { id } = request.params as { id: number };
-    const body = request.body as { favorite: boolean } | undefined;
+    const body = request.body as { favorite: boolean } | null | undefined;
 
     const result = await historyService.setFavorite(userId, id, body?.favorite);
 
