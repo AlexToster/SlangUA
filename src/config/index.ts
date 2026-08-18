@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isScryptHash } from '../lib/password';
 
 /**
  * Secrets that must never keep their `.env.example` value in production.
@@ -188,12 +189,97 @@ export const envSchema = z.object({
 
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // Admin panel
+  // Comma-separated Telegram user ids allowed into /api/v1/admin/*. Empty is
+  // the off switch for the whole surface, and the default: an unconfigured
+  // deployment must not have an admin panel at all, rather than one with a
+  // guessable way in. Ids only - a username can be changed by its owner and is
+  // not what Telegram signs into initData.
+  ADMIN_TELEGRAM_IDS: z
+    .string()
+    .refine(
+      (value) =>
+        value.trim() === '' ||
+        value
+          .split(',')
+          .every((entry) => /^\d{1,20}$/.test(entry.trim())),
+      'ADMIN_TELEGRAM_IDS must be a comma-separated list of numeric Telegram user ids',
+    )
+    .default(''),
+  // scrypt hash produced by scripts/hash-admin-password.mjs. Validated by shape
+  // at boot so a mangled copy-paste surfaces on start instead of looking like a
+  // wrong password forever. Empty means "no password configured", which is only
+  // legal while ADMIN_TELEGRAM_IDS is empty too (see superRefine below).
+  //
+  // Intentionally absent from PRODUCTION_FORBIDDEN_SECRETS: `.env.example` ships
+  // this variable empty, because any example value that passed the shape check
+  // would be a hash of a password published in this repository. There is
+  // therefore no placeholder to detect - the superRefine rule below covers the
+  // real failure mode instead.
+  ADMIN_PASSWORD_HASH: z
+    .string()
+    .refine(
+      (value) => value.trim() === '' || isScryptHash(value),
+      'ADMIN_PASSWORD_HASH must have the form scrypt$N=<n>,r=<r>,p=<p>$<salt base64>$<key base64>; generate it with scripts/hash-admin-password.mjs',
+    )
+    .default(''),
+  // Idle window: slides forward on every admin request.
+  ADMIN_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  // Absolute window: never slides, so a leaked admin token dies within 8 hours
+  // however actively it is used.
+  ADMIN_SESSION_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().default(28800),
+  // Password attempts. The global 100/min budget is no defence against
+  // guessing, so the login endpoint gets both its own sliding window (429) and
+  // a per-Telegram-id lockout that outlives the window.
+  ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(300000),
+  ADMIN_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+  ADMIN_LOGIN_MAX_FAILURES: z.coerce.number().int().positive().default(5),
+  ADMIN_LOGIN_LOCKOUT_MS: z.coerce.number().int().positive().default(900000),
+  // Budget for the authenticated admin endpoints themselves.
+  ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
+  // Usage metrics. Counters live in Redis only and expire on their own, so these
+  // numbers bound how much history exists at all - there is no pruning job and
+  // nothing to migrate. The upper bounds are not taste: the minute series is read
+  // with one MGET per counter, and the daily rows with one ZCARD per day, so an
+  // unbounded value would turn a panel refresh into a large Redis round trip.
+  METRICS_MINUTE_SERIES_LENGTH: z.coerce.number().int().positive().max(1440).default(60),
+  METRICS_RETENTION_DAYS: z.coerce.number().int().positive().max(90).default(7),
+  METRICS_TOP_USERS_LIMIT: z.coerce.number().int().positive().max(100).default(10),
+  // Error feed. A capped Redis list: newest first, trimmed on every write and
+  // expiring as a whole, because the pino logs remain the real archive.
+  ADMIN_ERROR_FEED_MAX: z.coerce.number().int().positive().max(1000).default(100),
+  ADMIN_ERROR_FEED_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
 }).superRefine((data, ctx) => {
   if (data.TELEGRAM_INLINE_ENABLED && (!data.TELEGRAM_WEBHOOK_SECRET || data.TELEGRAM_WEBHOOK_SECRET.trim() === '')) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'TELEGRAM_WEBHOOK_SECRET is required when TELEGRAM_INLINE_ENABLED is true',
       path: ['TELEGRAM_WEBHOOK_SECRET'],
+    });
+  }
+
+  // An allowlist without a password would be single-factor: whoever controls
+  // one of those Telegram accounts would walk straight in. Fail the boot instead
+  // of silently serving the panel behind one factor.
+  if (data.ADMIN_TELEGRAM_IDS.trim() !== '' && data.ADMIN_PASSWORD_HASH.trim() === '') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'ADMIN_PASSWORD_HASH is required when ADMIN_TELEGRAM_IDS is set. Generate it with: node scripts/hash-admin-password.mjs >> .env',
+      path: ['ADMIN_PASSWORD_HASH'],
+    });
+  }
+
+  // An absolute window shorter than the idle one would make the idle window
+  // dead code and the session expire earlier than configured.
+  if (data.ADMIN_SESSION_ABSOLUTE_TTL_SECONDS < data.ADMIN_SESSION_TTL_SECONDS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'ADMIN_SESSION_ABSOLUTE_TTL_SECONDS must be greater than or equal to ADMIN_SESSION_TTL_SECONDS',
+      path: ['ADMIN_SESSION_ABSOLUTE_TTL_SECONDS'],
     });
   }
 

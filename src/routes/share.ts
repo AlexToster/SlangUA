@@ -11,6 +11,7 @@ import { telegramInlineService, InlineQuery } from '../services/telegram-inline.
 import { createRateLimiter } from '../plugins/rate-limit.js';
 import { config } from '../config/index.js';
 import { authenticate } from '../plugins/authenticate.js';
+import { captureErrorSnapshot } from '../plugins/observability.js';
 
 const sourceSchema = z.union([z.object({ previewId: z.string().uuid() }).strict(), z.object({ translationId: z.number().int().positive() }).strict()]);
 
@@ -32,7 +33,12 @@ export const shareRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =
   const rateLimit = createRateLimiter({ windowMs: config.SHARE_RATE_LIMIT_WINDOW_MS, maxRequests: config.SHARE_RATE_LIMIT_MAX_REQUESTS, keyPrefix: config.SHARE_RATE_LIMIT_KEY_PREFIX });
   const webhookRateLimit = createRateLimiter({ windowMs: config.WEBHOOK_RATE_LIMIT_WINDOW_MS, maxRequests: config.WEBHOOK_RATE_LIMIT_MAX_REQUESTS, keyPrefix: config.WEBHOOK_RATE_LIMIT_KEY_PREFIX });
   app.post('/share/inline', { schema: { body: sourceSchema }, preHandler: [authenticate, rateLimit] }, async (request: any, reply) => {
-    if (!config.TELEGRAM_INLINE_ENABLED) return reply.status(503).send({ error: 'Service Unavailable', code: 'TELEGRAM_INLINE_UNAVAILABLE', message: 'Telegram inline sharing is not configured' });
+    if (!config.TELEGRAM_INLINE_ENABLED) {
+      // A configuration state rather than a failure, but the client still sees a
+      // 503 - so name it, or the error feed would show an unexplained 5xx.
+      captureErrorSnapshot(request, 'TELEGRAM_INLINE_UNAVAILABLE', 'Telegram inline sharing is not configured');
+      return reply.status(503).send({ error: 'Service Unavailable', code: 'TELEGRAM_INLINE_UNAVAILABLE', message: 'Telegram inline sharing is not configured' });
+    }
     const source = request.body as z.infer<typeof sourceSchema>;
     const userId = request.user.id as number;
     let translatedText: string; let style: string;

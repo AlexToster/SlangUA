@@ -5,6 +5,7 @@ import { userService } from '../services/user.service.js';
 import { createRateLimiter } from '../plugins/rate-limit.js';
 import { SLANG_STYLE_VALUES } from '../constants/index.js';
 import { authenticate } from '../plugins/authenticate.js';
+import { adminAuthService } from '../services/admin/admin-auth.service.js';
 
 export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Rate limiters for user endpoints (30 requests/minute)
@@ -24,6 +25,10 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable(),
           notificationsEnabled: z.boolean(),
           ageConfirmedAdult: z.boolean(),
+          // Derived from deployment config, never stored on the user row: it
+          // tells the client whether to show the admin entry point. False for
+          // everyone on a deployment without ADMIN_TELEGRAM_IDS.
+          isAdmin: z.boolean(),
           createdAt: z.string().datetime(),
         }),
         401: z.object({
@@ -66,6 +71,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
       defaultSlangStyle: profile.defaultSlangStyle,
       notificationsEnabled: profile.notificationsEnabled,
       ageConfirmedAdult: profile.ageConfirmedAdult,
+      isAdmin: adminAuthService.hasAdminAccess(profile.telegramId),
       createdAt: profile.createdAt.toISOString(),
     };
   });
@@ -88,6 +94,10 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable(),
           notificationsEnabled: z.boolean(),
           ageConfirmedAdult: z.boolean(),
+          // Same field as in GET: the client replaces its cached profile with
+          // this response, so omitting it here would hide the admin button
+          // until the next full reload.
+          isAdmin: z.boolean(),
           createdAt: z.string().datetime(),
         }),
         400: z.object({
@@ -129,6 +139,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
         defaultSlangStyle: updatedProfile.defaultSlangStyle,
         notificationsEnabled: updatedProfile.notificationsEnabled,
         ageConfirmedAdult: updatedProfile.ageConfirmedAdult,
+        isAdmin: adminAuthService.hasAdminAccess(updatedProfile.telegramId),
         createdAt: updatedProfile.createdAt.toISOString(),
       };
     } catch (error) {

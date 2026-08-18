@@ -3,19 +3,37 @@
  *
  * Main service for AI translations with fallback strategy.
  * Implements provider fallback, per-provider timeout, retry policy,
- * and circuit breaker to skip degraded providers.
+ * a circuit breaker to skip degraded providers, and the operator kill-switch
+ * (see provider-switch.service.ts) which outranks all of them.
  * All behavior is driven by configuration, not hardcoded.
  */
 
 import { IAIProvider, TranslateRequest, TranslateResponse } from './types';
 import { providerFactory } from './provider.factory';
 import { AllKeysExhaustedError, isAllKeysExhaustedError } from './errors';
+import { providerSwitchService, ProviderSwitchService } from './provider-switch.service';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
 
 export interface AIServiceConfig {
   enableFallback: boolean;
   maxFallbackAttempts: number | null;
+}
+
+/** One row of the operator view: provider health *and* operator intent. */
+export interface ProviderOverviewEntry {
+  id: string;
+  /** False while the circuit breaker holds the provider open. */
+  available: boolean;
+  /** False when the deployment never configured the instance. */
+  configured: boolean;
+  /** Position in the fallback chain; lower is tried first. */
+  priority: number;
+  /** True while an operator has switched the provider off. */
+  disabled: boolean;
+  disabledAt: string | null;
+  disabledBy: string | null;
+  disabledReason: string | null;
 }
 
 interface CircuitBreakerState {
@@ -27,14 +45,18 @@ interface CircuitBreakerState {
 export class AIService {
   private factory: typeof providerFactory;
   private serviceConfig: AIServiceConfig;
+  /** Operator kill-switch. Injected so unit tests need no Redis. */
+  private switchService: ProviderSwitchService;
   /** Keyed by provider instance id, the same string the API returns. */
   private circuitBreakers: Map<string, CircuitBreakerState> = new Map();
 
   constructor(
     factory = providerFactory,
-    serviceConfig: Partial<AIServiceConfig> = {}
+    serviceConfig: Partial<AIServiceConfig> = {},
+    switchService: ProviderSwitchService = providerSwitchService
   ) {
     this.factory = factory;
+    this.switchService = switchService;
     this.serviceConfig = {
       enableFallback: serviceConfig.enableFallback ?? true,
       // `null` means "as many attempts as there are providers", resolved per
@@ -100,9 +122,8 @@ export class AIService {
     }
   }
 
-  private getEligibleProviders(): IAIProvider[] {
-    const allProviders = this.factory.getProviders();
-    return allProviders.filter((p) => !this.isCircuitOpen(p.id));
+  private getEligibleProviders(providers: IAIProvider[]): IAIProvider[] {
+    return providers.filter((p) => !this.isCircuitOpen(p.id));
   }
 
   /**
@@ -120,17 +141,39 @@ export class AIService {
   }
 
   /**
-   * Translate text with automatic fallback on failure
+   * Translate text with automatic fallback on failure.
+   *
+   * The operator kill-switch is read once per request and applied *before* the
+   * circuit breakers, for two reasons. It must be the strongest of the two
+   * mechanisms - a breaker reopens on its own after a cooldown, and a provider a
+   * human switched off must never come back that way - and a single snapshot
+   * keeps the whole fallback chain of one request consistent even if an operator
+   * flips a switch halfway through it.
    */
   async translate(request: TranslateRequest): Promise<TranslateResponse> {
-    const eligibleProviders = this.getEligibleProviders();
+    const disabled = await this.switchService.list();
+    const configured = this.factory.getProviders();
+    const permitted = configured.filter((p) => !disabled.has(p.id));
+
+    if (permitted.length === 0) {
+      if (configured.length > 0) {
+        // Deliberate operator action, not an outage. Logged as its own message so
+        // an on-call reading the logs is not sent looking for a broken provider.
+        logger.error(
+          { disabled: [...disabled.keys()] },
+          'Every configured AI provider is switched off by an operator',
+        );
+        throw new Error('All AI providers are switched off by an operator.');
+      }
+      throw new Error('No AI providers available. Please configure at least one provider.');
+    }
+
+    const eligibleProviders = this.getEligibleProviders(permitted);
 
     if (eligibleProviders.length === 0) {
-      const allProviders = this.factory.getProviders();
-      if (allProviders.length === 0) {
-        throw new Error('No AI providers available. Please configure at least one provider.');
-      }
-      const probe = this.pickRecoveryProbe(allProviders);
+      // The probe is picked among the permitted providers only: recovering by
+      // reaching for a switched-off provider would defeat the switch.
+      const probe = this.pickRecoveryProbe(permitted);
       logger.warn(
         { providerId: probe.id },
         'All providers circuit-open; probing the longest-failing one',
@@ -193,7 +236,10 @@ export class AIService {
   }
 
   /**
-   * Translate with a specific provider (bypasses fallback)
+   * Translate with a specific provider (bypasses fallback).
+   *
+   * It bypasses fallback, not the kill-switch: "use exactly this provider" is
+   * still traffic the operator forbade.
    */
   async translateWithProvider(
     request: TranslateRequest,
@@ -207,6 +253,10 @@ export class AIService {
 
     if (!provider.isAvailable()) {
       throw new Error(`Provider ${providerId} is not available`);
+    }
+
+    if ((await this.switchService.list()).has(providerId)) {
+      throw new Error(`Provider ${providerId} is switched off by an operator`);
     }
 
     return provider.translate(request);
@@ -224,6 +274,38 @@ export class AIService {
    */
   getProviderStatus() {
     return this.factory.getProviderStatus();
+  }
+
+  /**
+   * Provider health merged with operator intent, for the admin panel.
+   *
+   * Ids that exist only in the kill-switch are included as well. A switch left
+   * behind by a provider that was later unconfigured or renamed would otherwise
+   * be invisible - and an invisible switch cannot be cleared.
+   */
+  async getProviderOverview(): Promise<ProviderOverviewEntry[]> {
+    const disabled = await this.switchService.list();
+    const status = this.factory.getProviderStatus();
+    const ids = new Set<string>([...Object.keys(status), ...disabled.keys()]);
+
+    return [...ids]
+      .map((id) => {
+        const entry = status[id] ?? { available: false, configured: false, priority: 999 };
+        const record = disabled.get(id);
+        return {
+          id,
+          available: entry.available,
+          configured: entry.configured,
+          priority: entry.priority,
+          disabled: record !== undefined,
+          disabledAt: record?.at ?? null,
+          disabledBy: record?.by ?? null,
+          disabledReason: record?.reason ?? null,
+        };
+      })
+      // Sorted by the fallback order the service actually uses, so the panel
+      // shows the chain rather than an arbitrary object order.
+      .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
   }
 
   /**

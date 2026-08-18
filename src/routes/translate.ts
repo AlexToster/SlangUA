@@ -7,6 +7,7 @@ import { SlangStyle, Translation } from '@prisma/client';
 import { SLANG_STYLE_VALUES, PROVIDER_ID_PATTERN } from '../constants/index.js';
 import { config } from '../config/index.js';
 import { authenticate } from '../plugins/authenticate.js';
+import { captureErrorSnapshot } from '../plugins/observability.js';
 
 /**
  * One mapping for the HTTP reason phrase, shared by all handlers in this file.
@@ -183,6 +184,11 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
       const code = err.code || 'INTERNAL_ERROR';
       const message = err.message || 'Translation failed';
 
+      // This handler answers directly, so the global error handler never runs
+      // for it. Without this the admin error feed would show the most common
+      // real failure - every provider exhausted - as a bare 503 with no cause.
+      if (statusCode >= 500) captureErrorSnapshot(request, code, message);
+
       return reply.status(statusCode).send({
         error: httpErrorName(statusCode),
         code,
@@ -218,6 +224,8 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
       const statusCode = err.statusCode || 500;
       const code = err.code || 'INTERNAL_ERROR';
       const message = err.message || 'Save failed';
+
+      if (statusCode >= 500) captureErrorSnapshot(request, code, message);
 
       // A duplicate save is not a lost result: return the row the first save
       // created so the client can render it instead of re-running the preview.
@@ -262,6 +270,8 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
       const statusCode = err.statusCode || 500;
       const code = err.code || 'INTERNAL_ERROR';
       const message = err.message || 'Translation failed';
+
+      if (statusCode >= 500) captureErrorSnapshot(request, code, message);
 
       return reply.status(statusCode).send({
         error: httpErrorName(statusCode),

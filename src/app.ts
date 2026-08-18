@@ -8,9 +8,11 @@ import { historyRoutes } from './routes/history.js';
 import { userRoutes } from './routes/user.js';
 import { stylesRoutes } from './routes/styles.js';
 import { shareRoutes } from './routes/share.js';
+import { adminRoutes } from './routes/admin.js';
 import { connectRedis, disconnectRedis, getRedisClient } from './lib/redis.js';
 import { prisma } from './lib/prisma.js';
 import { createRateLimiter } from './plugins/rate-limit.js';
+import { registerObservability, captureErrorSnapshot } from './plugins/observability.js';
 import { initializeStyleEngine } from './style-engine/loader.js';
 import cors from '@fastify/cors';
 
@@ -71,6 +73,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     await globalRateLimiter(request, reply);
   });
 
+  // Counts finished requests and pushes 5xx onto the admin error feed. Registered
+  // after the rate limiter so the ordering reads in lifecycle order, though the
+  // hook itself runs on `onResponse` and cannot affect admission.
+  registerObservability(app);
+
   // Global error handler
   app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     request.log.error(error, 'Request error');
@@ -113,6 +120,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Rate limiter unavailable (fail-closed)
     if (error.code === 'RATE_LIMITER_UNAVAILABLE') {
+      captureErrorSnapshot(request, 'RATE_LIMITER_UNAVAILABLE', error.message);
       return reply.status(503).send({
         error: 'Service Unavailable',
         code: 'RATE_LIMITER_UNAVAILABLE',
@@ -149,6 +157,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Service unavailable (AI providers exhausted)
     if (error.statusCode === 503) {
+      captureErrorSnapshot(request, 'AI_PROVIDERS_UNAVAILABLE', error.message);
       return reply.status(503).send({
         error: 'Service Unavailable',
         code: 'AI_PROVIDERS_UNAVAILABLE',
@@ -158,6 +167,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Default internal server error
     const statusCode = error.statusCode || 500;
+    if (statusCode >= 500) {
+      captureErrorSnapshot(request, error.code || 'INTERNAL_ERROR', error.message);
+    }
     return reply.status(statusCode).send({
       error: 'Internal Server Error',
       code: 'INTERNAL_ERROR',
@@ -212,6 +224,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(userRoutes, { prefix: '/api/v1' });
   await app.register(stylesRoutes, { prefix: '/api/v1' });
   await app.register(shareRoutes, { prefix: '/api/v1' });
+  // Registered unconditionally: with no ADMIN_TELEGRAM_IDS configured every
+  // route answers Fastify's own 404, so a deployment without an admin has an
+  // admin API that is indistinguishable from not having one.
+  await app.register(adminRoutes, { prefix: '/api/v1' });
 
   // Graceful shutdown
   const close = async () => {
