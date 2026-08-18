@@ -46,6 +46,29 @@ export default defineConfig({
       TELEGRAM_WEBHOOK_SECRET: 'test-telegram-webhook-secret-not-real',
       PREVIEW_ROOT_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
       PREVIEW_KEY_VERSION: 'test-v1',
+      // Admin panel. The ids and the hash must match
+      // test/integration/global-setup.ts; the hash is scrypt of the literal
+      // 'test-admin-password-not-real' and is a test fixture, not a secret.
+      ADMIN_TELEGRAM_IDS: '555000111,555000222',
+      ADMIN_PASSWORD_HASH:
+        'scrypt$N=16384,r=8,p=1$ehN6SvtS/mSclfA2LB+tAg==$Y4inoYaGkMWg25H+XHlzZfJQZqwdAh+TByZjqlzJKD4=',
+      // The lockout must fire before the request limiter does, otherwise the
+      // lockout test can never observe its Retry-After: 5 wrong guesses trip the
+      // lockout, and the 9th request in the window trips the limiter.
+      ADMIN_LOGIN_MAX_FAILURES: '5',
+      ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS: '60000',
+      ADMIN_LOGIN_RATE_LIMIT_MAX: '8',
+      // Observability views. Pinned rather than left on the schema defaults so
+      // the suites can assert on the echoed numbers, and small enough that a
+      // failing assertion prints something readable: the minute series is ten
+      // buckets instead of sixty, and the daily table two rows instead of seven.
+      METRICS_MINUTE_SERIES_LENGTH: '10',
+      METRICS_RETENTION_DAYS: '2',
+      METRICS_TOP_USERS_LIMIT: '5',
+      ADMIN_ERROR_FEED_MAX: '5',
+      // An hour, not a week: the TTL is asserted, and a value distinguishable
+      // from the default proves it comes from the configuration.
+      ADMIN_ERROR_FEED_TTL_SECONDS: '3600',
     },
   },
   resolve: {

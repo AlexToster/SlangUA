@@ -38,6 +38,13 @@ export default defineConfig({
       AI_KEY_COOLDOWN_RATE_MS: '60000',
       AI_KEY_COOLDOWN_QUOTA_MS: '3600000',
       AI_KEY_COOLDOWN_INVALID_MS: '3600000',
+      // Small on purpose: the metrics tests assert on exact bucket lists, and a
+      // 60-minute series would say nothing a 5-minute one does not.
+      METRICS_MINUTE_SERIES_LENGTH: '5',
+      METRICS_RETENTION_DAYS: '3',
+      METRICS_TOP_USERS_LIMIT: '2',
+      ADMIN_ERROR_FEED_MAX: '3',
+      ADMIN_ERROR_FEED_TTL_SECONDS: '604800',
       LOG_LEVEL: 'fatal',
     },
   },

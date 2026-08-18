@@ -1,16 +1,22 @@
 /**
  * AIService fallback bookkeeping.
  *
- * The property under test: an exhausted key pool must not be recorded as a
- * provider failure. A provider whose keys are spent is healthy, and its keys come
+ * Two properties under test. First: an exhausted key pool must not be recorded as
+ * a provider failure. A provider whose keys are spent is healthy, and its keys come
  * back on their own - opening the circuit breaker would keep it out of the chain
- * long after the cooldown ended.
+ * long after the cooldown ended. Second: the operator kill-switch outranks the
+ * breaker in both directions - a switched-off provider is never tried, and
+ * nothing automatic ever switches it back on.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { AIService } from '../../src/services/ai/ai.service';
 import { AllKeysExhaustedError } from '../../src/services/ai/errors';
 import type { providerFactory } from '../../src/services/ai/provider.factory';
+import type {
+  ProviderDisableRecord,
+  ProviderSwitchService,
+} from '../../src/services/ai/provider-switch.service';
 import type { IAIProvider, TranslateRequest, TranslateResponse } from '../../src/services/ai/types';
 
 const request: TranslateRequest = { text: 'привіт', style: 'GEN_Z' };
@@ -41,6 +47,21 @@ function fakeFactory(providers: IAIProvider[]): typeof providerFactory {
   } as unknown as typeof providerFactory;
 }
 
+const noRecord: ProviderDisableRecord = { by: '1', at: '2026-08-18T10:00:00.000Z', reason: null };
+
+/** The kill-switch without Redis: a fixed set of switched-off provider ids. */
+function fakeSwitch(disabledIds: string[] = []): ProviderSwitchService {
+  return {
+    list: async () => new Map(disabledIds.map((id) => [id, noRecord])),
+    disable: async () => noRecord,
+    enable: async () => undefined,
+  } as unknown as ProviderSwitchService;
+}
+
+function makeService(providers: IAIProvider[], disabledIds: string[] = []): AIService {
+  return new AIService(fakeFactory(providers), {}, fakeSwitch(disabledIds));
+}
+
 const ok = (providerId: string): TranslateResponse => ({
   translatedText: `served by ${providerId}`,
   providerId,
@@ -53,7 +74,7 @@ describe('AIService fallback', () => {
       throw new AllKeysExhaustedError('openai', 45_000, 'rate');
     });
     const healthy = fakeProvider('ollama', async () => ok('ollama'));
-    const service = new AIService(fakeFactory([exhausted, healthy]));
+    const service = makeService([exhausted, healthy]);
 
     // Six requests is one more than CIRCUIT_BREAKER_FAILURE_THRESHOLD (5).
     for (let i = 0; i < 6; i++) {
@@ -71,7 +92,7 @@ describe('AIService fallback', () => {
       throw new Error('upstream exploded');
     });
     const healthy = fakeProvider('ollama', async () => ok('ollama'));
-    const service = new AIService(fakeFactory([broken, healthy]));
+    const service = makeService([broken, healthy]);
 
     for (let i = 0; i < 6; i++) {
       await service.translate(request);
@@ -86,7 +107,7 @@ describe('AIService fallback', () => {
       throw new AllKeysExhaustedError('openai', 1_000, 'quota');
     });
     const healthy = fakeProvider('gemini', async () => ok('gemini'));
-    const service = new AIService(fakeFactory([exhausted, healthy]));
+    const service = makeService([exhausted, healthy]);
 
     await expect(service.translate(request)).resolves.toMatchObject({
       providerId: 'gemini',
@@ -97,7 +118,7 @@ describe('AIService fallback', () => {
     // The point of the free-form providerId: an AI_EXTRA_INSTANCES entry is just
     // another id in the chain, with no enum to extend.
     const extra = fakeProvider('groq', async () => ok('groq'));
-    const service = new AIService(fakeFactory([extra]));
+    const service = makeService([extra]);
 
     await expect(service.translate(request)).resolves.toMatchObject({
       providerId: 'groq',
@@ -108,10 +129,79 @@ describe('AIService fallback', () => {
     const exhausted = fakeProvider('openai', async () => {
       throw new AllKeysExhaustedError('openai', 1_000, 'quota');
     });
-    const service = new AIService(fakeFactory([exhausted]));
+    const service = makeService([exhausted]);
 
     // TranslationService turns any AI-layer error into 503 AI_PROVIDER_UNAVAILABLE,
     // so this needs no new error code of its own.
     await expect(service.translate(request)).rejects.toBeInstanceOf(AllKeysExhaustedError);
+  });
+});
+
+describe('AIService operator kill-switch', () => {
+  it('never sends a request to a switched-off provider', async () => {
+    const off = fakeProvider('openai', async () => ok('openai'));
+    const on = fakeProvider('gemini', async () => ok('gemini'));
+    const service = makeService([off, on], ['openai']);
+
+    await expect(service.translate(request)).resolves.toMatchObject({ providerId: 'gemini' });
+    expect(off.translate).not.toHaveBeenCalled();
+  });
+
+  it('fails the request rather than using a switched-off provider as a last resort', async () => {
+    const off = fakeProvider('openai', async () => ok('openai'));
+    const service = makeService([off], ['openai']);
+
+    await expect(service.translate(request)).rejects.toThrow(/switched off by an operator/);
+    expect(off.translate).not.toHaveBeenCalled();
+  });
+
+  it('does not pick a switched-off provider as the recovery probe', async () => {
+    // The breaker opens on the only permitted provider; the probe must stay inside
+    // the permitted set, or a broken chain would quietly resurrect the switch.
+    const broken = fakeProvider('gemini', async () => {
+      throw new Error('upstream exploded');
+    });
+    const off = fakeProvider('openai', async () => ok('openai'));
+    const service = makeService([off, broken], ['openai']);
+
+    for (let i = 0; i < 7; i++) {
+      await expect(service.translate(request)).rejects.toThrow();
+    }
+
+    // Five attempts before the breaker opened, then one probe per later request -
+    // always the same provider, never the switched-off one.
+    expect(broken.translate).toHaveBeenCalledTimes(7);
+    expect(off.translate).not.toHaveBeenCalled();
+  });
+
+  it('refuses an explicit request for a switched-off provider', async () => {
+    const off = fakeProvider('openai', async () => ok('openai'));
+    const service = makeService([off], ['openai']);
+
+    // translateWithProvider bypasses fallback, not the switch.
+    await expect(service.translateWithProvider(request, 'openai')).rejects.toThrow(
+      /switched off by an operator'?/
+    );
+    expect(off.translate).not.toHaveBeenCalled();
+  });
+
+  it('reports a stale switch for a provider that is no longer configured', async () => {
+    // The instance disappeared from the configuration while switched off. If the
+    // overview dropped the row, the switch could never be cleared.
+    const service = makeService([], ['groq']);
+
+    const overview = await service.getProviderOverview();
+    expect(overview).toEqual([
+      {
+        id: 'groq',
+        available: false,
+        configured: false,
+        priority: 999,
+        disabled: true,
+        disabledAt: noRecord.at,
+        disabledBy: noRecord.by,
+        disabledReason: null,
+      },
+    ]);
   });
 });

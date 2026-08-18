@@ -90,3 +90,142 @@ describe('envSchema', () => {
     expect(failedKeys(result)).toContain('TELEGRAM_WEBHOOK_SECRET');
   });
 });
+
+/**
+ * The admin block is validated at boot rather than at the first login attempt,
+ * because every failure mode here is silent otherwise: a mangled hash looks
+ * exactly like a wrong password forever, and an allowlist without a hash serves
+ * the panel behind a single factor.
+ */
+describe('envSchema: admin panel', () => {
+  /** A real hash of an unrelated throwaway password, in the stored format. */
+  const VALID_HASH =
+    'scrypt$N=16384,r=8,p=1$ehN6SvtS/mSclfA2LB+tAg==$Y4inoYaGkMWg25H+XHlzZfJQZqwdAh+TByZjqlzJKD4=';
+
+  it('defaults to no admin panel at all', () => {
+    const result = parse({ NODE_ENV: 'production', ...REAL_SECRETS });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.ADMIN_TELEGRAM_IDS).toBe('');
+    expect(result.success && result.data.ADMIN_PASSWORD_HASH).toBe('');
+  });
+
+  it('accepts one id and a list of ids', () => {
+    for (const ADMIN_TELEGRAM_IDS of ['555000111', '555000111,555000222', ' 555000111 , 555000222 ']) {
+      const result = parse({
+        NODE_ENV: 'production',
+        ...REAL_SECRETS,
+        ADMIN_TELEGRAM_IDS,
+        ADMIN_PASSWORD_HASH: VALID_HASH,
+      });
+      expect(result.success, `${ADMIN_TELEGRAM_IDS} should be accepted`).toBe(true);
+    }
+  });
+
+  it('rejects usernames and other non-numeric entries', () => {
+    // A username can be changed by its owner and is not what Telegram signs
+    // into initData, so accepting one would be a moving allowlist.
+    for (const ADMIN_TELEGRAM_IDS of ['@operator', '555000111,@operator', '555000111;555000222', '555000111,']) {
+      const result = parse({
+        NODE_ENV: 'production',
+        ...REAL_SECRETS,
+        ADMIN_TELEGRAM_IDS,
+        ADMIN_PASSWORD_HASH: VALID_HASH,
+      });
+      expect(result.success, `${ADMIN_TELEGRAM_IDS} should be rejected`).toBe(false);
+      expect(failedKeys(result)).toContain('ADMIN_TELEGRAM_IDS');
+    }
+  });
+
+  it('refuses an allowlist without a password hash', () => {
+    const result = parse({ NODE_ENV: 'production', ...REAL_SECRETS, ADMIN_TELEGRAM_IDS: '555000111' });
+    expect(result.success).toBe(false);
+    expect(failedKeys(result)).toContain('ADMIN_PASSWORD_HASH');
+  });
+
+  it('accepts a password hash with no allowlist', () => {
+    // Harmless: with no ids configured every admin route answers 404 anyway, and
+    // failing here would block the "generate the hash first" order of work.
+    const result = parse({ NODE_ENV: 'production', ...REAL_SECRETS, ADMIN_PASSWORD_HASH: VALID_HASH });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a mangled hash by shape', () => {
+    const mangled = [
+      'not-a-hash',
+      'scrypt$N=16384,r=8,p=1$onlyonefield',
+      // A truncated copy-paste: the base64 key is too short to be a 32-byte key.
+      'scrypt$N=16384,r=8,p=1$ehN6SvtS/mSclfA2LB+tAg==$Y4in',
+      // N must be a power of two; scrypt itself would throw at login time.
+      'scrypt$N=16000,r=8,p=1$ehN6SvtS/mSclfA2LB+tAg==$Y4inoYaGkMWg25H+XHlzZfJQZqwdAh+TByZjqlzJKD4=',
+      VALID_HASH.replace('scrypt', 'bcrypt'),
+    ];
+
+    for (const ADMIN_PASSWORD_HASH of mangled) {
+      const result = parse({
+        NODE_ENV: 'production',
+        ...REAL_SECRETS,
+        ADMIN_TELEGRAM_IDS: '555000111',
+        ADMIN_PASSWORD_HASH,
+      });
+      expect(result.success, `${ADMIN_PASSWORD_HASH} should be rejected`).toBe(false);
+      expect(failedKeys(result)).toContain('ADMIN_PASSWORD_HASH');
+    }
+  });
+
+  it('refuses an absolute session window shorter than the idle one', () => {
+    const result = parse({
+      NODE_ENV: 'production',
+      ...REAL_SECRETS,
+      ADMIN_TELEGRAM_IDS: '555000111',
+      ADMIN_PASSWORD_HASH: VALID_HASH,
+      ADMIN_SESSION_TTL_SECONDS: '3600',
+      ADMIN_SESSION_ABSOLUTE_TTL_SECONDS: '900',
+    });
+    expect(result.success).toBe(false);
+    expect(failedKeys(result)).toContain('ADMIN_SESSION_ABSOLUTE_TTL_SECONDS');
+  });
+
+  it('accepts equal idle and absolute windows', () => {
+    const result = parse({
+      NODE_ENV: 'production',
+      ...REAL_SECRETS,
+      ADMIN_TELEGRAM_IDS: '555000111',
+      ADMIN_PASSWORD_HASH: VALID_HASH,
+      ADMIN_SESSION_TTL_SECONDS: '900',
+      ADMIN_SESSION_ABSOLUTE_TTL_SECONDS: '900',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a non-positive limit or window', () => {
+    for (const key of [
+      'ADMIN_SESSION_TTL_SECONDS',
+      'ADMIN_LOGIN_RATE_LIMIT_MAX',
+      'ADMIN_LOGIN_MAX_FAILURES',
+      'ADMIN_LOGIN_LOCKOUT_MS',
+      'ADMIN_RATE_LIMIT_MAX_REQUESTS',
+    ]) {
+      const result = parse({
+        NODE_ENV: 'production',
+        ...REAL_SECRETS,
+        ADMIN_TELEGRAM_IDS: '555000111',
+        ADMIN_PASSWORD_HASH: VALID_HASH,
+        [key]: '0',
+      });
+      expect(result.success, `${key}=0 should be rejected`).toBe(false);
+      expect(failedKeys(result)).toContain(key);
+    }
+  });
+
+  it('never echoes the hash in an error message', () => {
+    const result = parse({
+      NODE_ENV: 'production',
+      ...REAL_SECRETS,
+      ADMIN_TELEGRAM_IDS: '@operator',
+      ADMIN_PASSWORD_HASH: VALID_HASH,
+    });
+    expect(result.success).toBe(false);
+    const messages = JSON.stringify(result.success ? [] : result.error.issues);
+    expect(messages).not.toContain(VALID_HASH);
+  });
+});

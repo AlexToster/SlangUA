@@ -52,6 +52,15 @@ export async function setup() {
   process.env.OPENAI_API_KEY = '';
   process.env.ANTHROPIC_API_KEY = '';
   process.env.GEMINI_API_KEY = '';
+  // Admin panel fixture. Two ids so a test can prove that a step-up token opened
+  // by one admin is refused for another, and neither collides with the default
+  // test user (123456789). The hash below is scrypt of the literal password
+  // 'test-admin-password-not-real' - a throwaway fixture, not a deployment
+  // secret. Keep both values in sync with the `env` block of
+  // vitest.integration.config.mjs (that one reaches the workers).
+  process.env.ADMIN_TELEGRAM_IDS = '555000111,555000222';
+  process.env.ADMIN_PASSWORD_HASH =
+    'scrypt$N=16384,r=8,p=1$ehN6SvtS/mSclfA2LB+tAg==$Y4inoYaGkMWg25H+XHlzZfJQZqwdAh+TByZjqlzJKD4=';
 
   // Run prisma migrate deploy
   console.log('Running prisma migrate deploy...');
