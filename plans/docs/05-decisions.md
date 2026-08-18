@@ -35,6 +35,14 @@ Production starts on free tiers, where the quota belongs to the key rather than 
 
 Pooling keys is a deployment decision with a legal edge: some vendors forbid holding several free-tier accounts, and rotation cannot make that acceptable. `.env.example` says so where the variables are documented.
 
+## The Operator Kill-Switch Is Not the Circuit Breaker
+
+Both mechanisms take a provider out of the fallback chain, so the temptation is to reuse one for the other. They answer different questions. The circuit breaker in `AIService` answers "is this provider failing right now?" — it is derived from live failures, lives in process memory, and is *supposed* to heal itself after `CIRCUIT_BREAKER_RESET_MS`. The switch behind `PATCH /admin/providers/:providerId` answers "does a human want traffic going there at all?" — the reasons an operator flips it (a leaked key, a runaway bill, a model that started emitting garbage) are invisible to failure counting, and a provider switched off for any of them must not come back on its own a minute later with nobody watching.
+
+Hence three properties that follow from the distinction rather than from convenience: the state lives in Redis (`ai:provider:disabled`), because an in-memory flag would silently re-enable a provider on the next deploy and two replicas would disagree; it carries **no TTL**, because an expiring switch resurrects a provider at an arbitrary moment; and it is read *before* the breakers, once per request, so a single snapshot governs the whole chain and the recovery probe cannot pick a provider a human forbade.
+
+The cost is accepted openly: this is the one piece of Redis state that is not easily re-creatable, and a `FLUSHDB` re-enables everything that was switched off. The alternative — a Postgres column — would give the AI layer a relational dependency it does not otherwise have, to protect a handful of fields an operator can re-flip in seconds from a panel that shows the current state plainly.
+
 ## Simplified Backend Layering
 
 This project intentionally uses a simplified Route → Service → Prisma architecture suitable for a solo-developer MVP. This is a proactive architectural decision.

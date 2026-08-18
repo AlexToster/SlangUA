@@ -29,7 +29,7 @@ The following entities represent the persistent state of the SlangUA system, man
 - **Favorites**: The "favorite" status is an attribute of the `Translation` entity (`Translation.favorite: BOOLEAN`). There is no separate "Favorite" entity to keep the model simple and performant for the MVP scope.
 - **Persistence**: All three entities (User, Translation, RefreshToken) are stored in PostgreSQL for permanent availability.
 - **Relational Integrity**: Deleting a `User` should trigger a cascade delete of their `Translations` and `RefreshTokens` (to be defined in the Prisma schema stage).
-- **Redis Exclusion**: Redis is used exclusively for transient data (rate limits, short-term caching) and is not part of this relational/conceptual model.
+- **Redis Exclusion**: Redis is used exclusively for transient data (rate limits, short-term caching, usage counters, the admin error feed) and for runtime operator state that has no relational counterpart (admin step-up sessions, the AI provider kill-switch); none of it is part of this relational/conceptual model.
 
 ## Entity Definitions
 
@@ -75,6 +75,8 @@ The following entities represent the persistent state of the SlangUA system, man
   - Required: Yes.
   - Default: False.
   - Business Rule: This is a product-level age gate, not identity or age verification.
+
+> **Deliberately absent: an admin flag.** `GET|PATCH /user/me` return an `isAdmin` boolean, but it is computed per request from `ADMIN_TELEGRAM_IDS` and never stored. Admin access is deployment configuration: a column here could be flipped by anything with write access to the database, and a restore from backup could resurrect a former admin. Do not add one. See [Security](06-security.md#admin-access).
 
 ### Entity: Translation
 - **userId**:
@@ -236,9 +238,33 @@ Redis serves as a low-latency ephemeral store for data that does not require lon
 - **Lifetime**: 1–2 hours (short-lived).
 - **Storage**: Redis Only.
 
+### 4. Admin Step-Up Sessions
+- **Purpose**: Hold the second factor for the admin panel outside process memory, so a restart or a second replica does not decide whether the operator is still logged in.
+- **Data Examples**: `admin:session:<HMAC of token>` → `{ uid, tid, iat }`; `admin:failures:<telegramId>`; `admin:lockout:<telegramId>`. The token itself is in neither the key nor the value.
+- **Lifetime**: Idle TTL of `ADMIN_SESSION_TTL_SECONDS`, slid forward on each admin request but clamped to the absolute deadline derived from `iat`; counters expire with the lockout window.
+- **Storage**: Redis Only — admin-ness is deployment configuration (`ADMIN_TELEGRAM_IDS`), so nothing about it belongs in PostgreSQL. See [Security](06-security.md#admin-access).
+
+### 5. AI Provider Kill-Switch
+- **Purpose**: Record which AI provider instances an operator has switched out of the fallback chain. This is operator *intent*, not health: the circuit breaker inside `AIService` stays in process memory because it is derived from live failures and is expected to heal itself, while a switch flipped by a human must survive everything and heal never.
+- **Data Examples**: one hash, `ai:provider:disabled`, field = provider id → `{"by":"<telegramId>","at":"<ISO-8601>","reason":"<text|null>"}`. Presence of the field is the switch; the JSON is provenance, and an unparseable value still counts as disabled.
+- **Lifetime**: **No TTL, deliberately.** An expiring kill-switch would put a provider back into the chain at an arbitrary moment with nobody watching. It is cleared only by `PATCH /admin/providers/:providerId` with `disabled: false` (or by hand, `HDEL`).
+- **Storage**: Redis Only — and this is the one entry here that is *not* easily re-creatable. A `FLUSHDB` re-enables every switched-off provider, which is the trade accepted in exchange for keeping the AI layer free of a Postgres dependency; the switch is a handful of fields an operator can re-flip in seconds, and the panel shows the resulting state plainly. See [Security](06-security.md#the-operator-kill-switch-for-ai-providers).
+
+### 6. Usage Counters
+- **Purpose**: Answer "how much load is there, and is any of it failing" for the admin panel without a per-request insert into PostgreSQL. These numbers are a picture of the last hour and the last week, not a ledger.
+- **Data Examples**: `metrics:req:m:<epoch minute>` and `metrics:err:m:<epoch minute>` (plain counters); `metrics:req:d:<YYYY-MM-DD>` and `metrics:err:d:<YYYY-MM-DD>` (UTC days); `metrics:users:d:<YYYY-MM-DD>` — a sorted set, member = **internal numeric user id**, score = that day's request count, which is what `ZCARD` turns into "users today" and `ZREVRANGE` into the heaviest ones. No Telegram id, no username, no text.
+- **Lifetime**: An absolute `EXPIREAT` computed from the bucket itself, never a TTL refreshed per write — otherwise a busy minute would outlive a quiet one. Minute keys live `METRICS_MINUTE_SERIES_LENGTH` minutes, day keys `METRICS_RETENTION_DAYS` days. Nothing prunes: retention *is* the expiry.
+- **Storage**: Redis Only — and freely disposable. A `FLUSHDB` loses a graph, which is exactly the cost that was accepted in exchange for keeping the counters off the hot write path in PostgreSQL.
+
+### 7. Error Feed
+- **Purpose**: Let an operator see the last few `5xx` responses without shell access — a window, not an archive. The pino logs remain the record of what happened, with the stack and the full message.
+- **Data Examples**: one list, `admin:errors`, newest at the head, each element a JSON object of exactly `{ at, method, route, statusCode, code, message, userId, requestId }`. `route` is the registered **pattern** (`/api/v1/history/:id`), never the concrete path, and `userId` is the internal id. No request body, no headers, no translated text. See [Security](06-security.md#what-the-observability-views-may-store).
+- **Lifetime**: `LTRIM` to `ADMIN_ERROR_FEED_MAX` on every write, plus a whole-key TTL of `ADMIN_ERROR_FEED_TTL_SECONDS` refreshed by each write, so a quiet week empties the feed by itself. There is no `DELETE` endpoint: anything it removed would come back on the next failure, and a clear button on a diagnostic view mostly invites hiding the evidence.
+- **Storage**: Redis Only, disposable for the same reason as the counters above.
+
 ### Summary of Storage Strategy
 - **PostgreSQL**: Source of truth for all relational, permanent data (**Users**, **Translations**, **Hashed Refresh Tokens**). If Redis is cleared, the core system functionality remains intact.
-- **Redis**: Performance accelerator and protector. Used for data that is either easily re-creatable or purely transient in nature (**Rate limits**, **Cache**).
+- **Redis**: Performance accelerator and protector. Used for data that is either easily re-creatable or purely transient in nature (**Rate limits**, **Cache**, **usage counters**, **error feed**) — with the deliberate exception of the AI provider kill-switch above, which is durable operator state with no Postgres counterpart.
 
 ## Scalability & Future-Proofing
 

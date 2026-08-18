@@ -198,6 +198,8 @@ Production deployment.
 
 *Note: These features are outside the MVP scope.*
 
+**Exception, in progress:** the admin panel is being built ahead of this stage, at the repository owner's request, in four steps — A: access layer (Telegram allowlist + password step-up, `404` for everyone else, read-only provider overview) `[done]`; B: operator kill-switch for AI providers (`PATCH /admin/providers/:providerId`, a Redis switch with no TTL that outranks the circuit breaker and is cleared only by a human) `[done]`; C: usage metrics (`GET /admin/metrics` — requests and `5xx` per minute and per UTC day, users per day with the average per user, today's heaviest users by internal id) `[done]`; D: error feed (`GET /admin/errors` — the last `ADMIN_ERROR_FEED_MAX` failures, newest first, with the code and technical message the client was never told, and no `DELETE`) `[done]`. Everything it needs lives in Redis: no Postgres migration, no admin column, no user role. Both observability views are read-only and are fed by one `onResponse` hook that writes after the reply, so a Redis failure costs a data point rather than a request; neither stores request text or a Telegram id, and neither counts `/health*`, `OPTIONS` preflights or the panel's own reads. Contract: [04-api.md §7](docs/04-api.md#7-admin-routes); rules: [06-security.md](docs/06-security.md#admin-access). Statistics and user management in the bullet above remain post-MVP in the broader sense — steps C and D cover operator-facing load and error visibility, not user administration.
+
 ---
 
 ## Development Principles
