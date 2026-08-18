@@ -17,7 +17,7 @@
 ## Передумови
 
 - **Node.js ≥ 20** та npm
-- Запущений backend на `http://localhost:3000` (див. [Getting Started](../README.md#швидкий-старт-getting-started))
+- Запущений backend на `http://localhost:3000` (див. [Швидкий старт](../README.md#швидкий-старт))
 
 ## Скрипти
 

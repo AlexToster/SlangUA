@@ -1,275 +1,168 @@
+<div align="center">
+
+<!-- 🖼 ⟨docs/assets/logo.svg 112×112 — розкоментувати, коли файл з'явиться⟩
+<img src="docs/assets/logo.svg" width="112" alt="SlangUA" />
+-->
+
 # SlangUA
 
-> AI-перекладач української мови у сучасні українські стилі мовлення.
->
-> Українська може звучати по-різному: сучасно, влучно, дотепно, молодіжно чи поетично. Ми часто користуємося лише невеликою частиною її можливостей. **SlangUA** допоможе розкрити всю палітру сучасної української мови й знайти стиль, який пасує саме вам.
+**Один текст. Шість українських голосів.**
 
----
+AI-перекладач звичайної української у сучасні стилі мовлення —
+зміст залишається, форма змінюється до невпізнання.
 
-# Ідея проєкту
+[![CI](https://github.com/AlexToster/SlangUA/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexToster/SlangUA/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-5FA04E?logo=node.js&logoColor=white)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Telegram Mini App](https://img.shields.io/badge/Telegram-Mini%20App-26A5E4?logo=telegram&logoColor=white)](https://t.me/SlangUA_bot)
+[![Stage](https://img.shields.io/badge/%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-MVP%20%D0%B2%20%D1%80%D0%BE%D0%B7%D1%80%D0%BE%D0%B1%D1%86%D1%96-orange)](plans/ROADMAP.md)
 
-SlangUA — це сервіс стилізації тексту, а не буквального перекладу.
+### [🚀 Спробувати в Telegram](https://t.me/SlangUA_bot) · [🎬 Демо](#демо) · [🎨 Стилі](#стилі) · [📚 Документація](plans/docs/README.md)
 
-Мета проєкту — перетворювати звичайний український текст у різні стилі сучасної української мови зі збереженням змісту, але максимальною зміною форми.
+<sub><b>English:</b> SlangUA rewrites plain Ukrainian text into six contrasting
+modern registers — Gen Z, street, IT, bureaucratic, prison and Galician —
+keeping the meaning intact while changing the form as much as possible.
+It is a style translator, not a dictionary, chatbot or machine translator.
+Telegram Mini App on top of Fastify, Prisma and a multi-provider LLM layer
+(OpenAI, Anthropic, Gemini, OpenRouter, local Ollama). MVP in development.</sub>
 
-Основна ідея:
+</div>
 
-> **Максимально змінити форму тексту.**
-> **Повністю зберегти його зміст.**
+## Демо
 
-Кожен стиль має бути миттєво впізнаваним.
+Один і той самий текст, шість стилів:
 
----
+> **Оригінал:** «Я йду додому, там мене чекають друзі.»
 
-# Філософія проєкту
+| Стиль | Результат |
+| ----- | --------- |
+| 🔥 **GEN_Z** — TikTok / Discord | 🖼 ⟨вставити реальний вивід⟩ |
+| 🚬 **STREET** — двір і вулиця | «Йду в хату, там братва... ой, пацани вже чекають.» |
+| 💻 **IT_SLANG** — технічний спіч | 🖼 ⟨вставити реальний вивід⟩ |
+| 🏛 **KANCLER** — бюрократ | 🖼 ⟨вставити реальний вивід; тут має бути видно подовження у 2–4 рази⟩ |
+| ⛓ **POFENI** — жаргон, 18+ | «Двигаю до себе — там кореші вже чекають.» |
+| 🍺 **GALICIAN** — львівська ґвара | 🖼 ⟨вставити реальний вивід⟩ |
 
-SlangUA не є:
+<details>
+<summary><b>Ще приклади — справжні пари з <code>examples.json</code></b></summary>
 
-* словником;
-* чат-ботом;
-* генератором текстів;
-* машинним перекладачем.
+Це не ілюстрації для README, а ті самі приклади, які Style Engine підкладає
+моделі у промпт: `src/style-engine/styles/*/examples.json`.
 
-Це **AI Style Translator**.
+| Стиль | Було | Стало |
+| ----- | ---- | ----- |
+| `GEN_Z` | Це дуже соромно, я не можу в це повірити. | Крінж чиста вода, не можу це зачіпнути. |
+| `STREET` | Це коштує багато грошей, я не можу це дозволити. | Це бабло велике, на таку роздачу у мене немає. |
+| `IT_SLANG` | Мені потрібно розгорнути нову версію на продакшн. | Треба задеплоїти хотфікс на продакшн, ролбек не варіант. |
+| `KANCLER` | Дай мені відповідь. | Прошу надати вичерпну відповідь у визначений термін, беручи до уваги вищевикладені обставини та відповідно до чинного порядку розгляду звернень. |
+| `POFENI` | Не бреши, говори правду, інакше буду проблеми. | Не гони. Базар по поняттях, інакше буде зашквар. |
+| `GALICIAN` | Давай швидко сходимо в магазин по хліб, поки не пізно. | Ходи борше до склепу за булкою, най ся не спізнимо. |
 
-Кожен стиль має власний характер, словник, правила, приклади та індивідуальну "особистість".
+</details>
 
-Стилі навмисно максимально контрастні між собою.
+<div align="center">
 
-Наприклад:
+🖼 ⟨demo.gif, 10–15 с: вставив текст → GEN_Z → перемкнув на KANCLER → «Поділитися»⟩
 
-* **GEN_Z** — молодіжний TikTok/Instagram/Discord;
-* **STREET** — вуличний базар;
-* **IT_SLANG** — технічний спіч;
-* **POFENI** — зеківський жаргон: мова вʼязниці (18+);
-* **KANCLER** — бюрократичний стиль, радянщина;
-* **GALICIAN** — галицька ґвара, львівський діалект.
+<!-- <img src="docs/assets/demo.gif" width="320" alt="SlangUA у Telegram: один текст у різних стилях" /> -->
 
-Не всі стилі однаково трансформують текст.
+</div>
 
-Наприклад:
+| Переклад | Вибір стилю | Історія |
+| :------: | :---------: | :-----: |
+| 🖼 ⟨screenshot-translate.png⟩ | 🖼 ⟨screenshot-styles.png⟩ | 🖼 ⟨screenshot-history.png⟩ |
 
-* **KANCLER** навмисно може збільшувати довжину речення у 2–4 рази.
-* **GEN_Z** намагається зберігати приблизно ту саму довжину тексту.
-* **POFENI** говорить крізь тюремну ієрархію і «поняття», тому виглядає грубіше або нагліше; це інший регістр, ніж **STREET** (двір і вулиця).
+<!-- Після появи файлів замінити рядок вище на:
+| <img src="docs/assets/screenshot-translate.png" width="240" alt="Екран перекладу"> | <img src="docs/assets/screenshot-styles.png" width="240" alt="Вибір стилю"> | <img src="docs/assets/screenshot-history.png" width="240" alt="Історія перекладів"> |
+-->
 
----
+> **Чесно про стан:** MVP у розробці. Backend готовий, фронтенд і
+> Telegram-шеринг допилюються ([Stage 7](plans/ROADMAP.md)). Стиль `POFENI` —
+> 18+ і не шериться назовні. Якість виводу залежить від обраної LLM: локальна
+> 7B-модель дасть слабший результат, ніж модель класу GPT-4.
 
-# Принципи перекладу
+## Що це таке
 
-Кожен переклад повинен відповідати таким правилам:
+SlangUA — **AI style translator**, а не словник, чат-бот, генератор текстів чи
+машинний перекладач. Він бере твій текст і переписує його чужим голосом:
 
-1. Повністю зберігати зміст оригінального тексту.
-2. Максимально передавати характер обраного стилю.
-3. Бути природним для носія української мови.
-4. Не змішувати стилі між собою.
-5. Давати користувачу відчутний WOW-ефект уже після першого перекладу.
+> зміст зберігається повністю, форма змінюється максимально.
 
----
+Кожен стиль має власний словник, промпт, приклади та «особистість», і стилі
+навмисно контрастні між собою — результат мусить бути впізнаваним з першого
+рядка, без підпису, який це стиль.
 
-# Основні можливості
+Трансформація не однакова за силою: **KANCLER** свідомо роздуває речення у 2–4
+рази, **GEN_Z** тримає приблизно ту саму довжину, **POFENI** говорить крізь
+тюремну ієрархію і «поняття» — це інший регістр, ніж **STREET** (двір і вулиця).
 
-## Функціональні можливості
+Технічно: [як побудований Style Engine](plans/docs/07-styles.md) ·
+[архітектурні рішення](plans/docs/05-decisions.md)
 
-* переклад українського тексту у різні стилі;
-* Telegram Mini App (TWA);
-* історія перекладів — до 100 записів на користувача (константа `HISTORY_MAX_ENTRIES` на сервері, не змінюється через env). Після кожного збереження найстаріші записи понад ліміт видаляються, але **улюблені не обрізаються ніколи**, тому користувач, який усе позначає зірочкою, може перевищити ліміт. `GET /history` повертає цей ліміт як `totalLimit`, щоб клієнт не зашивав число в себе.
+## Стилі
 
-## Архітектурні особливості
+Шість стилів. Ідентифікатори — значення enum `SlangStyle`.
 
-* Fastify Backend;
-* підтримка декількох AI Provider;
-* окремий Style Engine.
-
----
-
-# Архітектура
-
-```text
-Telegram Mini App (TWA)
-        │
-        ▼
-     Fastify
-        │
-        ▼
- Translation Service
-        │
-        ▼
-    AI Service
-        │
-        ▼
-   AI Provider
-        │
-        ▼
-       LLM
-```
-
-Стилізація працює окремою підсистемою.
-
-```text
-BaseAdapter
-      │
-      ▼
- Style Engine
-      │
-      ├── Registry
-      ├── Prompt
-      ├── Examples
-      └── Lexicon
-```
-
-Style Engine відповідає лише за побудову системного промпту.
-
-Він не містить бізнес-логіки, не працює з базою даних та не викликає LLM.
-
----
-
-# Технології
-
-## Backend
-
-* Node.js
-* TypeScript
-* Fastify
-* Prisma
-* PostgreSQL
-* Redis
-
-## Frontend
-
-* Telegram Mini App (TWA)
-* React
-* Vite
-* Звичайний CSS — по одному файлу на компонент (Tailwind навмисно не використовується)
-
-## AI
-
-* OpenAI
-* Anthropic (Claude)
-* Gemini
-* Ollama (локальні моделі)
-* OpenRouter
-* Adapter Pattern
-
-> Класів адаптерів три, а не п'ять: `OpenAICompatibleAdapter` обслуговує всіх, хто розмовляє форматом OpenAI Chat Completions (OpenAI, OpenRouter, локальна Ollama через `/v1`), а власні класи мають лише Anthropic і Gemini. Провайдер — це набір параметрів у `.env`, тому підключити ще один сумісний ендпоінт (Groq, DeepSeek, vLLM, проксі) можна без нового коду.
-
-> Конкретні моделі, ключі, базові URL, пріоритет провайдерів і таймаути задаються через змінні середовища (див. розділ «Змінні середовища» та `src/config/index.ts` як джерело правди), тому не дублюються тут, щоб не застарівати.
-
-> Список AI-провайдерів відкритий: новий інстанс додається змінними середовища (`AI_EXTRA_INSTANCES`), без міграції бази і без змін у клієнті. Ідентифікатор провайдера (`providerId`) — вільний рядок у нижньому регістрі, а не enum, саме щоб додавання провайдера залишалося налаштуванням, а не зміною схеми.
-
-> Кожна змінна з ключем AI-провайдера приймає **кілька ключів через кому**: коли поточний ключ вичерпав ліміт, запит обслуговує наступний. Перед тим як складати кілька ключів разом, перевірте умови провайдера: деякі забороняють мати кілька безкоштовних акаунтів.
-
----
-
-# Основні принципи проєкту
-
-* Максимально зберігати зміст при максимальній зміні стилю.
-* Кожен стиль повинен легко впізнаватися.
-* Стилі повинні бути контрастними між собою.
-* Архітектура має залишатися максимально простою до появи реальної потреби в її ускладненні.
-
----
-
-# Future
-
-Після MVP планується розвиток у таких напрямках.
-
-## Style Engine
-
-* нові стилі;
-* розширення словників;
-* збільшення кількості прикладів;
-* Character Engine;
-* Adaptive Examples;
-* Prompt Builder;
-* Style Validation.
-
-## Адмін-панель
-
-Можливість керування стилями без зміни коду:
-
-* увімкнення та вимкнення стилів;
-* редагування Prompt;
-* редагування словників;
-* редагування прикладів;
-* керування версіями стилів;
-* статистика використання стилів.
-
-Архітектура Style Engine вже проєктується таким чином, щоб у майбутньому перейти від файлової системи до бази даних або API без зміни його публічного контракту.
-
-> Шар доступу до адмінки вже реалізований: вхід за Telegram-allowlist плюс пароль, сесія з кроком підтвердження, і `GET /api/v1/admin/overview` зі станом ланцюжка AI-провайдерів. Реалізований і кіл-світч оператора: `PATCH /api/v1/admin/providers/:providerId` вимикає провайдера з ланцюжка fallback і повертає його назад — запис живе в Redis без TTL, тож сам собою не «вилікується» ні через кулдаун, ні після рестарту, і зняти його може лише людина. Додані два оглядові розділи: `GET /api/v1/admin/metrics` — навантаження по хвилинах і по добах (UTC) плюс найактивніші користувачі за сьогодні, і `GET /api/v1/admin/errors` — останні `5xx` із кодом, технічним повідомленням і `requestId` для пошуку в логах. Обидва читаються з лічильників у Redis, які пише хук `onResponse`; жоден не зберігає текст запиту чи Telegram-id, і жоден не рахує ні `/health*`, ні звернення самої адмінки. Налаштування — у розділі «Змінні середовища» (`ADMIN_*`, `METRICS_*`), контракт — у [`plans/docs/04-api.md`](plans/docs/04-api.md). Керування стилями з переліку вище — наступні етапи.
-
-## AI
-
-* нові AI Provider;
-* fallback між моделями;
-* локальні LLM.
-
-## Клієнти
-
-* Telegram Mini App;
-* PWA;
-* Web Version;
-* Android;
-* iOS.
-
----
-
-# Статус
-
-**Поточний статус:** активна розробка MVP.
-
-Основна увага зараз приділяється побудові стабільної архітектури та Style Engine. Після завершення MVP розвиток буде зосереджений на розширенні функціональності, додаванні нових стилів і розвитку адміністративної панелі.
-
-Основний принцип розвитку:
-
-> **Спочатку просте рішення.**
-> **Потім стабілізація.**
-> **Лише після цього — нові абстракції.**
-
----
-
-## Документація
-
-Технічна документація починається з [plans/docs/README.md](plans/docs/README.md); звідти — посилання на [architecture.md](plans/architecture.md) та інші документи.
-
-| Файл | Опис |
-| ---- | ---- |
-| [plans/docs/README.md](plans/docs/README.md) | Індекс архітектурної документації: огляд усіх документів у `plans/docs/` (01–10). |
-| [plans/architecture.md](plans/architecture.md) | Високорівнева архітектура та діаграми. |
-| [plans/ROADMAP.md](plans/ROADMAP.md) | Поетапний план реалізації зі статусами. |
-| [plans/docs/01-backend.md](plans/docs/01-backend.md) | Backend Architecture — шари, потік комунікації, конфігурація AI-провайдерів. |
-| [plans/docs/02-frontend.md](plans/docs/02-frontend.md) | Frontend Architecture — структура клієнта, Telegram Mini App, UI. |
-| [plans/docs/03-database.md](plans/docs/03-database.md) | Database Design — концептуальна модель та Prisma-схема. |
-| [plans/docs/04-api.md](plans/docs/04-api.md) | API Design — маршрути, DTO, контракти та валідація. |
-| [plans/docs/05-decisions.md](plans/docs/05-decisions.md) | Architectural Decisions — прийняті рішення та обґрунтування. |
-| [plans/docs/06-security.md](plans/docs/06-security.md) | Security — автентифікація, авторизація, rate limiting, захист даних. |
-| [plans/docs/07-styles.md](plans/docs/07-styles.md) | Style Engine Specification. |
-| [plans/docs/08-frontend-design.md](plans/docs/08-frontend-design.md) | Frontend Design Specification (Stage 6) — UX та acceptance criteria. |
-| [plans/docs/09-telegram-sharing.md](plans/docs/09-telegram-sharing.md) | Telegram-native Sharing Architecture. |
-| [plans/docs/10-repository-hygiene.md](plans/docs/10-repository-hygiene.md) | Repository hygiene audit та план очищення. |
-
-> **Політика мови документації:** README, [AGENTS.md](AGENTS.md) і [CONTRIBUTING.md](CONTRIBUTING.md) ведуться українською (продуктовий і командний контекст); технічна документація в `plans/**` — англійською (architecture, ROADMAP, API, style engine). Дотримуйтеся цієї конвенції для нових документів.
-
----
-
-# Швидкий старт (Getting Started)
-
-## Передумови
+| Стиль | Голос | Як звучить |
+| ----- | ----- | ---------- |
+| `GEN_Z` | TikTok, Instagram, Discord | «Сквад фармить лобі всю ніч, грінд не для слабких.» |
+| `STREET` | двір, вулиця, базар | «Це бабло велике, на таку роздачу у мене немає.» |
+| `IT_SLANG` | технічний спіч, продакшн і деплої | «Продакшн даун, алерт спрацював — лезу дебажити.» |
+| `KANCLER` | бюрократ, радянщина; текст довшає у 2–4 рази | «Прошу надати вичерпну відповідь у визначений термін, беручи до уваги вищевикладені обставини…» |
+| `POFENI` **18+** | тюремний жаргон, «поняття» | «Не гони. Базар по поняттях, інакше буде зашквар.» |
+| `GALICIAN` | львівська ґвара | «Ходи борше до склепу за булкою, най ся не спізнимо.» |
+
+`POFENI` доступний лише після підтвердження повноліття і **не шериться** назовні.
+Приклади вище — справжні пари з `src/style-engine/styles/*/examples.json`.
+Додати свій стиль — [чекліст в AGENTS.md](AGENTS.md).
+
+## Можливості
+
+- **Шість контрастних стилів** — від TikTok до бюрократа, з age gate для 18+.
+- **Telegram Mini App** — працює всередині Telegram, без реєстрації та паролів:
+  вхід через `initData`.
+- **Історія та улюблені** — останні 100 перекладів; позначені зірочкою
+  зберігаються без обмежень.
+- **Шеринг лише в Telegram** — переклад іде у вибраний чат як текст, без
+  публічних посилань на твій текст.
+  [Чому саме так](plans/docs/09-telegram-sharing.md).
+- **Будь-яка LLM** — OpenAI, Anthropic, Gemini, OpenRouter, локальний Ollama або
+  будь-який OpenAI-сумісний ендпоінт; додається змінними середовища, без зміни
+  коду. Автоматичний fallback між провайдерами і ротація ключів за лімітами.
+- **Панель оператора** — вхід за Telegram-allowlist плюс пароль, кіл-світч
+  провайдера, навантаження по хвилинах і добах, стрічка останніх `5xx`.
+  Вимкнена за замовчуванням: без `ADMIN_TELEGRAM_IDS` маршрутів просто не існує.
+
+## Спробувати
+
+**Найшвидший шлях —** [@SlangUA_bot](https://t.me/SlangUA_bot) у Telegram.
+Реєстрація не потрібна: вхід через Telegram-акаунт.
+
+Хочеш свій інстанс — далі про локальний запуск.
+
+## Швидкий старт
+
+> ~5 хвилин, якщо PostgreSQL і Redis уже запущені. Потрібен хоча б один AI-ключ
+> або локальний Ollama: без жодного провайдера сервер підніметься, але переклад
+> повертатиме помилку.
+
+### Передумови
 
 - **Node.js ≥ 20** та npm.
-- **PostgreSQL** і **Redis** (локально або у Docker).
+- **PostgreSQL** і **Redis** — локально або у Docker.
 - **Docker Desktop** — лише для інтеграційних тестів (Testcontainers).
 - **Telegram Bot Token** — для реальної автентифікації Mini App.
-- Щонайменше один AI-провайдер: ключ до OpenAI / Anthropic / Gemini / OpenRouter **або** локальний Ollama.
+- Щонайменше один AI-провайдер: ключ до OpenAI / Anthropic / Gemini /
+  OpenRouter **або** локальний Ollama.
 
-## Backend
+### Backend
 
 ```bash
 # 1. Встановити залежності
 npm install
 
-# 2. Створити .env на основі шаблону та заповнити змінні (див. таблицю нижче)
+# 2. Створити .env на основі шаблону та заповнити змінні
 cp .env.example .env
 
 # 3. Згенерувати Prisma Client
@@ -284,170 +177,157 @@ npm run dev
 
 Production-збірка: `npm run build`, запуск — `npm start`.
 
-## Frontend
+### Frontend
 
 ```bash
 cd frontend
-
-# 1. Встановити залежності
 npm install
-
-# 2. Запустити Vite dev-сервер (http://localhost:5173)
-#    Запити на /api проксуються на backend (http://localhost:3000)
-npm run dev
+npm run dev   # http://localhost:5173, запити на /api ідуть на localhost:3000
 ```
 
-Production-збірка frontend: `npm run build` (у теці `frontend/`) — вона збирає лише app- і node-проєкти TypeScript, як це робить Docker. Типи тестів перевіряє окремий `npm run typecheck`.
+### Конфігурація
 
-## Змінні середовища
+Джерело правди — Zod-схема у [`src/config/index.ts`](src/config/index.ts):
+невалідна конфігурація зупиняє запуск процесу, а значення-заглушки з
+`.env.example` відхиляються при `NODE_ENV=production` — копію прикладу
+неможливо задеплоїти як є.
 
-Джерело правди — Zod-схема у [`src/config/index.ts`](src/config/index.ts): невалідна конфігурація зупиняє запуск процесу. Нижче — обов'язкові та ключові опційні змінні.
+**Мінімум для старту:** `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
+`REFRESH_TOKEN_HMAC_SECRET`, `TELEGRAM_BOT_TOKEN`, `PREVIEW_ROOT_KEY`
+і хоча б один AI-ключ.
 
-### Обов'язкові
+Адмін-панель вимкнена за замовчуванням: поки `ADMIN_TELEGRAM_IDS` порожній,
+усі маршрути `/api/v1/admin/*` віддають 404.
 
-| Змінна | Опис |
-| ------ | ---- |
-| `DATABASE_URL` | URL підключення до PostgreSQL. |
-| `REDIS_URL` | URL підключення до Redis. |
-| `JWT_SECRET` | Секрет для підпису JWT (мінімум 32 символи). |
-| `REFRESH_TOKEN_HMAC_SECRET` | Секрет для HMAC-хешування refresh-токенів (мінімум 32 символи). |
-| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота для перевірки `initData`. |
-| `PREVIEW_ROOT_KEY` | Base64-кодований 32-байтовий ключ для шифрування preview-кешу. |
+Повний довідник змінних середовища — [docs/configuration.md](docs/configuration.md);
+синхронізований зі схемою перелік з коментарями — [`.env.example`](.env.example).
 
-> Значення-заглушки з [`.env.example`](.env.example) (усі з позначкою `example-only`, а також демонстраційний `PREVIEW_ROOT_KEY`) відхиляються під час запуску при `NODE_ENV=production`. Копію прикладу неможливо задеплоїти як є.
+### Тести
 
-### Ключові опційні (зі значеннями за замовчуванням)
+```bash
+npm test          # усе: typecheck + smoke + unit + integration
+npm run test:unit # без Docker
+```
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `NODE_ENV` | `development` | Режим роботи (`development` / `production` / `test`). |
-| `PORT` / `HOST` | `3000` / `0.0.0.0` | Адреса backend-сервера. |
-| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `7d` | Час життя access/refresh токенів. |
-| `AUTH_DATE_TTL` | `86400` | TTL Telegram `auth_date` у секундах (захист від replay). |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` | — | Ключі AI-провайдерів (опційні; потрібен хоча б один провайдер). Кожна змінна приймає **кілька ключів через кому** — вичерпаний ключ відкладається, запит обслуговує наступний. |
-| `AI_KEY_COOLDOWN_RATE_MS` | `60000` | На скільки відкладається ключ, який упав у ліміт запитів. |
-| `AI_KEY_COOLDOWN_QUOTA_MS` | `3600000` | Те саме для ключа з вичерпаною квотою. |
-| `AI_KEY_COOLDOWN_INVALID_MS` | `3600000` | Те саме для ключа, який провайдер відхилив як недійсний. |
-| `AI_MODEL_*` | див. конфіг | Назви моделей для кожного провайдера. |
-| `AI_BASE_URL_OPENAI` | `https://api.openai.com/v1` | Базовий URL OpenAI-сумісного інстансу разом із версією API. Можна спрямувати на будь-який сумісний ендпоінт (Groq, DeepSeek, vLLM, проксі) без зміни коду. |
-| `AI_BASE_URL_OPENROUTER` | `https://openrouter.ai/api/v1` | Те саме для OpenRouter. |
-| `AI_EXTRA_INSTANCES` | — | Додаткові OpenAI-сумісні інстанси через кому, напр. `groq,deepseek`. Ідентифікатор — `[a-z0-9_-]`, до 32 символів, не може збігатися з вбудованим (`openai`, `anthropic`, `gemini`, `ollama`, `openrouter`). Кожен `<ID>` налаштовується через `AI_BASE_URL_<ID>`, `AI_MODEL_<ID>`, `<ID>_API_KEY` і опційний `AI_TIMEOUT_<ID>`; інстанс без URL, моделі або ключа пропускається з логом помилки, а не валить запуск. |
-| `AI_PROVIDER_PRIORITY` | `openai,anthropic,gemini,ollama,openrouter` | Порядок fallback між провайдерами. Бере участь кожен налаштований інстанс: не згаданий у списку йде в кінець, а не вимикається. Невідомий ідентифікатор ігнорується з попередженням. |
-| `AI_MAX_FALLBACK_ATTEMPTS` | — | Максимум провайдерів на один запит; без значення — стільки, скільки доступно. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Адреса локального Ollama. Власної змінної `AI_BASE_URL_OLLAMA` немає: до цього хоста додається OpenAI-сумісний шлях `/v1`. |
-| `OLLAMA_ENABLED` | — | `true`/`false`. Без значення: увімкнено поза production, вимкнено в production (в Ollama немає API-ключа, за яким можна визначити «налаштований»). |
-| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` / `CIRCUIT_BREAKER_RESET_MS` | `5` / `60000` | Скільки поспіль помилок відкриває breaker провайдера і на який час. |
-| `TELEGRAM_INLINE_ENABLED` | `false` | Увімкнення Telegram inline-share. |
-| `TELEGRAM_WEBHOOK_SECRET` | — | Обовʼязковий, якщо `TELEGRAM_INLINE_ENABLED=true`: очікуваний `x-telegram-bot-api-secret-token`. |
-| `WEBHOOK_RATE_LIMIT_WINDOW_MS` / `WEBHOOK_RATE_LIMIT_MAX_REQUESTS` | `60000` / `30` | Ліміт запитів на `POST /telegram/webhook`. |
-| `AUTH_RATE_LIMIT_WINDOW_MS` / `AUTH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Ліміт на `POST /auth/telegram` за IP — окремий від загального `RATE_LIMIT_*`, бо ендпоінт видає токени. |
-| `REFRESH_RATE_LIMIT_WINDOW_MS` / `REFRESH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Те саме для `POST /auth/refresh`. |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Дозволені origin-и для CORS. |
-| `TRUST_PROXY` | `false` | Довіряти заголовкам проксі для визначення IP. |
-| `LOG_LEVEL` | `info` | Рівень логування. |
+Інтеграційні тести піднімають тимчасові PostgreSQL і Redis через Testcontainers
+(потрібен Docker) і не роблять жодного зовнішнього запиту — LLM підміняється
+локальним OpenAI-сумісним моком. Те саме виконує
+[CI](.github/workflows/ci.yml) на кожен push і PR у `main`.
+Деталі, структура тестів і що саме покриває кожен набір —
+[CONTRIBUTING.md](CONTRIBUTING.md#тестування).
 
-> Повний, синхронізований зі схемою перелік усіх змінних — у [`.env.example`](.env.example).
+<details>
+<summary>Не запускається?</summary>
 
-> Rate limiting, preview/save/share TTL та інші тонкі налаштування також конфігуруються через env — повний перелік дивіться у [`src/config/index.ts`](src/config/index.ts).
+- `Config validation failed` — не заповнений обов'язковий ключ у `.env`;
+  повний перелік з описами: [docs/configuration.md](docs/configuration.md).
+- Порт `3000` зайнятий — змінити `PORT`.
+- Переклад повертає помилку, хоча сервер піднявся — не задано жодного AI-ключа
+  або вибраний провайдер відключений кіл-світчем (`ai:provider:disabled` у Redis).
+- 🖼 ⟨додати 1–2 реальні граблі, на які ти сам наступив під час деплою⟩
 
-### Адмін-панель
+</details>
 
-Адмінка вимикається за замовчуванням: поки `ADMIN_TELEGRAM_IDS` порожній, усі маршрути `/api/v1/admin/*` віддають **404** — той самий, що й неіснуючий шлях. Доступ дають два незалежні фактори: Telegram-id зі списку і пароль, хеш якого лежить в `.env`. Ролі в базі немає — адміном робить конфігурація деплою, а не рядок у Postgres. Контракт маршрутів — у [`plans/docs/04-api.md`](plans/docs/04-api.md).
+## Технології
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `ADMIN_TELEGRAM_IDS` | — (порожньо) | Числові Telegram-id через кому, яким дозволено вхід. Порожнє значення = адмінки не існує. Тільки id: username власник може змінити, і його не підписує Telegram в `initData`. |
-| `ADMIN_PASSWORD_HASH` | — (порожньо) | scrypt-хеш пароля у форматі `scrypt$N=…,r=…,p=…$<salt>$<key>`. Генерується локально: `node scripts/hash-admin-password.mjs >> .env` (пароль вводиться на stdin, мінімум 12 символів, у виводі його немає). Форма хеша перевіряється при старті — зіпсована вставка впаде на запуску, а не виглядатиме як вічно неправильний пароль. Обовʼязковий, якщо заданий `ADMIN_TELEGRAM_IDS`: allowlist без пароля був би одним фактором. |
-| `ADMIN_SESSION_TTL_SECONDS` | `900` | Idle-вікно admin-сесії: продовжується на кожному запиті до адмінки. |
-| `ADMIN_SESSION_ABSOLUTE_TTL_SECONDS` | `28800` | Жорстке вікно: не продовжується ніколи, тому вкрадений admin-токен помирає протягом 8 годин навіть при активному використанні. Не може бути меншим за idle-вікно. |
-| `ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS` / `ADMIN_LOGIN_RATE_LIMIT_MAX` | `300000` / `5` | Ліміт спроб пароля (429). Окремий від загального бюджету, бо 100 запитів/хв — це не перешкода для перебору. |
-| `ADMIN_LOGIN_MAX_FAILURES` / `ADMIN_LOGIN_LOCKOUT_MS` | `5` / `900000` | Блокування входу після N хибних паролів. Рахується **на кожен Telegram-id окремо**, тому один адмін не може заблокувати іншого; лічильник згасає разом із блокуванням. |
-| `ADMIN_RATE_LIMIT_WINDOW_MS` / `ADMIN_RATE_LIMIT_MAX_REQUESTS` | `60000` / `120` | Бюджет уже автентифікованих admin-маршрутів. |
-| `METRICS_MINUTE_SERIES_LENGTH` | `60` | Скільки хвилин показує графік навантаження (максимум 1440). Це і глибина серії, і час життя хвилинних лічильників: термін життя кожного ключа обчислюється з його ж кошика, тому «остання година» означає те саме для всіх ключів. |
-| `METRICS_RETENTION_DAYS` | `7` | Скільки добових рядків (UTC) віддає `GET /admin/metrics` і скільки живуть добові лічильники. Прибирання немає — зберігання **і є** термін життя ключа. |
-| `METRICS_TOP_USERS_LIMIT` | `10` | Скільки найактивніших користувачів за сьогодні показувати. У рядку лише внутрішній числовий id — ніколи Telegram-id і ніколи username. |
-| `ADMIN_ERROR_FEED_MAX` | `100` | Довжина стрічки помилок: список у Redis обрізається до цього значення на кожному записі, тому рости він не може. `?limit=` більший за це число не помилка — його просто підріжуть. |
-| `ADMIN_ERROR_FEED_TTL_SECONDS` | `604800` | Час життя всього ключа стрічки, що поновлюється при кожному записі: тиждень без збоїв спорожнює її сам. |
+| Шар | Стек |
+| --- | ---- |
+| Backend | Node.js ≥ 20 · TypeScript · Fastify · Prisma · PostgreSQL · Redis · Zod |
+| Frontend | React · Vite · Telegram Mini App SDK · звичайний CSS, по файлу на компонент (Tailwind свідомо не використовується) |
+| AI | OpenAI · Anthropic · Gemini · OpenRouter · Ollama, через adapter pattern |
 
-> `ADMIN_PASSWORD_HASH` свідомо **не** входить до переліку «заглушок», які відхиляються в production: у [`.env.example`](.env.example) ця змінна порожня, бо будь-яке правильне за формою значення-приклад було б хешем пароля, опублікованого в цьому репозиторії. Замість цього при старті працює інше правило — allowlist без хеша не дає запуститися.
+**Про AI-шар.** Класів адаптерів три, а не п'ять: `OpenAICompatibleAdapter`
+обслуговує всіх, хто розмовляє форматом OpenAI Chat Completions (OpenAI,
+OpenRouter, локальна Ollama через `/v1`), власні класи мають лише Anthropic і
+Gemini. Провайдер — це набір змінних середовища, а не enum і не код, тому Groq,
+DeepSeek, vLLM чи проксі підключаються через `AI_EXTRA_INSTANCES` без міграції
+бази і без змін у клієнті. Кожен ключ можна задати списком через кому —
+вичерпаний відкладається, запит обслуговує наступний. Ланцюжок fallback можна
+розірвати вручну: кіл-світч оператора вимикає провайдера до явного повернення,
+не «лікуючись» ні кулдауном, ні рестартом.
 
-> Кіл-світч провайдерів навмисно не має жодної змінної середовища: це рішення оператора, ухвалене під час роботи системи, а не налаштування деплою. Стан лежить у Redis (хеш `ai:provider:disabled`) **без TTL** і зберігається між рестартами; вимкнути й увімкнути провайдера можна лише через `PATCH /api/v1/admin/providers/:providerId` (або руками через `HDEL`). Уточнення: `FLUSHDB` увімкне назад усе, що було вимкнено, — це усвідомлений компроміс за те, що AI-шар не залежить від Postgres.
+Як додати провайдера — [AGENTS.md](AGENTS.md).
 
-> Обидва оглядові розділи живуть виключно в Redis і нічого не пишуть у Postgres: лічильники (`metrics:req:*`, `metrics:err:*`, `metrics:users:d:*`) і стрічка помилок (`admin:errors`) самі згасають за термінами вище, тому окремого прибирання немає. Що саме туди потрапляє — обмежено списком дозволеного: статус-код, шаблон маршруту, наш код помилки, обрізане технічне повідомлення, внутрішній id користувача і `requestId`. Ні тексту запиту, ні заголовків, ні Telegram-id — див. [`plans/docs/06-security.md`](plans/docs/06-security.md).
+## Архітектура
 
-### Frontend (Vite, build-time)
+```text
+Telegram Mini App → Fastify → Translation Service → AI Service → AI Provider → LLM
+                                                         ↑
+                                              Style Engine (бібліотека)
+                                    registry · prompt · examples · lexicon
+```
 
-Ці змінні **не входять** до Zod-схеми backend: Vite вбудовує їх у бандл під час збірки (`VITE_*`), тому вони публічні за визначенням — секретів тут бути не може. Джерело правди для типів — [`frontend/src/vite-env.d.ts`](frontend/src/vite-env.d.ts).
+**Style Engine** будує системний промпт — і більше нічого: без бізнес-логіки,
+без бази даних, без викликів LLM. Його споживає `base.adapter.ts`, тому це не
+ланка в ланцюжку виклику, а бібліотека збоку. Публічний контракт зафіксований,
+щоб згодом перевести стилі з файлів у базу або API, не переписуючи споживачів.
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | База для запитів до backend. У production передається як build-arg у [`Dockerfile`](Dockerfile). |
-| `VITE_FEEDBACK_URL` | `https://t.me/+1lYdnphwsLBlZWMy` | Посилання на канал обговорення в розділі «Зворотний зв'язок» Налаштувань. Telegram-посилання відкриваються через `openTelegramLink`. |
-| `VITE_SHARE_URL` | `https://t.me/SlangUA_bot` | Посилання, що супроводжує надісланий переклад: `t.me/share/url` вимагає параметр `url`. Вкажіть свого бота, якщо розгортаєте власний. |
+Детально: [архітектура](plans/architecture.md) ·
+[backend](plans/docs/01-backend.md) · [frontend](plans/docs/02-frontend.md) ·
+[база даних](plans/docs/03-database.md) · [API](plans/docs/04-api.md) ·
+[безпека](plans/docs/06-security.md)
 
+## Статус
+
+Активна розробка MVP. Стан по етапах — у [ROADMAP](plans/ROADMAP.md),
+тут — коротко:
+
+| Що | Стан |
+| --- | --- |
+| Backend, API, база, Style Engine (6 стилів) | ✅ готово для MVP |
+| Шар доступу до адмінки: allowlist + пароль, кіл-світч, метрики, стрічка помилок | ✅ готово |
+| Frontend + Telegram Mini App | 🚧 Stage 7, у роботі |
+| Інтеграція і тестування | ⏭ Stage 8, наступний |
+| Публічний деплой | 🗓 Stage 9, запланований |
+
+**Далі:** нові стилі та ширші словники · керування стилями з адмінки без зміни
+коду (промпти, словники, приклади, версії) · fallback між моделями · PWA, web і
+мобільні клієнти.
+
+Принцип розвитку: спочатку просте рішення, потім стабілізація, і лише після
+цього — нові абстракції.
+
+## Документація
+
+Повний індекс — [plans/docs/README.md](plans/docs/README.md). Найкорисніше:
+
+- [Архітектура](plans/architecture.md) — діаграми і високий рівень
+- [Style Engine](plans/docs/07-styles.md) — стилі, словники, приклади
+- [API](plans/docs/04-api.md) — маршрути, DTO, контракти
+- [Безпека](plans/docs/06-security.md) — автентифікація, rate limiting, дані
+- [Конфігурація](docs/configuration.md) — усі змінні середовища
+- [ROADMAP](plans/ROADMAP.md) — етапи і статуси
+- [AGENTS.md](AGENTS.md) — робочі правила та інваріанти проєкту
+- [SLANGUA-BRIEFING.md](plans/SLANGUA-BRIEFING.md) — самодостатній технічний
+  дамп, який можна віддати будь-якій моделі
+
+> **Мова документації:** README, [AGENTS.md](AGENTS.md) і
+> [CONTRIBUTING.md](CONTRIBUTING.md) — українською; технічна документація в
+> `plans/**` — англійською. Дотримуйтеся цього для нових документів.
 
 ---
 
-# Тестування
+## Внесок
 
-## Залежності для інтеграційних тестів
+PR і issue вітаються. Перед початком — [CONTRIBUTING.md](CONTRIBUTING.md) та
+[AGENTS.md](AGENTS.md) (інваріанти, які легко порушити випадково).
 
-**Docker Desktop** є обов'язковим для запуску інтеграційних тестів, оскільки вони використовують Testcontainers для створення тимчасових контейнерів PostgreSQL та Redis.
+Особливо цінний внесок — **словники і приклади для стилів**: за них не потрібно
+знати архітектуру, достатньо чуття мови.
+🖼 ⟨якщо готовий приймати такі PR — постав теґ `good first issue` на кілька
+конкретних задач і посилайся тут на них⟩
 
-## Команди для запуску тестів
+## Зворотний зв'язок
 
-```bash
-# Повний набір тестів (typecheck + smoke + unit + integration)
-npm test
+Обговорення і повідомлення про баги —
+[канал у Telegram](https://t.me/+1lYdnphwsLBlZWMy) або
+[GitHub Issues](https://github.com/AlexToster/SlangUA/issues).
 
-# Тільки перевірка типів
-npm run test:typecheck
+## Ліцензія
 
-# Smoke-тест: production build + перевірка Style Engine
-npm run test:smoke
+[MIT](LICENSE) © AlexToster
 
-# Модульні тести без Docker: AI-шар (пул ключів, ротація, fallback, кіл-світч провайдерів),
-# Zod-схема конфігурації, хешування пароля адмінки (бібліотека + скрипт-генератор),
-# метрики та стрічка помилок на фейковому Redis
-npm run test:unit
+<div align="center">
+Якщо ідея зайшла — ⭐ репозиторію допомагає її знайти іншим.
+</div>
 
-# Інтеграційні тести (потрібен Docker)
-npm run test:integration
-```
-
-Frontend має власний набір (тека `frontend/`): `npm test` — одноразовий прогін vitest + Testing Library, `npm run test:watch` — режим спостереження, `npm run lint`, `npm run typecheck`, `npm run build`.
-
-Ті самі команди виконує GitHub Actions на кожен push і PR у `main` — [`.github/workflows/ci.yml`](.github/workflows/ci.yml), окремі jobs для backend (з Docker для інтеграційних тестів) і frontend.
-
-## Особливості інтеграційних тестів
-
-- Використовують **тимчасові контейнери** PostgreSQL та Redis (створюються автоматично через Testcontainers)
-- Використовують **локальний OpenAI-сумісний мок** на `POST /v1/chat/completions` (детермінований, без зовнішніх мережевих викликів). Він підставляється замість локального Ollama, а через нього — під той самий `OpenAICompatibleAdapter`, яким працює продакшн.
-- **Жодних зовнішніх викликів** до Telegram, OpenAI, Anthropic, Gemini, реального Ollama або інших сервісів
-- Тести запускаються **послідовно** (серіально), оскільки конфігурація додатка та синглтони сервісів є глобальними для процесу
-- Перед кожним тестом очищаються дані у Redis та PostgreSQL
-- Усі секрети (`JWT_SECRET`, `REFRESH_TOKEN_HMAC_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `PREVIEW_ROOT_KEY`) — детерміновані тестові значення
-- Адмінка теж має фікстуру: два `ADMIN_TELEGRAM_IDS` і `ADMIN_PASSWORD_HASH` разового пароля. Значення дублюються у [`test/integration/global-setup.ts`](test/integration/global-setup.ts) і в блоці `env` [`vitest.integration.config.mjs`](vitest.integration.config.mjs) — перший виконується до створення воркерів, другий доїжджає до них, тому обидва мусять залишатися синхронними
-
-## Структура інтеграційних тестів
-
-```
-test/
-├── integration/
-│   ├── auth.integration.test.ts        # Автентифікація (Telegram, refresh, logout, rate limit)
-│   ├── translate.integration.test.ts   # Переклад (усі стилі, age gate, prompt injection, AI failure)
-│   ├── history.integration.test.ts     # Історія (пагінація, фільтри, favorite, власність записів)
-│   ├── share.integration.test.ts       # Telegram inline share (токени, 18+ заборона)
-│   ├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429, webhook secret)
-│   ├── health.integration.test.ts      # /health (liveness, без метрики) і /health/ready (DB + Redis)
-│   ├── admin-auth.integration.test.ts  # Доступ до адмінки (404 для не-адмінів, пароль, крок-ап сесія)
-│   ├── admin-providers.integration.test.ts # Кіл-світч провайдерів (Redis без TTL, 503 при вимкненні всього)
-│   ├── admin-metrics.integration.test.ts # Метрики (хвилинна серія, добові цифри, що НЕ рахується)
-│   ├── admin-errors.integration.test.ts # Стрічка помилок (реальний 5xx у стрічці, текст запиту — ні)
-│   ├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
-│   ├── setup-test-context.ts           # Per-file setup: контекст, очищення БД і Redis
-│   └── test-context.ts                 # Спільний контекст (app, Prisma, Redis)
-└── helpers/
-    ├── mock-ollama-server.ts           # Детермінований OpenAI-сумісний мок (/v1/chat/completions)
-    └── telegram-initdata.ts            # Генератор підписаних initData
-```

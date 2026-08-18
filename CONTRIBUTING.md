@@ -4,7 +4,7 @@
 
 ## Перш ніж почати
 
-- Підніміть проєкт локально за інструкцією [Getting Started](README.md#швидкий-старт-getting-started).
+- Підніміть проєкт локально за інструкцією [Швидкий старт](README.md#швидкий-старт).
 - Ознайомтеся з архітектурою: [plans/docs/README.md](plans/docs/README.md) → [architecture.md](plans/architecture.md).
 - Один раз на початку роботи перевіряйте `git status`; наявні незв'язані зміни вважаються чужими й не чіпаються.
 
@@ -37,6 +37,55 @@ npm run build               # без тестового проєкту — як 
 
 Обсяг перевірок — пропорційно до ризику зміни (див. [AGENTS.md](AGENTS.md)). Невдалий тест спочатку ізолюйте: не маскуйте його зміною очікування чи вимкненням без доказів, що контракт змінився навмисно.
 
+## Тестування
+
+**Docker Desktop** обов'язковий для інтеграційних тестів: вони підіймають тимчасові контейнери PostgreSQL і Redis через Testcontainers.
+
+```bash
+npm test                  # усе: typecheck + smoke + unit + integration
+npm run test:typecheck    # тільки перевірка типів
+npm run test:smoke        # production build + перевірка Style Engine
+npm run test:unit         # без Docker
+npm run test:integration  # потрібен Docker
+```
+
+`test:unit` покриває AI-шар (пул ключів, ротація, fallback, кіл-світч провайдерів), Zod-схему конфігурації, хешування пароля адмінки (бібліотека + скрипт-генератор), метрики та стрічку помилок на фейковому Redis.
+
+Frontend має власний набір у теці `frontend/`: `npm test` (одноразовий прогін vitest + Testing Library), `npm run test:watch`, `npm run lint`, `npm run typecheck`, `npm run build`.
+
+### Особливості інтеграційних тестів
+
+- **Тимчасові контейнери** PostgreSQL і Redis, створюються автоматично через Testcontainers.
+- **Локальний OpenAI-сумісний мок** на `POST /v1/chat/completions` — детермінований, без зовнішніх мережевих викликів. Він підставляється замість локального Ollama, а через нього — під той самий `OpenAICompatibleAdapter`, яким працює продакшн.
+- **Жодних зовнішніх викликів** до Telegram, OpenAI, Anthropic, Gemini, реального Ollama чи інших сервісів.
+- Тести виконуються **послідовно**: конфігурація додатка та синглтони сервісів глобальні для процесу.
+- Перед кожним тестом дані у Redis і PostgreSQL очищаються.
+- Усі секрети (`JWT_SECRET`, `REFRESH_TOKEN_HMAC_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `PREVIEW_ROOT_KEY`) — детерміновані тестові значення.
+- Адмінка має власну фікстуру: два `ADMIN_TELEGRAM_IDS` і `ADMIN_PASSWORD_HASH` разового пароля. Значення дублюються у [`test/integration/global-setup.ts`](test/integration/global-setup.ts) і в блоці `env` [`vitest.integration.config.mjs`](vitest.integration.config.mjs) — перший виконується до створення воркерів, другий доїжджає до них, тому обидва мусять залишатися синхронними.
+
+### Структура тестів
+
+```text
+test/
+├── integration/
+│   ├── auth.integration.test.ts        # Автентифікація (Telegram, refresh, logout, rate limit)
+│   ├── translate.integration.test.ts   # Переклад (усі стилі, age gate, prompt injection, AI failure)
+│   ├── history.integration.test.ts     # Історія (пагінація, фільтри, favorite, власність записів)
+│   ├── share.integration.test.ts       # Telegram inline share (токени, 18+ заборона)
+│   ├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429, webhook secret)
+│   ├── health.integration.test.ts      # /health (liveness) і /health/ready (DB + Redis)
+│   ├── admin-auth.integration.test.ts  # Доступ до адмінки (404 для не-адмінів, пароль, крок-ап сесія)
+│   ├── admin-providers.integration.test.ts # Кіл-світч провайдерів (Redis без TTL, 503 при вимкненні всього)
+│   ├── admin-metrics.integration.test.ts   # Метрики (хвилинна серія, добові цифри, що НЕ рахується)
+│   ├── admin-errors.integration.test.ts    # Стрічка помилок (реальний 5xx у стрічці, текст запиту — ні)
+│   ├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
+│   ├── setup-test-context.ts           # Per-file setup: контекст, очищення БД і Redis
+│   └── test-context.ts                 # Спільний контекст (app, Prisma, Redis)
+└── helpers/
+    ├── mock-ollama-server.ts           # Детермінований OpenAI-сумісний мок (/v1/chat/completions)
+    └── telegram-initdata.ts            # Генератор підписаних initData
+```
+
 ## Мова документації
 
 - README, `AGENTS.md`, `CONTRIBUTING.md` — українською.
@@ -48,7 +97,7 @@ npm run build               # без тестового проєкту — як 
 ## Секрети та конфігурація
 
 - Ніколи не комітьте `.env` чи реальні секрети. Використовуйте `.env.example` як шаблон.
-- Нові змінні середовища додавайте у Zod-схему [`src/config/index.ts`](src/config/index.ts) і згадуйте в розділі «Змінні середовища» README.
+- Нові змінні середовища додавайте у Zod-схему [`src/config/index.ts`](src/config/index.ts), у [`.env.example`](.env.example) і в довідник [`docs/configuration.md`](docs/configuration.md).
 
 ## Кінці рядків
 
