@@ -51,6 +51,24 @@ export function StyleDropdown({
     setFailedArt(new Set());
   }, [selectedStyle]);
 
+  // Прогріваємо кеш ілюстрацій один раз, коли сторінка вже осіла, щоб перший тап
+  // по тригеру показував готові плитки. requestIdleCallback тримає це поза
+  // критичним шляхом; Safari/старі WebView його не мають — фолбек на setTimeout.
+  useEffect(() => {
+    const warm = () => {
+      for (const src of Object.values(STYLE_ART)) {
+        const img = new Image();
+        img.src = src;
+      }
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(warm);
+      return () => window.cancelIdleCallback?.(handle);
+    }
+    const timer = window.setTimeout(warm, 200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -182,6 +200,8 @@ export function StyleDropdown({
               src={selectedArtSrc ?? undefined}
               alt=""
               aria-hidden="true"
+              width={32}
+              height={24}
               onError={() => setFailedArt((prev) => new Set(prev).add(selectedArtSrc as string))}
             />
           ) : (
@@ -235,6 +255,10 @@ export function StyleDropdown({
                     src={itemArtSrc}
                     alt=""
                     aria-hidden="true"
+                    width={360}
+                    height={270}
+                    loading="lazy"
+                    decoding="async"
                     onError={() => setFailedArt((prev) => new Set(prev).add(itemArtSrc))}
                   />
                 ) : (
