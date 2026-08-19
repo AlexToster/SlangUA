@@ -95,11 +95,11 @@
 
 /* Updating state */
 .preview-result.updating {
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm);
 }
 
 .preview-content {
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm);
 }
 
 .preview-text {
@@ -160,7 +160,7 @@
 .preview-actions {
   display: flex;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  padding: var(--spacing-sm);
   border-top: 1px solid var(--tg-border-color, var(--color-border));
 }
 
@@ -223,7 +223,7 @@
 
 /* Success state */
 .preview-result.success {
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm);
 }
 
 .preview-result.success .preview-content {
@@ -231,7 +231,7 @@
 }
 
 .preview-result.success .preview-actions {
-  padding-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
   border-top: 1px solid var(--tg-border-color, var(--color-border));
 }
 

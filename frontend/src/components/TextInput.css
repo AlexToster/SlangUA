@@ -42,8 +42,11 @@
   width: 100%;
   min-height: 120px;
   max-height: 200px;
-  padding: var(--spacing-md);
-  padding-bottom: calc(var(--spacing-md) + var(--font-size-xs) + var(--spacing-xs));
+  /* One step down from --spacing-md: the editor reads roomier with more of the
+     card given to the text itself. The bottom pad still clears the absolutely
+     positioned .char-counter (bottom: --spacing-xs, --font-size-xs tall). */
+  padding: var(--spacing-sm);
+  padding-bottom: calc(var(--spacing-sm) + var(--font-size-xs) + var(--spacing-xs));
   font-family: inherit;
   font-size: var(--font-size-editor);
   line-height: var(--line-height-relaxed);

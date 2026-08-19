@@ -11,7 +11,11 @@
   justify-content: space-between;
   width: 100%;
   gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
+  /* One step down on both axes (was md/lg) so the longest style name has more
+     room before it ellipsises; min-height keeps the 44px tap target the
+     shortened vertical padding would otherwise cost. */
+  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 48px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -74,10 +78,13 @@
   white-space: nowrap;
 }
 
-/* "Бюрократична радянщина" is the longest style name and the only one that had
-   to be ellipsised at the shared size, so it drops one token step (18px → 16px).
-   Keyed off data-style, set by StyleDropdown for both the trigger and the list. */
+/* The two longest style names — "Молодіжний тікток-сленг" (23 chars) and
+   "Бюрократична радянщина" (22) — are the ones that ellipsise on the trigger at
+   the shared size, so they drop one token step (18px → 16px). Keyed off
+   data-style, set by StyleDropdown for both the trigger and the list. */
+.style-dropdown-label[data-style='GEN_Z'],
 .style-dropdown-label[data-style='KANCLER'],
+.style-dropdown-item-title[data-style='GEN_Z'],
 .style-dropdown-item-title[data-style='KANCLER'] {
   font-size: var(--font-size-base);
 }
@@ -100,27 +107,29 @@
   right: 0;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
-  /* Three rows of tiles are ~420px tall; at 60dvh on a 640px Telegram viewport the
-     grid would scroll, defeating the point of showing all six styles at once. */
-  max-height: min(78dvh, 34rem);
+  /* Three rows of 4:3 tiles plus their two-line captions come to ~550px at a
+     390px viewport, so the rem cap must clear that or tall screens would scroll
+     for no reason; the dvh term is what protects short Telegram viewports. */
+  max-height: min(78dvh, 36rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: var(--spacing-sm) var(--spacing-md);
+  /* Halved (was sm/md): the padding is chrome, the tiles need the width. */
+  padding: var(--spacing-xs) var(--spacing-sm);
   animation: style-dropdown-pop 0.2s ease;
 }
 
-/* On the narrowest phones trim the panel's side padding so each tile keeps ~121px. */
+/* On the narrowest phones trim the panel's side padding down to the gap size. */
 @media (max-width: 359.98px) {
   .style-dropdown-panel {
-    padding-left: var(--spacing-sm);
-    padding-right: var(--spacing-sm);
+    padding-left: var(--spacing-xs);
+    padding-right: var(--spacing-xs);
   }
 }
 
@@ -135,7 +144,8 @@
   align-items: stretch;
   gap: var(--spacing-xs);
   width: 100%;
-  padding: var(--spacing-sm);
+  /* Halved (was sm) together with the panel padding. */
+  padding: var(--spacing-xs);
   position: relative;
   background: transparent;
   border: none;
@@ -205,7 +215,15 @@
 
 .style-dropdown-item-art {
   width: 100%;
+  /* height: auto is load-bearing. The markup carries width=360 height=270 (to
+     reserve space before decode), and the height attribute maps to a
+     presentational-hint `height: 270px`. Without this override the box is
+     definite in both axes, `aspect-ratio` is ignored, and object-fit crops a
+     ~128x270 portrait window out of a landscape picture. */
+  height: auto;
   aspect-ratio: 4 / 3;
+  /* Matches the intrinsic 4:3 of every asset, so nothing is actually cropped;
+     `cover` only guards a future off-ratio file against letterboxing. */
   object-fit: cover;
   border-radius: var(--radius-sm);
   display: block;
@@ -228,11 +246,12 @@
 }
 
 /* Selected marker: circular chip overlaid on the artwork's top-right corner.
+   Offsets follow the tile padding so the chip sits on the artwork corner itself.
    aria-hidden in the markup — aria-selected already carries the meaning. */
 .style-dropdown-check {
   position: absolute;
-  top: var(--spacing-sm);
-  right: var(--spacing-sm);
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,8 +270,8 @@
 /* Age-gate marker: red overlay badge on the artwork's top-left corner, always visible. */
 .style-dropdown-lock {
   position: absolute;
-  top: var(--spacing-sm);
-  left: var(--spacing-sm);
+  top: var(--spacing-xs);
+  left: var(--spacing-xs);
   padding: 2px var(--spacing-xs);
   border-radius: var(--radius-sm);
   background: var(--color-error, #d92d20);
