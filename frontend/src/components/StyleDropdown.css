@@ -92,23 +92,36 @@
   transform: rotate(180deg);
 }
 
-/* Downward popover panel — opens below the trigger and overlays the result */
+/* Downward popover panel — a 2-column grid of picture tiles opening below the trigger. */
 .style-dropdown-panel {
   position: absolute;
   top: calc(100% + var(--spacing-sm));
   left: 0;
   right: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-sm);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
-  max-height: min(60dvh, 26rem);
+  /* Three rows of tiles are ~420px tall; at 60dvh on a 640px Telegram viewport the
+     grid would scroll, defeating the point of showing all six styles at once. */
+  max-height: min(78dvh, 34rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding: var(--spacing-sm) var(--spacing-md);
   animation: style-dropdown-pop 0.2s ease;
+}
+
+/* On the narrowest phones trim the panel's side padding so each tile keeps ~121px. */
+@media (max-width: 359.98px) {
+  .style-dropdown-panel {
+    padding-left: var(--spacing-sm);
+    padding-right: var(--spacing-sm);
+  }
 }
 
 @keyframes style-dropdown-pop {
@@ -118,11 +131,12 @@
 
 .style-dropdown-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-xs);
   width: 100%;
-  padding: var(--spacing-md) var(--spacing-sm);
+  padding: var(--spacing-sm);
+  position: relative;
   background: transparent;
   border: none;
   border-radius: var(--radius-md);
@@ -164,6 +178,14 @@
   color: var(--color-text-secondary);
 }
 
+.style-dropdown-item-art {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
 .style-dropdown-item-icon {
   flex-shrink: 0;
   color: var(--color-primary);
@@ -174,7 +196,10 @@
 }
 
 .style-dropdown-item-title {
-  flex: 1;
+  text-align: center;
+  line-height: 1.3;
+  /* Fixed two-line min-height so a wrapped label does not make its grid row taller. */
+  min-height: 2.6em;
 }
 
 .style-dropdown-check {

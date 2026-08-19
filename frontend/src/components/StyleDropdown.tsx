@@ -195,6 +195,8 @@ export function StyleDropdown({
         >
           {styles.map((style, index) => {
             const ItemIcon = STYLE_ICONS[style.id];
+            const itemArtSrc = STYLE_ART[style.id];
+            const showItemArt = !failedArt.has(itemArtSrc);
             const isLocked = lockedStyleIds.includes(style.id);
             const isSelected = style.id === selectedStyle;
             return (
@@ -214,7 +216,17 @@ export function StyleDropdown({
                 onClick={() => handleSelect(style.id)}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <ItemIcon className="style-dropdown-item-icon" size={22} aria-hidden="true" />
+                {showItemArt ? (
+                  <img
+                    className="style-dropdown-item-art"
+                    src={itemArtSrc}
+                    alt=""
+                    aria-hidden="true"
+                    onError={() => setFailedArt((prev) => new Set(prev).add(itemArtSrc))}
+                  />
+                ) : (
+                  <ItemIcon className="style-dropdown-item-icon" size={22} aria-hidden="true" />
+                )}
                 <span className="style-dropdown-item-title" data-style={style.id}>{getStyleLabel(style.id)}</span>
                 {isLocked && <span className="style-dropdown-lock">18+</span>}
                 {isSelected && (
