@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ChevronDown, Smartphone, Lightbulb, Terminal, Fence, Stamp, Mountain } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { Style, SlangStyle } from '../types/api';
 import { getStyleLabel } from '../utils/styleLabels';
+import { STYLE_ICONS } from '../utils/styleArt';
 import clsx from 'clsx';
 import './StyleDropdown.css';
-
-// Невеликі логотипчики, що характеризують кожен стиль (зліва від назви).
-const STYLE_ICONS: Record<SlangStyle, LucideIcon> = {
-  GEN_Z: Smartphone,      // молодіжний — смартфон
-  STREET: Lightbulb,      // вуличний — вуличний ліхтар
-  IT_SLANG: Terminal,     // айтішний — термінал
-  POFENI: Fence,          // зеківський — грати
-  KANCLER: Stamp,         // бюрократичний — печатка
-  GALICIAN: Mountain,     // ґвара — силует Карпат
-};
 
 interface StyleDropdownProps {
   styles: Style[];
