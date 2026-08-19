@@ -14,7 +14,7 @@ Once ready, `applyTelegramTheme`, `setupTelegramThemeListener` and `setupSafeAre
 - **`services/api.ts`** — a single typed Axios client class holding the access token in memory, refreshing it through the HttpOnly cookie + CSRF header pair on `401`, and exposing one method per endpoint. Nothing else in the app constructs a request.
 - **`types/api.ts`** — request/response shapes shared with the backend contract. `types/telegram.d.ts` describes the host SDK surface.
 - **`pages/`** — three routed screens (`TranslatePage`, `HistoryPage`, `SettingsPage`) wrapped by `AppLayout`, which provides the single-scroll shell and the in-flow bottom navigation.
-- **`components/`** — presentational units: `TextInput`, `StyleDropdown`, `PreviewResult`, `BottomNav`, `SelectField`, `ConfirmDialog`, `Toast`, `ErrorBanner`, `LoadingScreen`. Each ships its own CSS file; there is no CSS-in-JS and no utility framework.
+- **`components/`** — presentational units: `TextInput`, `StyleDropdown`, `PreviewResult`, `BottomNav`, `SelectField`, `ConfirmDialog`, `Toast`, `ErrorBanner`, `LoadingScreen`. Each ships its own CSS file; there is no CSS-in-JS and no utility framework. `StyleDropdown` owns the style artwork tiles (the 2×3 illustrated grid); the `SlangStyle`→image map lives in `utils/styleArt.ts`.
 - **`utils/`** — `localSettings` (theme and default-style persistence), `previewAttempts` (client-side regeneration accounting), `styleLabels` / `providerLabels` (display names), `text` (grapheme-aware counting).
 
 ## Server state
