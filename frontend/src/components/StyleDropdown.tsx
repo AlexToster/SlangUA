@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { Style, SlangStyle } from '../types/api';
 import { getStyleLabel } from '../utils/styleLabels';
-import { STYLE_ICONS } from '../utils/styleArt';
+import { STYLE_ART, STYLE_ICONS } from '../utils/styleArt';
 import clsx from 'clsx';
 import './StyleDropdown.css';
 
@@ -23,6 +23,9 @@ export function StyleDropdown({
 }: StyleDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  // Якщо ілюстрація стилю не завантажилась, відкочуємось на lucide-іконку.
+  // Зберігаємо set невдалих src; скидаємо його при зміні вибраного стилю.
+  const [failedArt, setFailedArt] = useState<Set<string>>(() => new Set());
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -39,6 +42,11 @@ export function StyleDropdown({
     setHighlightedIndex(index);
     setIsOpen(true);
   }, []);
+
+  // Новий стиль — нова спроба завантажити його ілюстрацію.
+  useEffect(() => {
+    setFailedArt(new Set());
+  }, [selectedStyle]);
 
   // Close on outside click
   useEffect(() => {
@@ -137,6 +145,8 @@ export function StyleDropdown({
 
   const selectedStyleObj = styles.find((s) => s.id === selectedStyle);
   const SelectedIcon = selectedStyleObj ? STYLE_ICONS[selectedStyleObj.id] : null;
+  const selectedArtSrc = selectedStyleObj ? STYLE_ART[selectedStyleObj.id] : null;
+  const showThumb = selectedArtSrc !== null && !failedArt.has(selectedArtSrc);
   const highlightedStyle = highlightedIndex >= 0 ? styles[highlightedIndex] : undefined;
 
   return (
@@ -152,7 +162,18 @@ export function StyleDropdown({
         aria-controls={listId}
         aria-label={`Вибраний стиль: ${selectedStyleObj ? getStyleLabel(selectedStyleObj.id) : 'не вибрано'}`}
       >
-        {SelectedIcon && <SelectedIcon className="style-dropdown-trigger-icon" size={20} aria-hidden="true" />}
+        {selectedStyleObj &&
+          (showThumb ? (
+            <img
+              className="style-dropdown-trigger-thumb"
+              src={selectedArtSrc ?? undefined}
+              alt=""
+              aria-hidden="true"
+              onError={() => setFailedArt((prev) => new Set(prev).add(selectedArtSrc as string))}
+            />
+          ) : (
+            SelectedIcon && <SelectedIcon className="style-dropdown-trigger-icon" size={20} aria-hidden="true" />
+          ))}
         {/* data-style lets the stylesheet size individual labels: the longest one
             ("Бюрократична радянщина") gets one step smaller so it is not clipped. */}
         <span className="style-dropdown-label" data-style={selectedStyleObj?.id}>

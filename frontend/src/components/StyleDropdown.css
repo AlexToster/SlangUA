@@ -21,10 +21,15 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   text-align: left;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.style-dropdown-trigger:hover {
-  border-color: var(--color-primary);
+/* Hover only on devices that truly hover, so the highlight does not stick after a tap. */
+@media (hover: hover) {
+  .style-dropdown-trigger:hover {
+    border-color: var(--color-primary);
+  }
 }
 
 .style-dropdown-trigger:focus-visible {
@@ -39,6 +44,27 @@
 .style-dropdown-trigger-icon {
   flex-shrink: 0;
   color: var(--color-primary);
+}
+
+.style-dropdown-trigger-thumb {
+  flex-shrink: 0;
+  width: 32px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  /* 1px inset ring so a light-artwork tile still reads as a distinct object on the tinted header. */
+  box-shadow: inset 0 0 0 1px var(--color-divider-strong);
+}
+
+/* Press feedback, matching .text-input-paste-btn in TextInput.css. */
+.style-dropdown-trigger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .style-dropdown-trigger:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 .style-dropdown-label {
