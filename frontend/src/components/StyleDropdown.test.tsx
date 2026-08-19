@@ -107,16 +107,51 @@ describe('StyleDropdown', () => {
     expect(highlighted()).toHaveTextContent(STYLE_LABELS.POFENI);
   });
 
-  it('wraps the highlight with ArrowDown and ArrowUp', () => {
+  // The panel is a 2-column grid, so ArrowDown/ArrowUp move by COLUMNS (2), not one.
+  it('moves the highlight one column with ArrowDown and ArrowUp', () => {
     setup({ selectedStyle: 'POFENI' });
     const panel = openPanel();
     expect(highlighted()).toHaveTextContent(STYLE_LABELS.POFENI);
 
+    // From POFENI (index 3): (3 + 2) % 4 = 1 → STREET.
     fireEvent.keyDown(panel, { key: 'ArrowDown' });
-    expect(highlighted()).toHaveTextContent(STYLE_LABELS.GEN_Z);
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.STREET);
 
+    // From STREET (index 1): (1 - 2 + 4) % 4 = 3 → POFENI.
     fireEvent.keyDown(panel, { key: 'ArrowUp' });
     expect(highlighted()).toHaveTextContent(STYLE_LABELS.POFENI);
+  });
+
+  it('moves the highlight with ArrowRight and ArrowLeft, wrapping at both ends', () => {
+    setup({ selectedStyle: 'GEN_Z' });
+    const panel = openPanel();
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.GEN_Z);
+
+    // (0 + 1) % 4 = 1 → STREET.
+    fireEvent.keyDown(panel, { key: 'ArrowRight' });
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.STREET);
+
+    // (1 - 1 + 4) % 4 = 0 → GEN_Z.
+    fireEvent.keyDown(panel, { key: 'ArrowLeft' });
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.GEN_Z);
+
+    // ArrowLeft from the first tile wraps to the last: (0 - 1 + 4) % 4 = 3 → POFENI.
+    fireEvent.keyDown(panel, { key: 'ArrowLeft' });
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.POFENI);
+
+    // ArrowRight from the last tile wraps to the first: (3 + 1) % 4 = 0 → GEN_Z.
+    fireEvent.keyDown(panel, { key: 'ArrowRight' });
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.GEN_Z);
+  });
+
+  it('moves ArrowDown from the first tile COLUMNS positions later', () => {
+    setup({ selectedStyle: 'GEN_Z' });
+    const panel = openPanel();
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.GEN_Z);
+
+    // COLUMNS = 2: (0 + 2) % 4 = 2 → IT_SLANG.
+    fireEvent.keyDown(panel, { key: 'ArrowDown' });
+    expect(highlighted()).toHaveTextContent(STYLE_LABELS.IT_SLANG);
   });
 
   it('jumps to the first and last style with Home and End', () => {
@@ -144,7 +179,9 @@ describe('StyleDropdown', () => {
     fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Enter' });
     expect(props.onSelect).toHaveBeenCalledWith('POFENI');
 
-    fireEvent.keyDown(openPanel(), { key: 'ArrowDown' });
+    // ArrowRight moves one tile (GEN_Z → STREET); this test covers Enter/Space
+    // selection, while the grid-specific ArrowDown motion has its own tests above.
+    fireEvent.keyDown(openPanel(), { key: 'ArrowRight' });
     fireEvent.keyDown(screen.getByRole('listbox'), { key: ' ' });
     expect(props.onSelect).toHaveBeenLastCalledWith('STREET');
   });

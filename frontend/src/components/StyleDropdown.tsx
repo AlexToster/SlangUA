@@ -6,6 +6,9 @@ import { STYLE_ART, STYLE_ICONS } from '../utils/styleArt';
 import clsx from 'clsx';
 import './StyleDropdown.css';
 
+// Must stay in sync with grid-template-columns in StyleDropdown.css (repeat(2, 1fr)).
+const COLUMNS = 2;
+
 interface StyleDropdownProps {
   styles: Style[];
   selectedStyle: SlangStyle | null;
@@ -106,6 +109,8 @@ export function StyleDropdown({
     }
   };
 
+  // 2D navigation matching the 2-column grid: Left/Right move by one (wrap),
+  // Down/Up move by COLUMNS (wrap). With six styles this cycles within a column.
   const handleListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case 'Escape':
@@ -115,13 +120,21 @@ export function StyleDropdown({
       case 'Tab':
         close(false);
         break;
-      case 'ArrowDown':
+      case 'ArrowRight':
         event.preventDefault();
         if (styles.length > 0) setHighlightedIndex((index) => (index + 1) % styles.length);
         break;
+      case 'ArrowLeft':
+        event.preventDefault();
+        if (styles.length > 0) setHighlightedIndex((index) => (index - 1 + styles.length) % styles.length);
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        if (styles.length > 0) setHighlightedIndex((index) => (index + COLUMNS) % styles.length);
+        break;
       case 'ArrowUp':
         event.preventDefault();
-        if (styles.length > 0) setHighlightedIndex((index) => (index <= 0 ? styles.length - 1 : index - 1));
+        if (styles.length > 0) setHighlightedIndex((index) => (index - COLUMNS + styles.length) % styles.length);
         break;
       case 'Home':
         event.preventDefault();
