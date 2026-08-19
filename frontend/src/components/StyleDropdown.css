@@ -146,10 +146,21 @@
   cursor: pointer;
   text-align: left;
   transition: all var(--transition-fast);
+  transform-origin: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.style-dropdown-item:hover {
-  background: var(--color-surface);
+/* Hover only where a real pointer can hover; on touch it would stick after a tap. */
+@media (hover: hover) {
+  .style-dropdown-item:hover {
+    background: var(--color-surface);
+  }
+}
+
+/* Large tiles press to 0.97 (the smaller TextInput buttons use 0.98). */
+.style-dropdown-item:active {
+  transform: scale(0.97);
 }
 
 /* Keyboard highlight: the list keeps focus, the active option is marked visually. */
@@ -158,10 +169,10 @@
   outline: none;
 }
 
+/* Keyboard highlight = a background shift (no ring); selected = ring + check badge,
+   so the two remain distinguishable when they land on the same tile. */
 .style-dropdown-item.highlighted {
   background: var(--color-surface);
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
 }
 
 .style-dropdown-item:focus-visible {
@@ -170,12 +181,26 @@
 }
 
 .style-dropdown-item.selected {
+  /* Ring drawn INSIDE the tile (outline-offset -2px) so the grid does not shift. */
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
   color: var(--color-primary);
+  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline-offset: -2px;
+}
+
+/* When the keyboard highlight lands on the selected tile, brighten the tint so the
+   highlight stays perceptible on top of the selected ring + check. */
+.style-dropdown-item.selected.highlighted {
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
 }
 
 .style-dropdown-item.locked {
   color: var(--color-text-secondary);
+}
+
+/* Grey the artwork only, so the label and the 18+ badge stay legible. */
+.style-dropdown-item.locked .style-dropdown-item-art {
+  filter: grayscale(1) brightness(0.85);
 }
 
 .style-dropdown-item-art {
@@ -202,18 +227,49 @@
   min-height: 2.6em;
 }
 
+/* Selected marker: circular chip overlaid on the artwork's top-right corner.
+   aria-hidden in the markup — aria-selected already carries the meaning. */
 .style-dropdown-check {
-  flex-shrink: 0;
-  color: var(--color-primary);
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  font-size: var(--font-size-xs);
   font-weight: bold;
+  line-height: 1;
+  /* Readable over any artwork. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
+/* Age-gate marker: red overlay badge on the artwork's top-left corner, always visible. */
 .style-dropdown-lock {
-  flex-shrink: 0;
-  margin-left: var(--spacing-sm);
+  position: absolute;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
   padding: 2px var(--spacing-xs);
-  border: 1px solid currentColor;
   border-radius: var(--radius-sm);
+  background: var(--color-error, #d92d20);
+  color: #fff;
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.2;
+  /* Readable over any artwork. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+/* Match TranslatePage.css: drop the press transform and its transition. */
+@media (prefers-reduced-motion: reduce) {
+  .style-dropdown-item {
+    transition: none;
+  }
+  .style-dropdown-item:active {
+    transform: none;
+  }
 }
