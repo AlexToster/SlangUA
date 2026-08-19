@@ -8,7 +8,7 @@
   },
   "street": {
     "id": "street",
-    "title": "Вуличний базар",
+    "title": "По-вуличному",
     "enabled": true,
     "version": "1.0.1",
     "ageRestricted": false

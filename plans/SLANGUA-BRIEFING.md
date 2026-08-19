@@ -21,7 +21,7 @@ Six styles ship today. Registry keys are lowercase; the Prisma enum and the API 
 | Enum | Registry key | Title (uk) | Notes |
 | ---- | ------------ | ---------- | ----- |
 | `GEN_Z` | `gen_z` | Молодіжний тікток-сленг | TikTok/Instagram/Discord register; output length roughly preserved |
-| `STREET` | `street` | Вуличний базар | Street-market speech |
+| `STREET` | `street` | По-вуличному | Street-market speech |
 | `IT_SLANG` | `it_slang` | АйТІшний спіч | Ukrainian IT jargon |
 | `POFENI` | `pofeni` | Зеківський жаргон | **18+**, `ageRestricted: true`, not shareable in v1. Ukrainian prison speech — both inside a penal colony and the register people keep after release. Distinct from STREET: hierarchy and «поняття», not the yard. Registry version `1.1.0` after the prompt rewrite |
 | `KANCLER` | `kancler` | Бюрократична радянщина | Deliberately expands output 2–4× |

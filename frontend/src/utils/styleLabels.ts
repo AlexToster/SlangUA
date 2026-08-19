@@ -2,7 +2,7 @@ import type { SlangStyle, Style } from '../types/api';
 
 export const STYLE_LABELS: Record<SlangStyle, string> = {
   GEN_Z: 'Молодіжний тікток-сленг',
-  STREET: 'Вуличний базар',
+  STREET: 'По-вуличному',
   IT_SLANG: 'АйТішний спіч',
   POFENI: 'Зеківський жаргон',
   KANCLER: 'Бюрократична радянщина',
