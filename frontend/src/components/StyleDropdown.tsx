@@ -9,6 +9,24 @@ import './StyleDropdown.css';
 // Must stay in sync with grid-template-columns in StyleDropdown.css (repeat(2, 1fr)).
 const COLUMNS = 2;
 
+// Панель — absolute всередині єдиного скрол-контейнера застосунку, тому все, що
+// звисає нижче його краю, розширює прокручувану область і піднімає другу
+// смугу прокрутки на головному вікні. Тому висоту панелі обмежуємо тим місцем,
+// яке реально є під тригером, а всередині панель прокручується сама.
+const PANEL_GAP = 8; // = --spacing-sm, відступ панелі від тригера
+const PANEL_MIN_HEIGHT = 240; // якщо тригер майже внизу, панель не має стати нечитабельною
+
+/** Нижня межа найближчого прокручуваного предка (або вьюпорта). */
+function scrollBoundaryBottom(element: HTMLElement): number {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === 'auto' || overflowY === 'scroll') {
+      return node.getBoundingClientRect().bottom;
+    }
+  }
+  return window.innerHeight;
+}
+
 interface StyleDropdownProps {
   styles: Style[];
   selectedStyle: SlangStyle | null;
@@ -29,6 +47,7 @@ export function StyleDropdown({
   // Якщо ілюстрація стилю не завантажилась, відкочуємось на lucide-іконку.
   // Зберігаємо set невдалих src; скидаємо його при зміні вибраного стилю.
   const [failedArt, setFailedArt] = useState<Set<string>>(() => new Set());
+  const [panelMaxHeight, setPanelMaxHeight] = useState<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -86,6 +105,26 @@ export function StyleDropdown({
   // The list itself takes focus so Escape and the arrow keys reach it (aria-activedescendant pattern).
   useEffect(() => {
     if (isOpen) listRef.current?.focus();
+  }, [isOpen]);
+
+  // Міряємо доступну висоту під тригером, поки панель відкрита: на відкритті,
+  // на resize (поява клавіатури) і на прокрутку контейнера — тригер при цьому
+  // рухається, тож ліміт треба перерахувати.
+  useEffect(() => {
+    if (!isOpen) return;
+    const measure = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const room = scrollBoundaryBottom(trigger) - trigger.getBoundingClientRect().bottom - PANEL_GAP * 2;
+      setPanelMaxHeight(Math.max(Math.round(room), PANEL_MIN_HEIGHT));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, { capture: true });
+    };
   }, [isOpen]);
 
   // Keep the highlighted option inside the scrollable panel.
@@ -207,8 +246,9 @@ export function StyleDropdown({
           ) : (
             SelectedIcon && <SelectedIcon className="style-dropdown-trigger-icon" size={20} aria-hidden="true" />
           ))}
-        {/* data-style lets the stylesheet size individual labels: the longest one
-            ("Бюрократична радянщина") gets one step smaller so it is not clipped. */}
+        {/* data-style lets the stylesheet size individual labels: the two longest
+            ones ("Молодіжний тікток-сленг", "Бюрократична радянщина") get one
+            step smaller here so they are not clipped on the single-line trigger. */}
         <span className="style-dropdown-label" data-style={selectedStyleObj?.id}>
           {selectedStyleObj ? getStyleLabel(selectedStyleObj.id) : 'Оберіть стиль'}
         </span>
@@ -220,6 +260,11 @@ export function StyleDropdown({
           ref={listRef}
           id={listId}
           className="style-dropdown-panel"
+          style={
+            panelMaxHeight !== null
+              ? ({ '--style-dropdown-max-h': `${panelMaxHeight}px` } as React.CSSProperties)
+              : undefined
+          }
           role="listbox"
           tabIndex={-1}
           aria-label="Оберіть стиль перекладу"

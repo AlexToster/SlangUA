@@ -60,27 +60,38 @@ export function TranslatePage() {
     enabled: apiService.isAuthenticated(),
   });
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: () => apiService.getProfile(),
     enabled: apiService.isAuthenticated(),
   });
 
-  // Initialize selected style from profile or first available style
+  // Initialize selected style from profile or first available style.
+  // profileLoading у гварді — обов'язковий: /styles і /user/me летять паралельно,
+  // і коли список стилів приходив першим, ми фіксували styles[0], а
+  // defaultSlangStyle з профілю вже ніколи не застосовувався (гвард !selectedStyle
+  // не давав перезаписати). Саме через це стиль за замовчуванням «не зберігався»
+  // між запусками застосунку. Для вимкненого запиту (без авторизації)
+  // isLoading === false, тож екран не блокується.
   useEffect(() => {
-    if (styles && styles.length > 0 && !selectedStyle) {
-      const defaultStyle = profile?.defaultSlangStyle;
-      if (defaultStyle && styles.some(s => s.id === defaultStyle)) {
-        setSelectedStyle(defaultStyle);
-      } else {
-        setSelectedStyle(styles[0].id);
-      }
+    if (selectedStyle || styles.length === 0 || profileLoading) return;
+    const defaultStyle = profile?.defaultSlangStyle;
+    if (defaultStyle && styles.some(s => s.id === defaultStyle)) {
+      setSelectedStyle(defaultStyle);
+    } else {
+      setSelectedStyle(styles[0].id);
     }
-  }, [styles, profile, selectedStyle]);
+  }, [styles, profile, selectedStyle, profileLoading]);
 
   // Save default style when changed
   const updateDefaultStyleMutation = useMutation({
     mutationFn: (style: SlangStyle) => apiService.updateProfile({ defaultSlangStyle: style }),
+    // Кеш ['profile'] — те, з чого «Стиль за замовчуванням» малюється в
+    // Налаштуваннях і з чого цей екран стартує наступного разу. Без цього рядка
+    // там лишався попередній стиль, поки запит не став stale.
+    onSuccess: (updatedProfile) => {
+      queryClient.setQueryData(['profile'], updatedProfile);
+    },
     onError: () => {
       setToast({ message: 'Не вдалося запам\'ятати вибір стилю', type: 'error' });
     },

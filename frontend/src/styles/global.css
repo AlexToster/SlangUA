@@ -7,14 +7,15 @@
   color-scheme: light;
 
   /* Telegram theme colors (mapped from themeParams).
-     Світла тема — з голубуватим відтінком (bluish light). */
-  --tg-bg-color: #eef3fb;
+     Світла тема — тепла, жовтувата (warm cream), у тон ілюстрацій стилів:
+     --tg-bg-color — тло за блоками, --tg-secondary-bg-color — самі блоки. */
+  --tg-bg-color: #f8f1de;
   --tg-text-color: #12203a;
   --tg-hint-color: #64748b;
   --tg-link-color: #2563eb;
   --tg-button-color: #2563eb;
   --tg-button-text-color: #ffffff;
-  --tg-secondary-bg-color: #dde8f7;
+  --tg-secondary-bg-color: #ede1c3;
 
   /* Safe area insets */
   --safe-area-top: 0px;
@@ -33,6 +34,17 @@
   --color-error: #e74c3c;
   --color-success: #27ae60;
   --color-warning: #f39c12;
+
+  /* Style tiles. Literal values, not --tg-* derivatives: the picture tiles must
+     stay separable from the panel behind them even when Telegram supplies its
+     own palette in "Системна" mode. The light set is the cream sampled from the
+     sticker sheet (#fef8e7); the tile is the lightest surface in the app so it
+     reads as an object lying on the panel, and the border is a soft warm tan —
+     deliberately low-contrast, so the primary-coloured ring on the selected tile
+     is still the loudest thing in the grid. */
+  --color-tile-bg: #fffaea;
+  --color-tile-bg-hover: #f6ead0;
+  --color-tile-border: #cbb488;
 
   /* Per-style accent colours, used by the history badges. */
   --color-gen-z: #d946ef;
@@ -136,6 +148,11 @@
   --tg-button-color: #0a84ff;
   --tg-button-text-color: #ffffff;
   --tg-secondary-bg-color: #2c2c2e;
+  /* Warm dark counterpart of the tile set: lighter than the panel it sits on
+     (--color-bg), so the tiles stop merging into it. */
+  --color-tile-bg: #2e2b25;
+  --color-tile-bg-hover: #3a352c;
+  --color-tile-border: #55503f;
 }
 
 /* System theme fallback: used when no explicit theme is chosen and no Telegram
@@ -150,6 +167,9 @@
     --tg-button-color: #0a84ff;
     --tg-button-text-color: #ffffff;
     --tg-secondary-bg-color: #2c2c2e;
+    --color-tile-bg: #2e2b25;
+    --color-tile-bg-hover: #3a352c;
+    --color-tile-border: #55503f;
   }
 }
 

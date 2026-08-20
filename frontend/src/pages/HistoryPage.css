@@ -157,14 +157,17 @@
 }
 
 .history-item {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
+/* Компактна картка: 4px між рядками замість 8, і внутрішній відступ на один
+   токен менший. Картка все одно читається як окремий блок — за рахунок фону,
+   рамки й радіуса, а не порожнього місця. */
 .history-entry {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-lg);
   background: var(--tg-secondary-bg-color, var(--color-surface));
   border: 1px solid var(--tg-border-color, var(--color-border));
@@ -216,13 +219,15 @@
 .history-entry-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .history-original,
 .history-translated {
   margin: 0;
-  line-height: var(--line-height-relaxed);
+  /* Було --line-height-relaxed (1.7): на 3-4 рядках перекладу це давало
+     половину зайвої висоти картки. 1.5 читається так само спокійно. */
+  line-height: var(--line-height-normal);
   white-space: pre-wrap;
   word-wrap: break-word;
   /* A single long token (URL, pasted hash) must wrap instead of widening the
@@ -231,9 +236,11 @@
 }
 
 /* The translation is what the entry is about, so it carries the emphasis and the
-   original is the quiet reference. The two used to be the other way round. */
+   original is the quiet reference. The two used to be the other way round.
+   Обидва тексти — на один токен менші, ніж були (18→16 і 20→18): у списку
+   важлива щільність, а не розмір, повний текст лишається на екрані перекладу. */
 .history-original {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-base);
   color: var(--tg-hint-color, var(--color-text-secondary));
   font-style: italic;
 }
@@ -241,9 +248,9 @@
 /* A rule between the source text and its translation - without it the two ran
    together in one block. */
 .history-translated {
-  padding-top: var(--spacing-sm);
+  padding-top: var(--spacing-xs);
   border-top: 1px solid var(--tg-border-color, var(--color-border));
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: 500;
   color: var(--tg-text-color, var(--color-text));
 }
@@ -256,14 +263,16 @@
   border-top: 1px solid var(--tg-border-color, var(--color-border));
 }
 
+/* 36px → 32px: все ще ≥ рекомендованого мінімуму для дотику в межах картки,
+   але рядок дій забирає на 4px менше висоти. */
 .history-favorite-btn,
 .history-delete-btn,
 .history-share-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   color: var(--tg-hint-color, var(--color-text-muted));
   background: transparent;
@@ -309,8 +318,8 @@
 .history-favorite-btn svg,
 .history-delete-btn svg,
 .history-share-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .history-load-more {
@@ -385,7 +394,7 @@
   }
 
   .history-entry {
-    padding: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
   }
 
   .history-load-more {

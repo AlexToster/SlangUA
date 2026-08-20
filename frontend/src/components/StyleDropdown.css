@@ -79,13 +79,11 @@
 }
 
 /* The two longest style names — "Молодіжний тікток-сленг" (23 chars) and
-   "Бюрократична радянщина" (22) — are the ones that ellipsise on the trigger at
-   the shared size, so they drop one token step (18px → 16px). Keyed off
-   data-style, set by StyleDropdown for both the trigger and the list. */
+   "Бюрократична радянщина" (22) — ellipsise on the single-line trigger at the
+   shared size, so there they drop one token step (18px → 16px). The tile
+   captions need no exception: they wrap, and already sit at 16px. */
 .style-dropdown-label[data-style='GEN_Z'],
-.style-dropdown-label[data-style='KANCLER'],
-.style-dropdown-item-title[data-style='GEN_Z'],
-.style-dropdown-item-title[data-style='KANCLER'] {
+.style-dropdown-label[data-style='KANCLER'] {
   font-size: var(--font-size-base);
 }
 
@@ -109,14 +107,20 @@
   grid-template-columns: repeat(2, 1fr);
   gap: var(--spacing-xs);
   background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  /* Tile-border tan rather than --color-border: the latter equals the card
+     surface the popover overlays, so the panel had no visible edge of its own. */
+  border: 1px solid var(--color-tile-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
-  /* Three rows of 4:3 tiles plus their two-line captions come to ~550px at a
+  /* Three rows of 4:3 tiles plus their two-line captions come to ~515px at a
      390px viewport, so the rem cap must clear that or tall screens would scroll
-     for no reason; the dvh term is what protects short Telegram viewports. */
-  max-height: min(78dvh, 36rem);
+     for no reason. --style-dropdown-max-h is measured on open (StyleDropdown.tsx)
+     and holds the room actually left below the trigger inside the app's scroll
+     container: without it the part of the panel hanging below the fold extends
+     that container's scrollable area and raises a second scrollbar on the page.
+     The dvh fallback applies only until the measurement lands (and in tests). */
+  max-height: min(var(--style-dropdown-max-h, 78dvh), 36rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -142,13 +146,19 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--spacing-xs);
+  /* 2px above the caption and below it: the tile should be as short as the
+     artwork plus two lines of text allow. */
+  gap: 2px;
   width: 100%;
   /* Halved (was sm) together with the panel padding. */
-  padding: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-xs) 2px;
   position: relative;
-  background: transparent;
-  border: none;
+  /* A tile is a card, not a transparent hit area: without its own surface and
+     outline it dissolved into the panel in both themes. The border is soft on
+     purpose — see the --color-tile-* block in global.css. */
+  background: var(--color-tile-bg);
+  border: 1px solid var(--color-tile-border);
+  box-shadow: var(--shadow-sm);
   border-radius: var(--radius-md);
   font-size: var(--font-size-lg);
   font-weight: 500;
@@ -164,7 +174,7 @@
 /* Hover only where a real pointer can hover; on touch it would stick after a tap. */
 @media (hover: hover) {
   .style-dropdown-item:hover {
-    background: var(--color-surface);
+    background: var(--color-tile-bg-hover);
   }
 }
 
@@ -182,7 +192,7 @@
 /* Keyboard highlight = a background shift (no ring); selected = ring + check badge,
    so the two remain distinguishable when they land on the same tile. */
 .style-dropdown-item.highlighted {
-  background: var(--color-surface);
+  background: var(--color-tile-bg-hover);
 }
 
 .style-dropdown-item:focus-visible {
@@ -191,9 +201,12 @@
 }
 
 .style-dropdown-item.selected {
-  /* Ring drawn INSIDE the tile (outline-offset -2px) so the grid does not shift. */
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  /* Ring drawn INSIDE the tile (outline-offset -2px) so the grid does not shift;
+     the soft tan border also turns primary, so the accent reads as one edge
+     instead of a blue ring wrapped in a tan outline. */
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-tile-bg));
   color: var(--color-primary);
+  border-color: var(--tg-link-color, var(--color-primary));
   outline: 2px solid var(--tg-link-color, var(--color-primary));
   outline-offset: -2px;
 }
@@ -201,7 +214,7 @@
 /* When the keyboard highlight lands on the selected tile, brighten the tint so the
    highlight stays perceptible on top of the selected ring + check. */
 .style-dropdown-item.selected.highlighted {
-  background: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--color-tile-bg));
 }
 
 .style-dropdown-item.locked {
@@ -240,9 +253,12 @@
 
 .style-dropdown-item-title {
   text-align: center;
-  line-height: 1.3;
-  /* Fixed two-line min-height so a wrapped label does not make its grid row taller. */
-  min-height: 2.6em;
+  /* Compact caption: one step down from the tile's 18px, tight leading, and a
+     min-height of exactly two lines (2 x 1.2em) so it reserves no slack beyond
+     the text itself while still keeping both tiles in a row the same height. */
+  font-size: var(--font-size-base);
+  line-height: 1.2;
+  min-height: 2.4em;
 }
 
 /* Selected marker: circular chip overlaid on the artwork's top-right corner.
