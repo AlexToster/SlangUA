@@ -15,6 +15,11 @@ model User {
   lastName          String?
   languageCode      String?
   defaultSlangStyle SlangStyle?
+  /// DEPRECATED: функціонал сповіщень прибрано з додатку, API та документації.
+  /// Колонку залишено свідомо — вона `NOT NULL DEFAULT true`, тож жодного коду
+  /// вона не тримає, а видалення означало б деструктивну міграцію на робочій
+  /// базі. Не читати й не писати: нового призначення в неї не додавати, а
+  /// прибирати — окремою міграцією, якщо колись буде потреба.
   notificationsEnabled Boolean     @default(true)
   ageConfirmedAdult  Boolean       @default(false)
   createdAt         DateTime       @default(now())

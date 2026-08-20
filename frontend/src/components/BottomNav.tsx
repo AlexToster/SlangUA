@@ -35,10 +35,10 @@ export function BottomNav() {
         >
           {/* Окрема обгортка, а не сам <a>: підсвітка активної вкладки — компактна
               пігулка навколо гліфа, а не блок на всю висоту смуги. Розмір гліфа
-              42px — це 28px × 1.5 на прохання власника; пігулка в BottomNav.css
-              підігнана під внутрішні 52px смуги, тому висота скла не змінилась. */}
+              38px: 28 → 42 (×1.5) на прохання власника, потім на крок сетки (4px)
+              менше. Пігулка в BottomNav.css тягнеться на всю висоту смуги. */}
           <span className="bottom-nav-glyph">
-            <Icon className="bottom-nav-icon" size={42} strokeWidth={2} aria-hidden="true" />
+            <Icon className="bottom-nav-icon" size={38} strokeWidth={2} aria-hidden="true" />
           </span>
           <span className="visually-hidden">{label}</span>
         </NavLink>

@@ -64,11 +64,11 @@ The following entities represent the persistent state of the SlangUA system, man
   - Purpose: User's preferred slang style, pre-filled in the translation UI.
   - Conceptual Type: Enum (SlangStyle).
   - Required: No.
-- **notificationsEnabled**:
-  - Purpose: Whether the user has notifications enabled.
-  - Conceptual Type: Boolean.
-  - Required: Yes.
-  - Default: True.
+- **notificationsEnabled** — *DEPRECATED, not part of the product.* The notifications
+  feature was removed from the app, the API and this documentation. The column
+  stays (`Boolean`, `NOT NULL DEFAULT true`) only because dropping it would mean a
+  destructive migration on a live database; nothing reads or writes it, and
+  `PATCH /user/me` rejects the field. Do not give it a new meaning.
 - **ageConfirmedAdult**:
   - Purpose: Records the user's self-attestation that they are an adult before accessing an age-restricted style.
   - Conceptual Type: Boolean.
@@ -198,7 +198,7 @@ which renamed it to `providerId`, retyped it to `TEXT` and lowercased the existi
 ### Entity: User
 - **Creation**: Occurs during the first `/auth/telegram` handshake if the `telegramId` does not exist.
 - **Read**: Frequent; performed during every authentication or session validation to retrieve user profile/preferences.
-- **Update**: Occurs when a user changes application settings (e.g., default style, notification preference, or adult self-attestation).
+- **Update**: Occurs when a user changes application settings (default style or adult self-attestation).
 - **Delete**: Performed upon explicit request for account deletion or system cleanup.
 - **Retention**: Permanent until manual deletion.
 

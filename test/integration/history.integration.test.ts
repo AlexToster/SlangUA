@@ -708,7 +708,10 @@ describe('History Integration Tests', () => {
       expect(body.ageConfirmedAdult).toBe(true);
     });
 
-    it('should accept notificationsEnabled', async () => {
+    // Сповіщення прибрано з продукту. Поле лишилося тільки колонкою в базі
+    // (schema.prisma, позначена DEPRECATED), тож strict-схема тіла мусить його
+    // відхиляти — інакше клієнт зміг би писати в мертву колонку.
+    it('should reject the removed notificationsEnabled field', async () => {
       const response = await app.inject({
         method: 'PATCH',
         url: '/api/v1/user/me',
@@ -716,9 +719,9 @@ describe('History Integration Tests', () => {
         payload: { notificationsEnabled: false },
       });
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
-      expect(body.notificationsEnabled).toBe(false);
+      expect(body.code).toBe('VALIDATION_ERROR');
     });
   });
 });

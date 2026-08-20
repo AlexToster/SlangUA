@@ -323,7 +323,6 @@ Clears the whole history of the authenticated user, favorites included. Scoped t
   | `lastName` | `string \| null` | Last name from Telegram |
   | `languageCode` | `string \| null` | Preferred language from Telegram |
   | `defaultSlangStyle` | `SlangStyle \| null` | User's preferred slang style |
-  | `notificationsEnabled` | `boolean` | Whether notifications are enabled |
   | `ageConfirmedAdult` | `boolean` | User has confirmed they are an adult (mutable preference) |
   | `isAdmin` | `boolean` | Server-computed: this Telegram id is on the `ADMIN_TELEGRAM_IDS` allowlist **and** the deployment has an admin password hash. Not stored in Postgres and not settable by the client; it only tells the client whether to render the admin entry point. See [§7 Admin routes](#7-admin-routes) |
   | `createdAt` | `datetime` | Registration timestamp |
@@ -334,9 +333,8 @@ Clears the whole history of the authenticated user, favorites included. Scoped t
   | Field | Type | Required | Constraints |
   |-------|------|----------|-------------|
   | `defaultSlangStyle` | `SlangStyle \| null` | No | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER`, `GALICIAN` (see [Database Design](03-database.md#enum-slangstyle)); `null` clears the preference |
-  | `notificationsEnabled` | `boolean` | No | |
   | `ageConfirmedAdult` | `boolean` | No | Mutable preference field (not immutable like Telegram-sourced fields) |
-  **Excludes**: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` (Telegram-sourced identity fields are immutable via API), and `isAdmin` (deployment configuration, not user data — sending it is a `400 VALIDATION_ERROR` like any other unknown field)
+  **Excludes**: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` (Telegram-sourced identity fields are immutable via API), `isAdmin` (deployment configuration, not user data — sending it is a `400 VALIDATION_ERROR` like any other unknown field), and `notificationsEnabled` (the notifications feature was removed; only the deprecated database column remains, so the field is rejected like any other unknown one)
 - Unknown request fields are rejected with `400`.
 - `ageConfirmedAdult` is self-attestation for the product age gate; it is not external identity or age verification.
 - **Success response (200)**: Updated `User` profile (same shape as `GET /user/me`, `isAdmin` included — the client replaces its cached profile with this body, so omitting the flag here would make the admin entry point disappear after any settings change)
@@ -544,7 +542,7 @@ This section describes the Service-layer responsibilities for each module, consi
 ### UserService
 - **Business logic owned**:
   - Retrieval of current user's profile (Telegram-sourced identity fields + preferences)
-  - Update of application-level preferences only (e.g., default slang style, notification settings)
+  - Update of application-level preferences only (default slang style, adult self-attestation)
   - Enforcement of immutable fields: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` cannot be modified via API
 - **Prisma models read/written**:
   - `User` — read (find by id), write (update preference fields only)

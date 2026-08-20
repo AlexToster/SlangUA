@@ -10,11 +10,12 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  gap: var(--spacing-sm);
-  /* One step down on both axes (was md/lg) so the longest style name has more
-     room before it ellipsises; min-height keeps the 44px tap target the
-     shortened vertical padding would otherwise cost. */
-  padding: var(--spacing-sm) var(--spacing-md);
+  /* Жодних відступів навколо превю: мініатюра стилю тягнеться на всю висоту
+     кнопки і впритул до її лівого краю (прохання власника). Тому паддінг живе
+     не на кнопці, а на її вмісті — на підписі та на fallback-іконці; праворуч
+     лишається місце під шеврон. Раніше було `padding: sm md` + `gap: sm`. */
+  gap: 0;
+  padding: 0 var(--spacing-md) 0 0;
   min-height: 48px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -47,17 +48,28 @@
 
 .style-dropdown-trigger-icon {
   flex-shrink: 0;
+  /* Фолбек замість мініатюри: у нього немає власного тла, тож відступ від краю
+     кнопки він мусить мати сам — інакше іконка прилипає до рамки. */
+  margin-left: var(--spacing-md);
   color: var(--color-primary);
 }
 
+/* Превю стилю — на всю висоту кнопки, впритул до лівого краю, без відступів.
+   `align-self: stretch` + `aspect-ratio` дають висоту від кнопки, а ширину — з
+   пропорції ілюстрації (4:3), тому мініатюра росте разом із кнопкою й не
+   деформується. Було 32×24 у рамці з відступами. Ліві кути повторюють радіус
+   кнопки мінус її 1px рамка; у зведеній картці Translate радіус інший, тому
+   там є свій override у TranslatePage.css. Права межа — єдиний розділювач між
+   превю й підписом (замість колишнього inset-кільця навколо мініатюри). */
 .style-dropdown-trigger-thumb {
   flex-shrink: 0;
-  width: 32px;
-  height: 24px;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
-  border-radius: var(--radius-sm);
-  /* 1px inset ring so a light-artwork tile still reads as a distinct object on the tinted header. */
-  box-shadow: inset 0 0 0 1px var(--color-divider-strong);
+  border-right: 1px solid var(--color-divider-strong);
+  border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
 }
 
 /* Press feedback, matching .text-input-paste-btn in TextInput.css. */
@@ -73,6 +85,9 @@
 
 .style-dropdown-label {
   flex: 1;
+  /* Відступ від превю (і від краю кнопки, коли стиль ще не вибрано) — тепер тут,
+     бо сама кнопка паддінгів не має. */
+  padding: 0 0 0 var(--spacing-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

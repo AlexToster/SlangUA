@@ -116,6 +116,14 @@
   outline-offset: -2px;
 }
 
+/* Превю тягнеться на всю висоту кнопки, тож його лівий верхній кут мусить
+   повторювати кут картки (внутрішній радіус = --radius-lg мінус 2px рамки
+   .translate-output). Знизу кута немає: під кнопкою картка продовжується
+   результатом, і превю впирається в розділювач. */
+.translate-output .style-dropdown-trigger-thumb {
+  border-radius: calc(var(--radius-lg) - 2px) 0 0 0;
+}
+
 .translate-output .style-dropdown-chevron {
   color: var(--tg-link-color, var(--color-primary));
 }

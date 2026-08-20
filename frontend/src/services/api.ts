@@ -157,7 +157,9 @@ class ApiService {
     return response.data;
   }
 
-  async updateProfile(data: Partial<Omit<Pick<UserProfile, 'defaultSlangStyle' | 'notificationsEnabled' | 'ageConfirmedAdult'>, 'defaultSlangStyle'>> & { defaultSlangStyle?: SlangStyle | null }): Promise<UserProfile> {
+  // The server accepts exactly two mutable preferences; unknown keys are rejected
+  // with 400, so the signature is deliberately narrow.
+  async updateProfile(data: Partial<Pick<UserProfile, 'ageConfirmedAdult'>> & { defaultSlangStyle?: SlangStyle | null }): Promise<UserProfile> {
     const response = await this.client.patch<UserProfile>('/user/me', data);
     return response.data;
   }

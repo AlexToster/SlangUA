@@ -1,6 +1,8 @@
 /* BottomNav Component Styles — скляна смуга з трьох гліфів */
 :root {
-  --bottom-nav-height: 60px;
+  /* Висота смуги = висота самої кнопки: вертикальних паддінгів немає, пігулка
+     гліфа розпирає смугу зсередини. Було 60px при пігулці 52px. */
+  --bottom-nav-height: 48px;
 }
 
 /* Смуга лежить ПОВЕРХ контенту: `position: absolute` у межах .app-layout —
@@ -24,14 +26,18 @@
   display: flex;
   align-items: stretch;
   height: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
-  padding: var(--spacing-xs) var(--spacing-xs) calc(var(--spacing-xs) + var(--safe-area-bottom));
+  /* Згори й знизу відступів немає: рамка смуги обтягує кнопки. Safe area — це
+     єдиний нижній відступ, і він поза кнопками. */
+  padding: 0 var(--spacing-xs) var(--safe-area-bottom);
   /* Майже прозоро: тло — лише 15% поверхні, решту дає розмитий контент під ним.
      Було 30%; власник просив ще прозоріше, щоб смуга читалася як плівка, а не
      як окрема панель. Нижче цього значення іконки на світлій темі починають
      губитися в тексті сторінки, тому далі зменшувати не варто. */
   background: color-mix(in srgb, var(--color-surface) 15%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
+  /* Розмиття вдвічі менше за початкове (16px): контент під склом лишається
+     впізнаваним, а не перетворюється на матову пляму. */
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
   /* Волосяна лінія замість колишньої 3px рамки — межа скла, а не окремий блок. */
   border-top: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -59,20 +65,20 @@
 }
 
 /* Пігулка навколо гліфа — вона ж носій підсвітки, натискання й фокуса.
-   Гліф побільшав у півтора раза (28px → 42px), тому пігулка вже не коло на 44px,
-   а прямокутник 64×52: 52px — це рівно внутрішня висота смуги
-   (--bottom-nav-height 60px мінус 4px паддінга згори та знизу), тож кнопка
-   доросла до межі скла й не виходить за неї, а сама висота смуги не змінилась.
-   Радіус --radius-lg замість --radius-full: на такому співвідношенні сторін
-   повне заокруглення виглядало б як капсула на пів вкладки. */
+   Гліф 38px (спершу було 28, потім 42 — власник попросив на крок сетки менше),
+   пігулка 60px шириною й на всю внутрішню висоту смуги: `height: 100%` замість
+   фіксованого числа, бо смуга тепер саме такої висоти, як кнопка, і будь-яка
+   зміна --bottom-nav-height має тягнути кнопку за собою автоматично.
+   Радіус --radius-md, а не --radius-lg: пігулка тепер обтягує всю висоту, і
+   16px заокруглення робили з неї капсулу. */
 .bottom-nav-glyph {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
+  width: 60px;
   max-width: 100%;
-  height: 52px;
-  border-radius: var(--radius-lg);
+  height: 100%;
+  border-radius: var(--radius-md);
   transition:
     background-color var(--transition-fast),
     box-shadow var(--transition-fast),
@@ -118,15 +124,15 @@
   transform: scale(0.92);
 }
 
-/* Обведення на пігулці, а не на посиланні на всю висоту: смуга більше нічого не
-   обрізає, тож offset працює і кільце видно повністю. */
+/* Обведення всередині пігулки (offset від'ємний): вертикальних паддінгів у смуги
+   більше немає, тож зовнішнє кільце виходило б за скло. */
 .bottom-nav-item:focus-visible {
   outline: none;
 }
 
 .bottom-nav-item:focus-visible .bottom-nav-glyph {
   outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

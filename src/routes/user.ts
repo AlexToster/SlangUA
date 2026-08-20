@@ -23,7 +23,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           lastName: z.string().nullable(),
           languageCode: z.string().nullable(),
           defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable(),
-          notificationsEnabled: z.boolean(),
           ageConfirmedAdult: z.boolean(),
           // Derived from deployment config, never stored on the user row: it
           // tells the client whether to show the admin entry point. False for
@@ -69,7 +68,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
       lastName: profile.lastName,
       languageCode: profile.languageCode,
       defaultSlangStyle: profile.defaultSlangStyle,
-      notificationsEnabled: profile.notificationsEnabled,
       ageConfirmedAdult: profile.ageConfirmedAdult,
       isAdmin: adminAuthService.hasAdminAccess(profile.telegramId),
       createdAt: profile.createdAt.toISOString(),
@@ -81,7 +79,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
     schema: {
       body: z.object({
         defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable().optional(),
-        notificationsEnabled: z.boolean().optional(),
         ageConfirmedAdult: z.boolean().optional(),
       }).strict(),
       response: {
@@ -92,7 +89,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           lastName: z.string().nullable(),
           languageCode: z.string().nullable(),
           defaultSlangStyle: z.enum(SLANG_STYLE_VALUES).nullable(),
-          notificationsEnabled: z.boolean(),
           ageConfirmedAdult: z.boolean(),
           // Same field as in GET: the client replaces its cached profile with
           // this response, so omitting it here would hide the admin button
@@ -125,7 +121,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
     preHandler: [authenticate, userRateLimiter],
   }, async (request, reply) => {
     const userId = request.user!.id;
-    const body = request.body as { defaultSlangStyle?: (typeof SLANG_STYLE_VALUES)[number] | null; notificationsEnabled?: boolean; ageConfirmedAdult?: boolean };
+    const body = request.body as { defaultSlangStyle?: (typeof SLANG_STYLE_VALUES)[number] | null; ageConfirmedAdult?: boolean };
 
     try {
       const updatedProfile = await userService.updatePreferences(userId, body);
@@ -137,7 +133,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
         lastName: updatedProfile.lastName,
         languageCode: updatedProfile.languageCode,
         defaultSlangStyle: updatedProfile.defaultSlangStyle,
-        notificationsEnabled: updatedProfile.notificationsEnabled,
         ageConfirmedAdult: updatedProfile.ageConfirmedAdult,
         isAdmin: adminAuthService.hasAdminAccess(updatedProfile.telegramId),
         createdAt: updatedProfile.createdAt.toISOString(),

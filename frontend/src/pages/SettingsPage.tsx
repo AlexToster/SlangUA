@@ -206,11 +206,6 @@ export function SettingsPage() {
   }, [localSettings.hapticEnabled]);
 
   // Server settings handlers
-  const handleNotificationsToggle = useCallback(() => {
-    if (!profile) return;
-    updateProfileMutation.mutate({ notificationsEnabled: !profile.notificationsEnabled });
-  }, [profile, updateProfileMutation]);
-
   const handleDefaultStyleChange = useCallback((value: string) => {
     updateProfileMutation.mutate({
       defaultSlangStyle: value === AUTO_STYLE_VALUE ? null : (value as SlangStyle),
@@ -355,23 +350,6 @@ export function SettingsPage() {
                 label="Стиль за замовчуванням"
                 disabled={selectableStyles.length === 0}
               />
-            </div>
-          </div>
-
-          <div className="settings-item">
-            <div className="settings-item-info">
-              <span className="settings-item-label">Сповіщення</span>
-            </div>
-            <div className="settings-item-control">
-              <label className="settings-toggle">
-                <input
-                  type="checkbox"
-                  checked={profile?.notificationsEnabled || false}
-                  onChange={handleNotificationsToggle}
-                  aria-label="Увімкнути сповіщення"
-                />
-                <span className="settings-toggle-slider" aria-hidden="true" />
-              </label>
             </div>
           </div>
         </section>

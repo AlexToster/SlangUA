@@ -21,7 +21,6 @@ export interface UserProfile {
   lastName: string | null;
   languageCode: string | null;
   defaultSlangStyle: SlangStyle | null;
-  notificationsEnabled: boolean;
   ageConfirmedAdult: boolean;
   /**
    * Derived server-side from the deployment allowlist, not stored on the user.

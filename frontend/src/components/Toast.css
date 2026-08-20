@@ -15,7 +15,7 @@
  */
 .toast {
   position: fixed;
-  bottom: calc(var(--bottom-nav-height, 56px) + var(--safe-area-bottom) + var(--spacing-md));
+  bottom: calc(var(--bottom-nav-height, 48px) + var(--safe-area-bottom) + var(--spacing-md));
   left: var(--spacing-md);
   right: var(--spacing-md);
   max-width: 560px;

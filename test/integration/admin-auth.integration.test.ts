@@ -503,7 +503,7 @@ describe('Admin access integration tests', () => {
         method: 'PATCH',
         url: '/api/v1/user/me',
         headers: { authorization: `Bearer ${adminToken}` },
-        payload: { notificationsEnabled: false },
+        payload: { ageConfirmedAdult: true },
       });
 
       expect(response.statusCode).toBe(200);

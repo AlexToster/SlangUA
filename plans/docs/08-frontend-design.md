@@ -30,7 +30,7 @@
 
 Нижня навігація містить тільки три пункти: **Translate**, **History**, **Settings**. Translate вибраний за замовчуванням. На малих екранах навігація не повинна перекривати поле результату або Telegram safe area.
 
-> Уточнення після Stage 7: смуга — три однакові гліфи без підписів (будинок → `/`, годинник → `/history`, шестерня → `/settings`, іконки lucide), розділювачів між ними немає. Тло майже прозоре (15% поверхні) з `backdrop-filter`, тому смугу позиційовано `absolute` у межах `.app-layout` — контент має проїжджати під склом, інакше прозорість нічого не показує. Це не `position: fixed`, від якого проєкт відмовився: fixed прив'язаний до вьюпорта і Telegram WebView міг прокрутити смугу за екран. Щоб «не перекривати результат» лишалося правдою, `.app-layout-content` отримує `padding-bottom` на висоту смуги плюс safe area — кінець будь-якої сторінки прокручується вище скла. Гліфи — 42px у пігулці 64×52: 52px — це рівно внутрішня висота смуги, тож кнопки доросли до межі скла, а сама висота смуги (`--bottom-nav-height: 60px`) не змінилася. Активна вкладка позначена акцентним кольором, ледь помітною пігулкою й легким неоновим `drop-shadow` по контуру гліфа; колір не єдиний маркер — `NavLink` проставляє `aria-current="page"`. Видимих підписів немає, але назви лишаються в DOM як `.visually-hidden`, і це єдине джерело доступної назви кнопки. Виняток із правила «не перекривати»: розкрита сітка стилів навмисно заїжджає під скло — її висота смугою не обмежується, а перекритий низ компенсується внутрішнім `padding-bottom` на висоту перекриття, щоб останній ряд плиток можна було догорнути.
+> Уточнення після Stage 7: смуга — три однакові гліфи без підписів (будинок → `/`, годинник → `/history`, шестерня → `/settings`, іконки lucide), розділювачів між ними немає. Тло майже прозоре (15% поверхні) з `backdrop-filter: blur(8px)`, тому смугу позиційовано `absolute` у межах `.app-layout` — контент має проїжджати під склом, інакше прозорість нічого не показує. Це не `position: fixed`, від якого проєкт відмовився: fixed прив'язаний до вьюпорта і Telegram WebView міг прокрутити смугу за екран. Щоб «не перекривати результат» лишалося правдою, `.app-layout-content` отримує `padding-bottom` на висоту смуги плюс safe area — кінець будь-якої сторінки прокручується вище скла. Гліфи — 38px у пігулці 60px×`100%`: смуга й кнопка мають однакову висоту (`--bottom-nav-height: 48px`), тобто рамка скла — це і є рамка кнопок, вертикальних відступів у смузі немає (тому фокусне кільце — inset, `outline-offset: -2px`). Пігулка бере висоту від смуги через `height: 100%`, а не числом, щоб зв'язок «висота смуги = висота кнопки» вижив після наступної зміни токена. Активна вкладка позначена акцентним кольором, ледь помітною пігулкою й легким неоновим `drop-shadow` по контуру гліфа; колір не єдиний маркер — `NavLink` проставляє `aria-current="page"`. Видимих підписів немає, але назви лишаються в DOM як `.visually-hidden`, і це єдине джерело доступної назви кнопки. Виняток із правила «не перекривати»: розкрита сітка стилів навмисно заїжджає під скло — її висота смугою не обмежується, а перекритий низ компенсується внутрішнім `padding-bottom` на висоту перекриття, щоб останній ряд плиток можна було догорнути.
 
 ```text
 /
@@ -64,7 +64,7 @@
 
 ### 3.1. Верхня частина і вибір стилю
 
-У верхній частині екрана — компактний тригер, що показує мініатюру ілюстрації поточного стилю та його назву. Він не є додатковою навігацією й завжди доступний до вводу тексту.
+У верхній частині екрана — компактний тригер, що показує мініатюру ілюстрації поточного стилю та його назву. Мініатюра тягнеться на всю висоту тригера й впритул до лівого краю: висоту вона бере від кнопки (`align-self: stretch`), ширину — з пропорції ілюстрації (`aspect-ratio: 4/3`), тож паддінги живуть не на кнопці, а на підписі; єдиний розділювач між превю й текстом — права межа мініатюри. Він не є додатковою навігацією й завжди доступний до вводу тексту.
 
 Натискання відкриває **popover вниз** із сіткою 2×3 ілюстрованих плиток (по одній ілюстрації на стиль):
 
@@ -182,7 +182,7 @@ History відображає лише явно збережені перекла
 
 - **Тактильний відгук:** toggle, увімкнений за замовчуванням. Застосовується лише до успішного копіювання, збереження, зміни стилю та підтверджених destructive actions; не спрацьовує на кожному символі чи loading.
 - **Звуки подій:** toggle, вимкнений за замовчуванням. Якщо середовище не дозволяє безпечне відтворення звуку або користувач обрав тихий режим, звуки не програються; haptic не є їхньою обов'язковою заміною.
-- **Сповіщення:** наявний серверний `notificationsEnabled`; пояснити, який саме канал буде підтриманий, до появи push/бот-повідомлень. Не називати toggle «push», доки це не реалізовано.
+- **Сповіщень немає.** Функціонал прибрано з Налаштувань, клієнта й API: не було каналу доставки, тож toggle обіцяв те, чого продукт не робить. У базі лишилася лише колонка `notificationsEnabled` (позначена DEPRECATED у `schema.prisma`, бо видалення означало б деструктивну міграцію) — не читати, не писати, у UI не показувати.
 
 ### 6.3. Translation and age gate
 
@@ -201,7 +201,7 @@ History відображає лише явно збережені перекла
 
 | Налаштування | Джерело правди | Синхронізація |
 | --- | --- | --- |
-| `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult` | `GET/PATCH /user/me` | React Query mutation з rollback при помилці |
+| `defaultSlangStyle`, `ageConfirmedAdult` | `GET/PATCH /user/me` | React Query mutation з rollback при помилці |
 | **theme override, sound, haptic feedback** | **localStorage цього Mini App** (не Telegram CloudStorage) | **застосовується до першого paint, коли можливо** |
 | Support/Privacy/Terms URLs, версія | build-time environment/config | read-only для користувача |
 
@@ -273,7 +273,7 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 | UI-функція | Наявний маршрут | Статус для Stage 7 |
 | --- | --- | --- |
 | Bootstrap | `POST /auth/telegram`, `POST /auth/refresh`, `POST /auth/logout` | Готово, потрібен клієнтський coordinator refresh |
-| Профіль і серверні preferences | `GET/PATCH /user/me` | Готово для стилю, notifications і 18+ |
+| Профіль і серверні preferences | `GET/PATCH /user/me` | Готово для стилю і 18+ |
 | Стилі | `GET /styles` | Готово; використовувати тільки відповідь сервера |
 | Автоматичний переклад | `POST /translate/preview` | Готово: non-persistent preview з cache/TTL та abort/request-version захистом у UI |
 | Ліміт тексту | `/translate` і `/translate/preview` | Готово: 1 000 Unicode grapheme clusters на сервері та в UI |
@@ -293,9 +293,9 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 - `Надіслати в Telegram` з'являється лише в клієнтах із `Telegram.WebApp.switchInlineQuery` для shareable preview або History result. Share є explicit, не створює публічний URL чи History-запис, зберігає Copy fallback і застосовує server-side age/content/ownership checks за [09-telegram-sharing.md](09-telegram-sharing.md).
 - UI і сервер однаково відхиляють текст понад 1 000 символів.
 - Автоматичний preview не створює записів у History. Збереження є явною дією й не довіряє згенерованому тексту з клієнта.
-- Settings містить тему, haptic, звуки, сповіщення, стиль, 18+ self-attestation, feedback, about і очищення історії; self-attestation також доступна при виборі locked Pofeni у Translate.
+- Settings містить тему, haptic, звуки, стиль, 18+ self-attestation, feedback, about і очищення історії (сповіщень немає — функціонал прибрано); self-attestation також доступна при виборі locked Pofeni у Translate.
 - **`GET /styles` відфільтровує restricted styles серверно залежно від `ageConfirmedAdult`; Translate selector показує locked «Пофені 18+» тільки як точку входу до self-attestation. 403 `AGE_RESTRICTED_STYLE` лишається recoverable fallback для застарілого локального вибору.**
-- **theme override, sound, haptic feedback зберігаються у localStorage цього Mini App (не Telegram CloudStorage). Server-side лишаються лише `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult`.**
+- **theme override, sound, haptic feedback зберігаються у localStorage цього Mini App (не Telegram CloudStorage). Server-side лишаються лише `defaultSlangStyle`, `ageConfirmedAdult`.**
 - Для 400, 401, 403, 422, 429, 503, offline та clipboard-denied є окремі стани й зрозумілі шляхи відновлення.
 - Інтерфейс проходить ручну перевірку у світлій і темній Telegram темі, з відкритою клавіатурою та на ширині 320 px.
 
@@ -306,7 +306,7 @@ Complete the remaining Stage 7 Telegram Mini App acceptance checks in plans/docs
 
 Treat plans/docs/04-api.md as the API contract. Keep `/` as the Translate screen; do not add a Home or admin screen. Preserve the implemented preview/save/share flow: debounce preview after 900 ms and 3 characters, cancel stale requests, enforce the 1,000-grapheme UI limit, and never send client-generated translated text to persistence endpoints.
 
-Use only server-filtered styles for translation requests. The selector may show a static locked Pofeni entry only to start age self-attestation; it must not enable POFENI until PATCH /user/me succeeds and styles are refetched. AGE_RESTRICTED_STYLE is a recoverable stale-selection fallback. Keep theme, sound, and haptic preferences in this Mini App's localStorage; server-side preferences remain defaultSlangStyle, notificationsEnabled, and ageConfirmedAdult.
+Use only server-filtered styles for translation requests. The selector may show a static locked Pofeni entry only to start age self-attestation; it must not enable POFENI until PATCH /user/me succeeds and styles are refetched. AGE_RESTRICTED_STYLE is a recoverable stale-selection fallback. Keep theme, sound, and haptic preferences in this Mini App's localStorage; server-side preferences remain defaultSlangStyle and ageConfirmedAdult. There is no notifications setting: the feature was removed from the client and the API.
 
 For Telegram sharing, show the explicit action only when switchInlineQuery is available and the result is eligible. Send only a previewId or translationId to POST /share/inline, then pass only the returned opaque query to Telegram. Retain Copy fallback for every share error.
 

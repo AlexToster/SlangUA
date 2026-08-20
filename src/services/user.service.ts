@@ -8,14 +8,12 @@ export interface UserProfile {
   lastName: string | null;
   languageCode: string | null;
   defaultSlangStyle: SlangStyle | null;
-  notificationsEnabled: boolean;
   ageConfirmedAdult: boolean;
   createdAt: Date;
 }
 
 export interface UpdatePreferencesInput {
   defaultSlangStyle?: SlangStyle | null;
-  notificationsEnabled?: boolean;
   ageConfirmedAdult?: boolean;
 }
 
@@ -48,7 +46,6 @@ export class UserService {
         lastName: true,
         languageCode: true,
         defaultSlangStyle: true,
-        notificationsEnabled: true,
         ageConfirmedAdult: true,
         createdAt: true,
       },
@@ -65,7 +62,6 @@ export class UserService {
       lastName: user.lastName,
       languageCode: user.languageCode,
       defaultSlangStyle: user.defaultSlangStyle,
-      notificationsEnabled: user.notificationsEnabled,
       ageConfirmedAdult: user.ageConfirmedAdult,
       createdAt: user.createdAt,
     };
@@ -73,7 +69,7 @@ export class UserService {
 
   /**
    * Update user's application-level preferences
-   * Only mutable fields (defaultSlangStyle, notificationsEnabled, ageConfirmedAdult) can be updated
+   * Only mutable fields (defaultSlangStyle, ageConfirmedAdult) can be updated
    * Attempting to update immutable fields throws an error
    */
   async updatePreferences(
@@ -102,10 +98,6 @@ export class UserService {
       updateData.defaultSlangStyle = input.defaultSlangStyle;
     }
 
-    if (input.notificationsEnabled !== undefined) {
-      updateData.notificationsEnabled = input.notificationsEnabled;
-    }
-
     if (input.ageConfirmedAdult !== undefined) {
       updateData.ageConfirmedAdult = input.ageConfirmedAdult;
     }
@@ -132,7 +124,6 @@ export class UserService {
         lastName: true,
         languageCode: true,
         defaultSlangStyle: true,
-        notificationsEnabled: true,
         ageConfirmedAdult: true,
         createdAt: true,
       },
@@ -145,7 +136,6 @@ export class UserService {
       lastName: updatedUser.lastName,
       languageCode: updatedUser.languageCode,
       defaultSlangStyle: updatedUser.defaultSlangStyle,
-      notificationsEnabled: updatedUser.notificationsEnabled,
       ageConfirmedAdult: updatedUser.ageConfirmedAdult,
       createdAt: updatedUser.createdAt,
     };

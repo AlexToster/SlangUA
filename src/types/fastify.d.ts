@@ -19,7 +19,6 @@ declare module 'fastify' {
       lastName?: string | null;
       languageCode?: string | null;
       defaultSlangStyle?: string | null;
-      notificationsEnabled?: boolean;
       createdAt?: Date;
     };
 

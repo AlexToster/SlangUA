@@ -130,7 +130,7 @@ Every error response has the same shape: `{ "error": string, "code": string, "me
 
 Three PostgreSQL tables via Prisma. Redis is intentionally absent from the relational model.
 
-**`User`** — `id` (autoincrement Int PK), `telegramId` String @unique, optional `username` / `firstName` / `lastName` / `languageCode`, `defaultSlangStyle SlangStyle?`, `notificationsEnabled` default `true`, `ageConfirmedAdult` default `false`, `createdAt`. Relations: `translations`, `refreshTokens`.
+**`User`** — `id` (autoincrement Int PK), `telegramId` String @unique, optional `username` / `firstName` / `lastName` / `languageCode`, `defaultSlangStyle SlangStyle?`, `ageConfirmedAdult` default `false`, `createdAt`, plus the deprecated `notificationsEnabled` column (default `true`, read and written by nothing — the notifications feature was removed and dropping the column would mean a destructive migration). Relations: `translations`, `refreshTokens`.
 
 **`Translation`** — `id`, `userId` (FK, `onDelete: Cascade`), `previewId String? @unique` (save idempotency), `originalText`, `translatedText`, `slangStyle SlangStyle`, `styleVersion String?` (registry version captured at creation), `providerId String` (free-form lowercase instance id, **not** an enum), `favorite` default `false`, `createdAt`. Indexes: `[userId]`, `[createdAt]`, and the keyset index `[userId, createdAt, id]`. Business rule: the only mutable field is `favorite`. Retention is permanent.
 
@@ -173,7 +173,7 @@ All routes are under `/api/v1`. JSON only. Auth is a `Bearer` access token unles
 - **`PATCH /history/:id/favorite`** — JWT. **Toggles** the flag; the request body is ignored. 404 when the row is missing or not owned.
 - **`DELETE /history/:id`** — JWT. 204, or 404 when missing/not owned.
 - **`GET /user/me`** — JWT. Returns the profile including `ageConfirmedAdult` and the server-computed `isAdmin`.
-- **`PATCH /user/me`** — JWT, strict body. Accepts only `defaultSlangStyle`, `notificationsEnabled`, `ageConfirmedAdult`. Telegram-sourced identity fields (`telegramId`, `username`, `firstName`, `lastName`, `languageCode`) are immutable; unknown fields — `isAdmin` among them — are rejected with 400. The response repeats `isAdmin`, because the client replaces its cached profile with this body.
+- **`PATCH /user/me`** — JWT, strict body. Accepts only `defaultSlangStyle` and `ageConfirmedAdult`. Telegram-sourced identity fields (`telegramId`, `username`, `firstName`, `lastName`, `languageCode`) are immutable; unknown fields — `isAdmin` among them — are rejected with 400. The response repeats `isAdmin`, because the client replaces its cached profile with this body.
 
 ### Admin (`/admin/*`, invisible without both factors)
 
@@ -301,7 +301,7 @@ Cost control is explicit: the request key is the normalized `{text, style}` pair
 
 **History** shows only explicitly saved translations, newest first, with search across both texts, a favorites filter, cursor pagination passing `nextCursor` unmodified, optimistic favorite toggling with exact rollback, and a confirmed, optimistic delete.
 
-**Settings** covers appearance (theme `Як у Telegram` / `Світла` / `Темна`), interaction (haptics on by default, sound off by default), translation and age gate (default style, notifications, the 18+ self-attestation dialog), support and about, and logout. **Persistence is split on purpose:** `defaultSlangStyle`, `notificationsEnabled` and `ageConfirmedAdult` live server-side via `GET/PATCH /user/me`; theme override, sound and haptics live in this Mini App's `localStorage` — explicitly not Telegram CloudStorage.
+**Settings** covers appearance (theme `Як у Telegram` / `Світла` / `Темна`), interaction (haptics on by default, sound off by default), translation and age gate (default style, the 18+ self-attestation dialog), support and about, and logout. **Persistence is split on purpose:** `defaultSlangStyle` and `ageConfirmedAdult` live server-side via `GET/PATCH /user/me`; theme override, sound and haptics live in this Mini App's `localStorage` — explicitly not Telegram CloudStorage.
 
 **Network behavior.** A 401 triggers exactly one coordinated refresh shared by all in-flight requests (single-flight promise in `services/api.ts`); on failure the session is cleared and a recoverable "Відкрий застосунок у Telegram ще раз" state is shown. Repeated 401s must not loop. Offline preserves draft, result and style, and auto-translate resumes only after a fresh debounce or explicit retry — never as a burst on reconnect.
 
