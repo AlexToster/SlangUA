@@ -24,7 +24,7 @@ type FavoriteFilter = 'all' | 'favorite';
 
 const FAVORITE_FILTER_OPTIONS: SelectFieldOption<FavoriteFilter>[] = [
   { value: 'all', label: 'Усі' },
-  { value: 'favorite', label: 'Тільки обране' },
+  { value: 'favorite', label: 'Обране' },
 ];
 
 /**

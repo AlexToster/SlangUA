@@ -17,6 +17,11 @@ import './SettingsPage.css';
 // the project's own channel, so the row is always available.
 const FEEDBACK_URL = import.meta.env.VITE_FEEDBACK_URL?.trim() || 'https://t.me/+1lYdnphwsLBlZWMy';
 
+// Профіль автора — останній рядок попапа «Про додаток». Відкриваємо через
+// openExternalLink, а не <a href>: у Mini App звичайне посилання лишилось би
+// всередині вебвʼю Telegram.
+const GITHUB_URL = 'https://github.com/AlexToster';
+
 const THEME_OPTIONS: SelectFieldOption<'system' | 'light' | 'dark'>[] = [
   { value: 'system', label: 'Системна' },
   { value: 'light', label: 'Світла' },
@@ -30,7 +35,13 @@ const AUTO_STYLE_VALUE = '';
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  // Toast уже вміє показувати дію — саме нею тут виступає посилання на GitHub,
+  // тож воно лишається справжньою кнопкою 44px, а не текстом у повідомленні.
+  const [toast, setToast] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'info';
+    action?: { label: string; onClick: () => void };
+  } | null>(null);
   const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
   const [localSettings, setLocalSettingsState] = useState(() => getLocalSettings());
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
@@ -225,7 +236,11 @@ export function SettingsPage() {
   }, []);
 
   const handleAbout = useCallback(() => {
-    setToast({ message: `SlangUA v${__APP_VERSION__}\nПереклад української сленговою мовою`, type: 'info' });
+    setToast({
+      message: `SlangUA v${__APP_VERSION__}\nПереклад української сленговою мовою\ngithub.com/AlexToster`,
+      type: 'info',
+      action: { label: 'GitHub', onClick: () => openExternalLink(GITHUB_URL) },
+    });
   }, []);
 
   const handleAdminOpen = useCallback(() => {
@@ -457,7 +472,7 @@ export function SettingsPage() {
       )}
 
       {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={clearToast} />
+        <Toast message={toast.message} type={toast.type} action={toast.action} onClose={clearToast} />
       )}
     </div>
   );
