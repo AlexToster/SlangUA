@@ -271,8 +271,8 @@ export function StyleDropdown({
               src={selectedArtSrc ?? undefined}
               alt=""
               aria-hidden="true"
-              width={32}
-              height={24}
+              width={64}
+              height={48}
               onError={() => setFailedArt((prev) => new Set(prev).add(selectedArtSrc as string))}
             />
           ) : (
@@ -333,8 +333,8 @@ export function StyleDropdown({
                     src={itemArtSrc}
                     alt=""
                     aria-hidden="true"
-                    width={360}
-                    height={270}
+                    width={240}
+                    height={180}
                     loading="lazy"
                     decoding="async"
                     onError={() => setFailedArt((prev) => new Set(prev).add(itemArtSrc))}

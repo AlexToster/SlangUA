@@ -54,19 +54,23 @@
   color: var(--color-primary);
 }
 
-/* Превю стилю — на всю висоту кнопки, впритул до лівого краю, без відступів.
-   `align-self: stretch` + `aspect-ratio` дають висоту від кнопки, а ширину — з
-   пропорції ілюстрації (4:3), тому мініатюра росте разом із кнопкою й не
-   деформується. Було 32×24 у рамці з відступами. Ліві кути повторюють радіус
+/* Превю стилю — на всю висоту КНОПКИ (у згорнутому стані), впритул до лівого
+   краю, без відступів. Ширина мусить бути заданою: при `width: auto` +
+   `height: auto` мініатюра бере власний розмір ілюстрації (240×180) і сама
+   розтягує кнопку на всю висоту картинки — саме так і зламалося з першого
+   разу. 64px — це 4/3 від `min-height` кнопки (48px), тож у згорнутому стані
+   пропорція точна й нічого не обрізається; `align-self: stretch` +
+   `object-fit: cover` лишаються страховкою: якщо кнопка колись стане вищою,
+   картинка обріжеться, а не розсунеться. Міняючи `min-height` кнопки — міняй і
+   цю ширину. Було 32×24 у рамці з відступами. Ліві кути повторюють радіус
    кнопки мінус її 1px рамка; у зведеній картці Translate радіус інший, тому
    там є свій override у TranslatePage.css. Права межа — єдиний розділювач між
    превю й підписом (замість колишнього inset-кільця навколо мініатюри). */
 .style-dropdown-trigger-thumb {
   flex-shrink: 0;
   align-self: stretch;
-  width: auto;
+  width: 64px;
   height: auto;
-  aspect-ratio: 4 / 3;
   object-fit: cover;
   border-right: 1px solid var(--color-divider-strong);
   border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
@@ -250,11 +254,11 @@
 
 .style-dropdown-item-art {
   width: 100%;
-  /* height: auto is load-bearing. The markup carries width=360 height=270 (to
-     reserve space before decode), and the height attribute maps to a
-     presentational-hint `height: 270px`. Without this override the box is
-     definite in both axes, `aspect-ratio` is ignored, and object-fit crops a
-     ~128x270 portrait window out of a landscape picture. */
+  /* height: auto is load-bearing. The markup carries the asset's own size
+     (width=240 height=180, to reserve space before decode), and the height
+     attribute maps to a presentational-hint `height: 180px`. Without this
+     override the box is definite in both axes, `aspect-ratio` is ignored, and
+     object-fit crops a narrow portrait window out of a landscape picture. */
   height: auto;
   aspect-ratio: 4 / 3;
   /* Matches the intrinsic 4:3 of every asset, so nothing is actually cropped;

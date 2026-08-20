@@ -108,7 +108,7 @@ npm run build              # tsc -b tsconfig.app.json tsconfig.node.json && vite
 3. `src/style-engine/registry.json` — запис `{ id, title, enabled, ageRestricted, version }`; ключ мапи мусить дорівнювати `id`, у нижньому регістрі.
 4. `src/style-engine/styles/<id>/` — `prompt.md`, `lexicon.json`, `examples.json` (мінімум 3 приклади; `preferred` — 20–40 найхарактерніших слів).
 5. Frontend — union у `frontend/src/types/api.ts` і вичерпний `Record` у `frontend/src/utils/styleLabels.ts`.
-6. Ілюстрація — `frontend/src/assets/styles/<name>.webp` (де `<name>` — id стилю в нижньому регістрі з `_`→`-`, напр. `gen-z`) плюс статичний `import` і запис у `STYLE_ART` в `frontend/src/utils/styleArt.ts`. `STYLE_ART` — вичерпний `Record<SlangStyle, string>`, тож відсутня ілюстрація ламає typecheck, доки її не додано.
+6. Ілюстрація — `frontend/src/assets/styles/<name>.webp` (де `<name>` — id стилю в нижньому регістрі з `_`→`-`, напр. `gen-z`) плюс статичний `import` і запис у `STYLE_ART` в `frontend/src/utils/styleArt.ts`. `STYLE_ART` — вичерпний `Record<SlangStyle, string>`, тож відсутня ілюстрація ламає typecheck, доки її не додано. Формат нового файлу — **240×180 WebP (4:3), ~10–13 КБ**: це розмір плитки в сітці стилів, і атрибути `width`/`height` у `StyleDropdown.tsx` мусять дорівнювати розміру файлу, інакше картинка резервує не свій бокс до декодування.
 7. Тести — мок `test/helpers/mock-ollama-server.ts`: додай запис у `DEFAULT_RESPONSES` **і** унікальну фразу в `STYLE_MARKERS` (беруть з рядка `**Voice**` нового `prompt.md`; збіг по id стилю не працює, бо id інших стилів зустрічаються в секціях «Avoid»). Також `test/verify-style-engine.mjs`.
 8. Документація — `plans/docs/04-api.md`, `plans/docs/07-styles.md`, `README.md`.
 
