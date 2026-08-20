@@ -117,8 +117,9 @@
      390px viewport, so the rem cap must clear that or tall screens would scroll
      for no reason. --style-dropdown-max-h is measured on open (StyleDropdown.tsx)
      and holds the room actually left below the trigger inside the app's scroll
-     container: without it the part of the panel hanging below the fold extends
-     that container's scrollable area and raises a second scrollbar on the page.
+     container, minus the glass navigation bar that overlays its bottom edge:
+     without it the part of the panel hanging below the fold extends that
+     container's scrollable area and raises a second scrollbar on the page.
      The dvh fallback applies only until the measurement lands (and in tests). */
   max-height: min(var(--style-dropdown-max-h, 78dvh), 36rem);
   overflow-y: auto;

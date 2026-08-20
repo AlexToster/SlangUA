@@ -1,84 +1,128 @@
-/* BottomNav Component Styles — tab bar */
+/* BottomNav Component Styles — скляна смуга з трьох гліфів */
 :root {
   --bottom-nav-height: 60px;
 }
 
-/* Sits in the flow as the last flex item of .app-layout (a shell of fixed
-   height), so it is always on screen no matter how the page scrolls. It used to
-   be `position: fixed`, which the Telegram WebView could scroll away.
+/* Смуга лежить ПОВЕРХ контенту: `position: absolute` у межах .app-layout —
+   оболонки фіксованої висоти з `overflow: hidden` (див. AppLayout.css). Саме
+   тому напівпрозоре тло має сенс: під смугою проїжджає сторінка, і
+   `backdrop-filter` розмиває саме її. Це не повернення до `position: fixed`,
+   від якого проєкт відмовився: fixed прив'язаний до вьюпорта, і Telegram
+   WebView міг прокрутити смугу за екран, а absolute у нескролюваній оболонці —
+   ні. Щоб останній елемент сторінки не ховався під склом, .app-layout-content
+   отримує нижній відступ на висоту смуги.
 
-   Visually it copies the merged "style trigger + result" card from the translate
-   screen (.translate-output): same surface, same contrast rule, only the frame
-   around the whole bar is thicker than the lines that split the tabs. Unlike
-   that card it may clip its children (`overflow: hidden`) — nothing opens out of
-   the bar — so the rounded top corners can live on the container itself. */
+   Рамки між вкладками навмисно немає: розділювачі перетворювали прозоре тло на
+   сітку й читалися важче за самі іконки. Немає й `overflow: hidden` — він
+   обрізав би неонове сяйво активного гліфа. */
 .bottom-nav {
-  position: relative;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: var(--z-dropdown);
   display: flex;
   align-items: stretch;
-  flex-shrink: 0;
-  width: 100%;
   height: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
-  padding-bottom: var(--safe-area-bottom);
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 3px solid var(--color-divider-strong);
-  border-bottom: none;
+  padding: var(--spacing-xs) var(--spacing-xs) calc(var(--spacing-xs) + var(--safe-area-bottom));
+  /* Майже прозоро: тло — лише 30% поверхні, решту дає розмитий контент під ним. */
+  background: color-mix(in srgb, var(--color-surface) 30%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  /* Волосяна лінія замість колишньої 3px рамки — межа скла, а не окремий блок. */
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  overflow: hidden;
 }
 
+/* Старі WebView без backdrop-filter: без розмиття 30% тла лишили б іконки на
+   рухомому тексті, тому там смуга майже щільна. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bottom-nav {
+    background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
+  }
+}
+
+/* Три рівні вкладки: ширину задає CSS, а не inline `flex` у розмітці, бо
+   текстової вкладки на пів смуги більше немає. */
 .bottom-nav-item {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
-  height: 100%;
   min-width: 0;
-  padding: 0 var(--spacing-xs);
   color: var(--color-text-secondary);
   text-decoration: none;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Tab separators — deliberately thinner than the frame around the bar.
-   `+` keeps the outer edges clean. */
-.bottom-nav-item + .bottom-nav-item {
-  border-left: 1px solid var(--color-divider-strong);
+/* Пігулка навколо гліфа — вона ж носій підсвітки, натискання й фокуса. */
+.bottom-nav-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
-/* Highlighted the same way as the style trigger on the translate screen:
-   tinted primary background, accent text, heavier weight. */
-.bottom-nav-item.active {
-  background: var(--color-primary-alpha-15);
-  color: var(--tg-link-color, var(--color-primary));
-  font-weight: 600;
-}
-
-.bottom-nav-item:active {
-  background: var(--color-primary-alpha-20);
-}
-
-.bottom-nav-item:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-}
-
-/* The primary tab carries no icon: the word itself is the target, sized to fill
-   its half of the bar. clamp() keeps it as large as the narrowest phone allows
-   without overflowing wider screens. */
-.bottom-nav-label {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: clamp(var(--font-size-lg), 6.5vw, var(--font-size-2xl));
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-}
-
-/* Icon-only tabs: no label, just the glyph. */
 .bottom-nav-icon {
   flex-shrink: 0;
+}
+
+/* Активна вкладка: акцентний колір + легке неонове сяйво. Сяйво навмисно
+   drop-shadow на самому гліфі (світиться контур штриха), а не box-shadow на
+   прямокутнику; пігулка додає ледь помітний ореол навколо. Колір — не єдиний
+   маркер активності: NavLink проставляє aria-current="page". */
+.bottom-nav-item.active {
+  color: var(--tg-link-color, var(--color-primary));
+}
+
+.bottom-nav-item.active .bottom-nav-glyph {
+  background: var(--color-primary-alpha-10);
+  box-shadow: 0 0 12px var(--color-primary-alpha-20);
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+  filter:
+    drop-shadow(0 0 4px var(--color-primary-alpha-50))
+    drop-shadow(0 0 10px var(--color-primary-alpha-20));
+}
+
+@media (hover: hover) {
+  .bottom-nav-item:hover .bottom-nav-glyph {
+    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+
+  .bottom-nav-item.active:hover .bottom-nav-glyph {
+    background: var(--color-primary-alpha-15);
+  }
+}
+
+.bottom-nav-item:active .bottom-nav-glyph {
+  transform: scale(0.92);
+}
+
+/* Обведення на пігулці, а не на посиланні на всю висоту: смуга більше нічого не
+   обрізає, тож offset працює і кільце видно повністю. */
+.bottom-nav-item:focus-visible {
+  outline: none;
+}
+
+.bottom-nav-item:focus-visible .bottom-nav-glyph {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav-glyph {
+    transition: none;
+  }
+
+  .bottom-nav-item:active .bottom-nav-glyph {
+    transform: none;
+  }
 }

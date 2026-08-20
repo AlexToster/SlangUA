@@ -16,15 +16,26 @@ const COLUMNS = 2;
 const PANEL_GAP = 8; // = --spacing-sm, відступ панелі від тригера
 const PANEL_MIN_HEIGHT = 240; // якщо тригер майже внизу, панель не має стати нечитабельною
 
-/** Нижня межа найближчого прокручуваного предка (або вьюпорта). */
+/**
+ * Нижня межа вільного місця під елементом: край найближчого прокручуваного
+ * предка (або вьюпорта), піднятий над нижньою навігацією. Смуга навігації —
+ * напівпрозоре скло поверх скрол-контейнера (див. BottomNav.css), тому останні
+ * ~60px цього контейнера вільним місцем не є: панель не має заїжджати під неї.
+ */
 function scrollBoundaryBottom(element: HTMLElement): number {
+  let bottom = window.innerHeight;
   for (let node = element.parentElement; node; node = node.parentElement) {
     const { overflowY } = getComputedStyle(node);
     if (overflowY === 'auto' || overflowY === 'scroll') {
-      return node.getBoundingClientRect().bottom;
+      bottom = node.getBoundingClientRect().bottom;
+      break;
     }
   }
-  return window.innerHeight;
+  // Міряємо саму смугу, а не читаємо --bottom-nav-height: так ліміт правильний і
+  // коли смуги в DOM немає (тести рендерять компонент окремо).
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) bottom = Math.min(bottom, nav.getBoundingClientRect().top);
+  return bottom;
 }
 
 interface StyleDropdownProps {
