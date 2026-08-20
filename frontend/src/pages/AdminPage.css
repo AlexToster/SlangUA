@@ -1,7 +1,13 @@
 /* AdminPage styles.
    Same skeleton as SettingsPage (sticky header, page-level padding, no own
    scroller - the app scrolls in .app-layout-content), so the panel does not read
-   as a different application. Buttons and the spinner come from global.css. */
+   as a different application. Buttons and the spinner come from global.css.
+
+   Різограф тут стриманий навмисно: сторінка складається з таблиць і списків, а
+   не з кнопок, тому контур 2px дістається лише предметам (плашка бейджа,
+   стовпчикова діаграма, банер помилки), а рядки таблиць розділяє тонка лінійка
+   --color-divider. Друкувати кожен рядок повним контуром означало б перетворити
+   зведення на десятки окремих карток. */
 .admin-page {
   display: flex;
   flex-direction: column;
@@ -12,13 +18,14 @@
   color: var(--tg-text-color, var(--color-text));
 }
 
+/* Та сама пришпилена смуга, що .settings-header і .history-topbar. */
 .admin-header {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
-  background: var(--tg-bg-color, var(--color-bg));
   position: sticky;
   top: 0;
   z-index: 10;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--tg-bg-color, var(--color-bg));
+  border-bottom: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
 }
 
 .admin-header h1 {
@@ -36,13 +43,13 @@
   padding: var(--spacing-xl) 0;
 }
 
+/* Тільки розмір: дорожка, товщина й обертання — у .loading-spinner
+   (styles/global.css), звідти ж єдина копія @keyframes spin. Селектор нащадка
+   обов'язковий: global.css імпортується останнім і при однаковій специфічності
+   перекрив би ці 40px. */
 .admin-loading .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--tg-border-color, var(--color-border));
-  border-top-color: var(--tg-link-color, var(--color-primary));
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
 }
 
 .admin-section {
@@ -72,7 +79,11 @@
   flex-direction: column;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.admin-provider:last-child {
+  border-bottom: none;
 }
 
 .admin-provider-head {
@@ -80,6 +91,14 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-md);
+}
+
+.admin-provider-name {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  /* Provider ids are latin identifiers; a monospace face keeps the column even. */
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .admin-provider-note {
@@ -96,58 +115,58 @@
 }
 
 /* A row-level action is secondary to the page actions at the bottom, so it reads
-   one step quieter - but never below a 36px tap target. */
+   one step quieter — але не нижче 44px: це мінімум для дотику, а не орієнтир
+   (раніше тут стояло 36px). Форма й зсув фарби приходять з .btn у global.css. */
 .admin-provider-actions .btn {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 var(--spacing-md);
   font-size: var(--font-size-sm);
 }
 
+/* Повідомлення про збій — надрукований предмет: плашка з фарби помилки й
+   щільний контур. Раніше тло було --color-error-alpha-20, а текст — самою
+   фарбою помилки: рамки не було взагалі, і банер читався як зафарбований
+   абзац. Текст лишається кольору тексту, як у тості. */
 .admin-alert {
   margin: 0 0 var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-sm);
-  background: var(--color-error-alpha-20);
-  color: var(--color-error);
+  background: color-mix(in srgb, var(--tg-destructive-color, var(--color-error)) 12%, var(--color-bg));
+  border: var(--stroke-w) solid var(--tg-destructive-color, var(--color-error));
+  border-radius: var(--radius-md);
+  color: var(--tg-text-color, var(--color-text));
   font-size: var(--font-size-sm);
   line-height: 1.4;
 }
 
-.admin-provider:last-child {
-  border-bottom: none;
-}
-
-.admin-provider-name {
-  font-size: var(--font-size-base);
-  font-weight: 500;
-  /* Provider ids are latin identifiers; a monospace face keeps the column even. */
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
+/* Стан провайдера — та сама пігулка з контуром, що бейдж стилю, тільки фарба
+   інша. Напівпрозорих плашок (color-mix … transparent) тут більше немає:
+   текст на них залежав від того, що просвічує знизу. */
 .admin-badge {
   flex-shrink: 0;
   padding: 2px var(--spacing-sm);
-  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
 }
 
+/* --on-blue, а не чорний: він інвертується разом із темою, тож світлий текст
+   лягає на темно-зелену фарбу світлої теми, а темний — на світло-зелену
+   темної. Обидва напрямки тримають ≥5:1. */
 .admin-badge-up {
-  /* Mixed inline: global.css defines --color-success-alpha-10 but no -20 step. */
-  background: color-mix(in srgb, var(--color-success) 15%, transparent);
-  color: var(--color-success);
+  background: var(--color-success);
+  color: var(--on-blue);
 }
 
 .admin-badge-warn {
-  background: var(--color-error-alpha-20);
-  color: var(--color-error);
+  background: var(--tg-destructive-color, var(--color-error));
+  color: var(--on-blue);
 }
 
 .admin-badge-off {
-  background: var(--color-surface);
-  color: var(--tg-hint-color, var(--color-text-secondary));
+  background: var(--face);
+  color: var(--tg-text-color, var(--color-text));
 }
 
 .admin-note {
@@ -176,29 +195,35 @@
   overflow-wrap: anywhere;
 }
 
+/* Кнопки внизу — .btn з global.css, тому зсув фарби вже друкується; тут лишень
+   запас під нього, щоб відбиток не збігав за край сторінки. */
 .admin-actions {
   display: flex;
   gap: var(--spacing-md);
   justify-content: space-between;
   margin-top: var(--spacing-lg);
+  padding-bottom: var(--spacing-xs);
 }
 
 .admin-subtitle {
   margin: var(--spacing-md) 0 var(--spacing-xs);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--tg-hint-color, var(--color-text-secondary));
 }
 
 /* A retry link inside a section-level notice: the page actions at the bottom
-   stay the only real buttons, so this reads as text you can tap. */
+   stay the only real buttons, so this reads as text you can tap. 44px тут не
+   застосовується свідомо — це слово всередині речення, і збільшення цілі
+   розірвало б рядок; сама фраза лишається достатньо великою для дотику. */
 .admin-inline-btn {
-  padding: 0;
+  padding: 2px 0;
   border: none;
   background: none;
   color: inherit;
   font: inherit;
   text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
 }
 
@@ -211,15 +236,16 @@
 
 /* The minute series as bars. No chart library on purpose: one number per minute
    over one hour is a row of divs, and a dependency for it would be the largest
-   thing on this page. */
+   thing on this page. Плашка з контуром — тут це предмет, а не рядок таблиці. */
 .admin-chart {
   display: flex;
   align-items: flex-end;
   gap: 1px;
   height: 64px;
   padding: 2px;
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
 }
 
 .admin-bar {
@@ -232,7 +258,7 @@
 }
 
 .admin-bar-error {
-  background: var(--color-error);
+  background: var(--tg-destructive-color, var(--color-error));
 }
 
 .admin-chart-axis {
@@ -258,16 +284,20 @@
   color: var(--tg-hint-color, var(--color-text-secondary));
 }
 
+/* Лінійка, а не контур: див. примітку на початку файлу. */
 .admin-table th,
 .admin-table td {
   padding: var(--spacing-xs) 0;
   text-align: right;
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  border-bottom: 1px solid var(--color-divider);
 }
 
+/* Шапка таблиці — єдиний рядок із повним контуром, щоб зведення читалося як
+   таблиця, а не як суцільна сітка однакових лінійок. */
 .admin-table thead th {
-  font-weight: 600;
-  color: var(--tg-hint-color, var(--color-text-secondary));
+  font-weight: 700;
+  color: var(--tg-text-color, var(--color-text));
+  border-bottom: var(--stroke-w) solid var(--color-divider-strong);
 }
 
 .admin-table th:first-child,
@@ -289,7 +319,7 @@
   justify-content: space-between;
   gap: var(--spacing-md);
   padding: var(--spacing-xs) 0;
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .admin-top-users li:last-child {
@@ -308,7 +338,7 @@
 
 .admin-error {
   padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .admin-error:last-child {
@@ -326,7 +356,7 @@
 .admin-error-code {
   flex-shrink: 0;
   font-weight: 700;
-  color: var(--color-error);
+  color: var(--tg-destructive-color, var(--color-error));
   font-variant-numeric: tabular-nums;
 }
 
@@ -347,10 +377,20 @@
 }
 
 .admin-error-kind {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .admin-error-message,
 .admin-error-meta {
   color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+@media (max-width: 480px) {
+  .admin-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .admin-main {
+    padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
+  }
 }

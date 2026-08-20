@@ -34,11 +34,12 @@ export function BottomNav() {
           onClick={() => triggerHapticFeedback('selection')}
         >
           {/* Окрема обгортка, а не сам <a>: підсвітка активної вкладки — компактна
-              пігулка навколо гліфа, а не блок на всю висоту смуги. Розмір гліфа
-              38px: 28 → 42 (×1.5) на прохання власника, потім на крок сетки (4px)
-              менше. Пігулка в BottomNav.css тягнеться на всю висоту смуги. */}
+              плашка навколо гліфа (62×36 з макета «Різограф»), а не блок на всю
+              висоту смуги. Гліф 26px: раніше було 38px під пігулку на всі 48px,
+              але тепер у смуги є власний контур, і плашка стоїть нижчою за неї —
+              38px у 36px просто не влазить. */}
           <span className="bottom-nav-glyph">
-            <Icon className="bottom-nav-icon" size={38} strokeWidth={2} aria-hidden="true" />
+            <Icon className="bottom-nav-icon" size={26} strokeWidth={2} aria-hidden="true" />
           </span>
           <span className="visually-hidden">{label}</span>
         </NavLink>

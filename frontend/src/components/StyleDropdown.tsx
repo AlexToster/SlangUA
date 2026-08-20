@@ -13,17 +13,12 @@ const COLUMNS = 2;
 // звисає нижче його краю, розширює прокручувану область і піднімає другу
 // смугу прокрутки на головному вікні. Тому висоту панелі обмежуємо тим місцем,
 // яке реально є під тригером, а всередині панель прокручується сама.
-const PANEL_GAP = 8; // = --spacing-sm, відступ панелі від тригера
+const PANEL_GAP = 8; // маленький відступ між низом панелі і смугою навігації
 const PANEL_MIN_HEIGHT = 240; // якщо тригер майже внизу, панель не має стати нечитабельною
 
 /**
  * Нижня межа вільного місця під елементом: край найближчого прокручуваного
- * предка (або вьюпорта). Скляну смугу навігації тут НЕ враховуємо — панель
- * навмисно заїжджає під неї (так просив власник: сітка «провалюється» за нижнє
- * меню, і крізь скло видно, що вона продовжується). Раніше тут був клемп по
- * .bottom-nav — його прибрано; замість нього панель отримує внутрішній нижній
- * відступ на висоту перекриття (див. navOverlap), щоб останній ряд плиток можна
- * було догорнути з-під скла.
+ * предка (або вьюпорта).
  */
 function scrollBoundaryBottom(element: HTMLElement): number {
   let bottom = window.innerHeight;
@@ -38,14 +33,15 @@ function scrollBoundaryBottom(element: HTMLElement): number {
 }
 
 /**
- * Наскільки нижній край панелі (у координатах вьюпорта) перекриває скляна смуга.
- * Міряємо саму смугу, а не читаємо --bottom-nav-height: так значення правильне і
- * коли смуги в DOM немає (тести рендерять компонент окремо) — тоді 0.
+ * Верхній край смуги навігації — друга межа для низу панелі: сітка мусить
+ * закінчуватися над смугою, з невеликим відступом, щоб її закруглений нижній
+ * край було видно. Міряємо саму смугу, а не читаємо --bottom-nav-height: так
+ * значення правильне і коли смуги в DOM немає (тести рендерять компонент
+ * окремо) — тоді межі просто немає.
  */
-function navOverlap(panelBottom: number): number {
+function navBoundaryTop(): number | null {
   const nav = document.querySelector('.bottom-nav');
-  if (!nav) return 0;
-  return Math.max(0, Math.round(panelBottom - nav.getBoundingClientRect().top));
+  return nav ? nav.getBoundingClientRect().top : null;
 }
 
 interface StyleDropdownProps {
@@ -69,7 +65,6 @@ export function StyleDropdown({
   // Зберігаємо set невдалих src; скидаємо його при зміні вибраного стилю.
   const [failedArt, setFailedArt] = useState<Set<string>>(() => new Set());
   const [panelMaxHeight, setPanelMaxHeight] = useState<number | null>(null);
-  const [panelPadBottom, setPanelPadBottom] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -131,24 +126,21 @@ export function StyleDropdown({
 
   // Міряємо доступну висоту під тригером, поки панель відкрита: на відкритті,
   // на resize (поява клавіатури) і на прокрутку контейнера — тригер при цьому
-  // рухається, тож ліміт треба перерахувати. Другим значенням рахуємо, скільки
-  // нижнього краю панелі з'їдає скляна смуга: рівно на стільки додаємо
-  // внутрішній відступ, щоб останній ряд плиток догортався з-під скла.
+  // рухається, тож ліміт треба перерахувати. Низ панелі мусить лишитися вище
+  // смуги навігації, з відступом PANEL_GAP: інакше її закруглений нижній край
+  // ховається за смугою і сітка читається як обрізана.
   useEffect(() => {
     if (!isOpen) return;
     const measure = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
       const triggerBottom = trigger.getBoundingClientRect().bottom;
-      const room = scrollBoundaryBottom(trigger) - triggerBottom - PANEL_GAP * 2;
-      const height = Math.max(Math.round(room), PANEL_MIN_HEIGHT);
-      const overlap = navOverlap(triggerBottom + PANEL_GAP + height);
-      // Відступ має сенс лише коли сітка справді дістає до смуги. Якщо вона вся
-      // влазить вище — порожня смуга внизу панелі виглядала б як помилка.
-      const panel = listRef.current;
-      const content = panel ? panel.scrollHeight - panelPadBottom : Number.POSITIVE_INFINITY;
-      setPanelMaxHeight(height);
-      setPanelPadBottom(content > height - overlap ? overlap : 0);
+      const navTop = navBoundaryTop();
+      const boundary = navTop === null
+        ? scrollBoundaryBottom(trigger)
+        : Math.min(scrollBoundaryBottom(trigger), navTop);
+      const room = boundary - triggerBottom - PANEL_GAP;
+      setPanelMaxHeight(Math.max(Math.round(room), PANEL_MIN_HEIGHT));
     };
     measure();
     window.addEventListener('resize', measure);
@@ -157,7 +149,7 @@ export function StyleDropdown({
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, { capture: true });
     };
-  }, [isOpen, panelPadBottom]);
+  }, [isOpen]);
 
   // Keep the highlighted option inside the scrollable panel.
   useEffect(() => {
@@ -266,15 +258,21 @@ export function StyleDropdown({
       >
         {selectedStyleObj &&
           (showThumb ? (
-            <img
-              className="style-dropdown-trigger-thumb"
-              src={selectedArtSrc ?? undefined}
-              alt=""
-              aria-hidden="true"
-              width={64}
-              height={48}
-              onError={() => setFailedArt((prev) => new Set(prev).add(selectedArtSrc as string))}
-            />
+            /* Обгортка потрібна лише для кадрування: обличчя персонажа мусить
+               стояти в колі й крупніше, ніж дає object-fit (133% з 4:3 у
+               квадрат замість потрібних 185%). Зсув задають --fx/--fy у
+               StyleDropdown.css, по парі на кожен стиль. */
+            <span className="style-thumb-crop" data-style={selectedStyleObj.id}>
+              <img
+                className="style-dropdown-trigger-thumb"
+                src={selectedArtSrc ?? undefined}
+                alt=""
+                aria-hidden="true"
+                width={64}
+                height={48}
+                onError={() => setFailedArt((prev) => new Set(prev).add(selectedArtSrc as string))}
+              />
+            </span>
           ) : (
             SelectedIcon && <SelectedIcon className="style-dropdown-trigger-icon" size={20} aria-hidden="true" />
           ))}
@@ -293,10 +291,9 @@ export function StyleDropdown({
           id={listId}
           className="style-dropdown-panel"
           style={
-            {
-              ...(panelMaxHeight !== null ? { '--style-dropdown-max-h': `${panelMaxHeight}px` } : {}),
-              '--style-dropdown-pad-b': `${panelPadBottom}px`,
-            } as React.CSSProperties
+            panelMaxHeight !== null
+              ? ({ '--style-dropdown-max-h': `${panelMaxHeight}px` } as React.CSSProperties)
+              : undefined
           }
           role="listbox"
           tabIndex={-1}

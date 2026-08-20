@@ -91,33 +91,15 @@ export async function initTelegramApp(): Promise<LaunchParams | null> {
 }
 
 /**
- * Hand Telegram's palette to the theme layer.
+ * Hand Telegram's *brightness* to the theme layer.
  *
- * It deliberately does not touch the DOM itself: the values used to be written
- * as inline custom properties on <html>, which outrank every stylesheet rule
- * and so made the in-app theme picker a no-op. utils/localSettings owns that
- * decision now and applies the snapshot only while the user is on "Системна".
+ * Свідомо не бере з themeParams жодного кольору: інтерфейс друкується нашими
+ * фарбами (styles/global.css), а від Telegram потрібне лише світло/темно. Раніше
+ * ці кольори писалися інлайном на <html>, перекривали будь-який стилелист і
+ * робили перемикач тем у застосунку недієвим.
  */
 export function applyTelegramTheme(themeParams: Record<string, string>) {
-  // Map Telegram theme params to CSS variables
-  const themeMap: Record<string, string> = {
-    bg_color: '--tg-bg-color',
-    text_color: '--tg-text-color',
-    hint_color: '--tg-hint-color',
-    link_color: '--tg-link-color',
-    button_color: '--tg-button-color',
-    button_text_color: '--tg-button-text-color',
-    secondary_bg_color: '--tg-secondary-bg-color',
-  };
-
-  const vars: Record<string, string> = {};
-  Object.entries(themeMap).forEach(([tgKey, cssVar]) => {
-    if (themeParams[tgKey]) {
-      vars[cssVar] = themeParams[tgKey];
-    }
-  });
-
-  setTelegramTheme(vars, Boolean(themeParams.bg_color && isDarkColor(themeParams.bg_color)));
+  setTelegramTheme(Boolean(themeParams.bg_color && isDarkColor(themeParams.bg_color)));
 }
 
 function isDarkColor(color: string): boolean {

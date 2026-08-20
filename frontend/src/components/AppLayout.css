@@ -2,10 +2,9 @@
 
    Fixed-height shell: the shell itself never scrolls, only
    .app-layout-content does. The navigation is absolutely positioned inside this
-   shell — it is a translucent glass bar and the page has to scroll under it for
-   that to mean anything (see BottomNav.css). `position: relative` here is what
-   anchors it; the nav was `position: fixed` long ago, which the Telegram WebView
-   did not always honour while scrolling (the bar scrolled out of view), and a
+   shell (see BottomNav.css) and `position: relative` here is what anchors it;
+   the nav was `position: fixed` long ago, which the Telegram WebView did not
+   always honour while scrolling (the bar scrolled out of view), and a
    non-scrolling shell plus absolute positioning cannot lose it. */
 .app-layout {
   position: relative;
@@ -24,7 +23,7 @@
 /* The single scroll container of the app. Page roots therefore must not create
    their own scrollers (see the page stylesheets).
 
-   The bottom padding is what keeps the glass bar from hiding the end of a page:
+   The bottom padding is what keeps the nav bar from hiding the end of a page:
    the nav no longer takes room in the flow, so this container spans the full
    shell height and its last rows would sit under the bar. Padding on a scroll
    container counts as scrollable overflow, so the page really can be scrolled

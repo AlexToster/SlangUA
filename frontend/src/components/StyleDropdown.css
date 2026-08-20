@@ -1,30 +1,39 @@
-/* StyleDropdown Component Styles — downward-opening popover */
+/* StyleDropdown Component Styles — the trigger unrolls the tile grid downward */
 
+/* container-type робить кнопку одиницею вимірювання для назви стилю: 100cqw —
+   це її власна ширина, тож розмір напису можна порахувати від місця, яке
+   реально є (див. .style-dropdown-label). Обмеження вбудоване в
+   container-type (layout + inline-size) нічого тут не ламає: ширина задана
+   зовні (100%), а панель уже позиційована відносно цього ж блока. */
 .style-dropdown {
   position: relative;
   width: 100%;
+  container-type: inline-size;
 }
 
+/* Кнопка вибору стилю — пігулка з круглим обличчям ліворуч. Це окремий елемент
+   над результатом, а не заголовок спільної картки: хвостик відповіді
+   прив'язаний саме до кружка обличчя (див. TranslatePage.css). */
 .style-dropdown-trigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
-  /* Жодних відступів навколо превю: мініатюра стилю тягнеться на всю висоту
-     кнопки і впритул до її лівого краю (прохання власника). Тому паддінг живе
-     не на кнопці, а на її вмісті — на підписі та на fallback-іконці; праворуч
-     лишається місце під шеврон. Раніше було `padding: sm md` + `gap: sm`. */
-  gap: 0;
-  padding: 0 var(--spacing-md) 0 0;
+  gap: 11px;
+  /* 5px ліворуч — стільки, щоб кружок обличчя (42px) сидів усередині пігулки
+     висотою 48px + 2×2px рамки. Зміниш це число — перерахуй `left` хвостика. */
+  padding: 5px 14px 5px 5px;
   min-height: 48px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   font-size: var(--font-size-lg);
-  font-weight: 500;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: var(--color-text);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    box-shadow var(--transition-fast), transform var(--transition-fast);
   text-align: left;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -33,7 +42,7 @@
 /* Hover only on devices that truly hover, so the highlight does not stick after a tap. */
 @media (hover: hover) {
   .style-dropdown-trigger:hover {
-    border-color: var(--color-primary);
+    background: var(--face-hover);
   }
 }
 
@@ -42,43 +51,73 @@
   outline-offset: 2px;
 }
 
+/* Відкрита кнопка — це верх однієї фігури, а не окрема кнопка над окремою
+   панеллю: низ пігулки випрямляється, і сітка продовжує її вниз тим самим
+   контуром (див. .style-dropdown-panel). Зсув фарби тут той самий глибший, що
+   в панелі: обидві частини зсунуті на 6px, тож смуга фарби праворуч переходить
+   з кнопки в сітку без стику, а зсув під кнопкою ховається за панеллю.
+
+   28px, а не --radius-full: верхні кути мусять лишитися такими самими, як у
+   закритої пігулки. --radius-full (9999px) сам підганяється під висоту за
+   правилом накладання дуг — сума радіусів на боці не може перевищувати його
+   довжину, тож при чотирьох круглих кутах кожен стає 28px (половина висоти).
+   Щойно нижні кути стають нулем, ця сума на лівому й правому боці вдвічі
+   менша, множник удвічі більший — і верхні дуги виростають до 56px, тобто на
+   всю висоту кнопки. Саме це й змінювало її форму на відкритті.
+   56px — це власна висота кнопки: 42px кружок + 2×5px відступи + 2×2px рамки.
+   Зміниш будь-яке з цих чисел — перерахуй і цей радіус. */
 .style-dropdown-trigger.open {
   border-color: var(--color-primary);
+  border-radius: 28px 28px 0 0;
+  box-shadow: var(--shadow-lg);
 }
 
 .style-dropdown-trigger-icon {
   flex-shrink: 0;
-  /* Фолбек замість мініатюри: у нього немає власного тла, тож відступ від краю
-     кнопки він мусить мати сам — інакше іконка прилипає до рамки. */
-  margin-left: var(--spacing-md);
+  /* Фолбек замість мініатюри: у нього немає власного кружка, тож відступ від
+     краю пігулки він мусить мати сам. */
+  margin-left: var(--spacing-sm);
   color: var(--color-primary);
 }
 
-/* Превю стилю — на всю висоту КНОПКИ (у згорнутому стані), впритул до лівого
-   краю, без відступів. Ширина мусить бути заданою: при `width: auto` +
-   `height: auto` мініатюра бере власний розмір ілюстрації (240×180) і сама
-   розтягує кнопку на всю висоту картинки — саме так і зламалося з першого
-   разу. 64px — це 4/3 від `min-height` кнопки (48px), тож у згорнутому стані
-   пропорція точна й нічого не обрізається; `align-self: stretch` +
-   `object-fit: cover` лишаються страховкою: якщо кнопка колись стане вищою,
-   картинка обріжеться, а не розсунеться. Міняючи `min-height` кнопки — міняй і
-   цю ширину. Було 32×24 у рамці з відступами. Ліві кути повторюють радіус
-   кнопки мінус її 1px рамка; у зведеній картці Translate радіус інший, тому
-   там є свій override у TranslatePage.css. Права межа — єдиний розділювач між
-   превю й підписом (замість колишнього inset-кільця навколо мініатюри). */
-.style-dropdown-trigger-thumb {
-  flex-shrink: 0;
-  align-self: stretch;
-  width: 64px;
-  height: auto;
-  object-fit: cover;
-  border-right: 1px solid var(--color-divider-strong);
-  border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
+/* Кругле обличчя стилю. Обгортка потрібна тому, що обличчя в ілюстрації 240×180
+   треба збільшити до 185% і зсунути — цього не дає ні object-fit (з 4:3 у
+   квадрат він дає лише 133%), ні object-view-box (його немає в Safari/iOS).
+   Числа --fx/--fy виміряні рендером кадру з перехрестям для кожного стилю. */
+.style-thumb-crop {
+  position: relative;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: var(--stroke-w) solid var(--stroke);
+  background: var(--paper);
 }
 
-/* Press feedback, matching .text-input-paste-btn in TextInput.css. */
+/* height:185% + width:auto — точний аналог `background-size: auto 185%`;
+   пара left/top плюс зустрічний translate тих самих відсотків відтворює
+   семантику `background-position`. */
+.style-thumb-crop img {
+  position: absolute;
+  height: 185%;
+  width: auto;
+  left: var(--fx);
+  top: var(--fy);
+  transform: translate(calc(-1 * var(--fx)), calc(-1 * var(--fy)));
+}
+
+.style-thumb-crop[data-style='GEN_Z'] { --fx: 51%; --fy: 5%; }
+.style-thumb-crop[data-style='STREET'] { --fx: 48%; --fy: 4%; }
+.style-thumb-crop[data-style='IT_SLANG'] { --fx: 32%; --fy: 6%; }
+.style-thumb-crop[data-style='KANCLER'] { --fx: 45%; --fy: 13%; }
+.style-thumb-crop[data-style='POFENI'] { --fx: 41%; --fy: 9%; }
+.style-thumb-crop[data-style='GALICIAN'] { --fx: 32%; --fy: 8%; }
+
+/* Один стан натискання на весь застосунок. */
 .style-dropdown-trigger:active:not(:disabled) {
-  transform: scale(0.98);
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -87,24 +126,33 @@
   }
 }
 
+/* Назва стилю набирається настільки великою, наскільки влазить у рядок.
+   Формула: вільне місце під напис — це ширина кнопки мінус усе, що стоїть у
+   рядку поруч (2+2 рамки, 5 відступ, 42 кружок, 11 зазор, 11 зазор, 20 шеврон,
+   14 відступ = 107px; 110 з запасом). Ділимо його на «довжину» напису в емах —
+   --label-cap, тобто кількість знаків × 0,56 (верхня оцінка середньої ширини
+   знака для цієї гарнітури у 800 вазі). Стеля — 24px, щоб короткі назви не
+   виростали в заголовок.
+   Перший рядок font-size лишається як фолбек: без підтримки контейнерних
+   запитів другий стає невалідним, і напис просто набирається 18px. Обрізання
+   трьома точками тут теж лишається — як остання страховка. */
 .style-dropdown-label {
   flex: 1;
-  /* Відступ від превю (і від краю кнопки, коли стиль ще не вибрано) — тепер тут,
-     бо сама кнопка паддінгів не має. */
-  padding: 0 0 0 var(--spacing-md);
+  padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--font-size-lg);
+  font-size: min(var(--font-size-2xl), calc((100cqw - 110px) / var(--label-cap, 7.5)));
 }
 
-/* The two longest style names — "Молодіжний тікток-сленг" (23 chars) and
-   "Бюрократична радянщина" (22) — ellipsise on the single-line trigger at the
-   shared size, so there they drop one token step (18px → 16px). The tile
-   captions need no exception: they wrap, and already sit at 16px. */
-.style-dropdown-label[data-style='GEN_Z'],
-.style-dropdown-label[data-style='KANCLER'] {
-  font-size: var(--font-size-base);
-}
+/* Кількість знаків × 0,56. «Оберіть стиль» (13) працює на типовому значенні. */
+.style-dropdown-label[data-style='GEN_Z'] { --label-cap: 12.9; }      /* 23 знаки */
+.style-dropdown-label[data-style='STREET'] { --label-cap: 6.7; }      /* 12 */
+.style-dropdown-label[data-style='IT_SLANG'] { --label-cap: 7.3; }    /* 13 */
+.style-dropdown-label[data-style='POFENI'] { --label-cap: 9.5; }      /* 17 */
+.style-dropdown-label[data-style='KANCLER'] { --label-cap: 12.3; }    /* 22 */
+.style-dropdown-label[data-style='GALICIAN'] { --label-cap: 7.8; }    /* 14 */
 
 .style-dropdown-chevron {
   flex-shrink: 0;
@@ -116,50 +164,51 @@
   transform: rotate(180deg);
 }
 
-/* Downward popover panel — a 2-column grid of picture tiles opening below the trigger. */
+/* Сітка розкривається з кнопки: верх панелі накриває нижню рамку тригера
+   (`100% - 2px`), тож на стику лишається одна лінія, а не дві; верхні кути
+   випрямлені, нижні — того самого радіуса, що й блок з результатом перекладу
+   (--radius-lg), бо низ панелі тепер видно повністю. Контур синій, як і в
+   тригера з класом .open: у цьому застосунку акцент — це колір контуру, тож
+   уся відкрита фігура читається як один активний предмет. */
 .style-dropdown-panel {
   position: absolute;
-  top: calc(100% + var(--spacing-sm));
+  top: calc(100% - var(--stroke-w));
   left: 0;
   right: 0;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-xs);
+  gap: 12px 14px;
   background: var(--color-bg);
-  /* Tile-border tan rather than --color-border: the latter equals the card
-     surface the popover overlays, so the panel had no visible edge of its own. */
-  border: 1px solid var(--color-tile-border);
-  border-radius: var(--radius-lg);
+  border: var(--stroke-w) solid var(--color-primary);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  /* Той самий глибший зсув, що й у відкритого тригера, — одна фігура, одна
+     фарба зсуву на однаковій відстані. */
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
   /* Three rows of 4:3 tiles plus their two-line captions come to ~515px at a
      390px viewport, so the rem cap must clear that or tall screens would scroll
      for no reason. --style-dropdown-max-h is measured on open (StyleDropdown.tsx)
-     and holds the room actually left below the trigger inside the app's scroll
-     container: without it the part of the panel hanging below the fold extends
-     that container's scrollable area and raises a second scrollbar on the page.
-     The bar is deliberately NOT subtracted — the panel is meant to slide under
-     the glass — so the overlap comes back as --style-dropdown-pad-b below.
+     and holds the room actually left below the trigger: it is clamped both to the
+     app's scroll container (otherwise the part hanging below the fold extends
+     that container's scrollable area and raises a second scrollbar on the page)
+     and to the top of the nav bar minus a small gap, so the panel's rounded
+     bottom edge stays visible above the bar instead of sliding under it.
      The dvh fallback applies only until the measurement lands (and in tests). */
-  max-height: min(var(--style-dropdown-max-h, 78dvh), 36rem);
+  max-height: min(var(--style-dropdown-max-h, 70dvh), 36rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  /* Halved (was sm/md): the padding is chrome, the tiles need the width.
-     --style-dropdown-pad-b is the measured height of the glass bar covering the
-     panel's bottom edge (0 when the grid ends above it, or when there is no bar):
-     as scrollable overflow it lets the last tile row be scrolled clear of the
-     glass instead of staying half-hidden behind it. */
-  padding: var(--spacing-xs) var(--spacing-sm)
-    calc(var(--spacing-xs) + var(--style-dropdown-pad-b, 0px));
+  /* 10px — рівно стільки, щоб зсув фарби плиток (4px) не зрізався краєм панелі,
+     яка через overflow-y: auto обрізає й горизонталь. */
+  padding: 10px;
   animation: style-dropdown-pop 0.2s ease;
 }
 
 /* On the narrowest phones trim the panel's side padding down to the gap size. */
 @media (max-width: 359.98px) {
   .style-dropdown-panel {
-    padding-left: var(--spacing-xs);
-    padding-right: var(--spacing-xs);
+    padding-left: var(--spacing-sm);
+    padding-right: var(--spacing-sm);
   }
 }
 
@@ -176,22 +225,20 @@
      artwork plus two lines of text allow. */
   gap: 2px;
   width: 100%;
-  /* Halved (was sm) together with the panel padding. */
-  padding: var(--spacing-xs) var(--spacing-xs) 2px;
+  padding: 5px 5px 7px;
   position: relative;
-  /* A tile is a card, not a transparent hit area: without its own surface and
-     outline it dissolved into the panel in both themes. The border is soft on
-     purpose — see the --color-tile-* block in global.css. */
+  /* Плитка — це надрукований об'єкт: плашка, контур 2px і зсув фарби. */
   background: var(--color-tile-bg);
-  border: 1px solid var(--color-tile-border);
+  border: var(--stroke-w) solid var(--color-tile-border);
   box-shadow: var(--shadow-sm);
-  border-radius: var(--radius-md);
+  border-radius: 15px;
   font-size: var(--font-size-lg);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--color-text);
   cursor: pointer;
   text-align: left;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    box-shadow var(--transition-fast), transform var(--transition-fast);
   transform-origin: center;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -204,9 +251,10 @@
   }
 }
 
-/* Large tiles press to 0.97 (the smaller TextInput buttons use 0.98). */
+/* Один стан натискання на весь застосунок — замість scale(0.97). */
 .style-dropdown-item:active {
-  transform: scale(0.97);
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 /* Keyboard highlight: the list keeps focus, the active option is marked visually. */
@@ -227,14 +275,16 @@
 }
 
 .style-dropdown-item.selected {
-  /* Ring drawn INSIDE the tile (outline-offset -2px) so the grid does not shift;
-     the soft tan border also turns primary, so the accent reads as one edge
-     instead of a blue ring wrapped in a tan outline. */
+  /* Вибір читається синім кільцем УСЕРЕДИНІ плитки (тому inset, а не outline —
+     сітка не зсувається) плюс синім контуром. Зсув фарби лишається той самий,
+     тож він мусить бути першим у списку тіней. */
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-tile-bg));
-  color: var(--color-primary);
   border-color: var(--tg-link-color, var(--color-primary));
-  outline: 2px solid var(--tg-link-color, var(--color-primary));
-  outline-offset: -2px;
+  box-shadow: var(--shadow-sm), inset 0 0 0 2px var(--tg-link-color, var(--color-primary));
+}
+
+.style-dropdown-item.selected:active {
+  box-shadow: 0 0 0 var(--offset), inset 0 0 0 2px var(--tg-link-color, var(--color-primary));
 }
 
 /* When the keyboard highlight lands on the selected tile, brighten the tint so the
@@ -264,7 +314,9 @@
   /* Matches the intrinsic 4:3 of every asset, so nothing is actually cropped;
      `cover` only guards a future off-ratio file against letterboxing. */
   object-fit: cover;
-  border-radius: var(--radius-sm);
+  /* Ілюстрація теж обведена: у різографі контур має все, що надруковане. */
+  border: var(--stroke-w) solid var(--stroke);
+  border-radius: 10px;
   display: block;
 }
 
@@ -278,51 +330,56 @@
 }
 
 .style-dropdown-item-title {
+  /* Дві строфи місця (2 × 1,2em) резервуються, щоб дві плитки в рядку були
+     однакової висоти незалежно від того, чи назва згорнулась у два рядки. Через
+     це однорядкові назви стояли притиснуті до верху — flex ставить їх по центру
+     цієї висоти. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  /* Compact caption: one step down from the tile's 18px, tight leading, and a
-     min-height of exactly two lines (2 x 1.2em) so it reserves no slack beyond
-     the text itself while still keeping both tiles in a row the same height. */
   font-size: var(--font-size-base);
   line-height: 1.2;
   min-height: 2.4em;
 }
 
-/* Selected marker: circular chip overlaid on the artwork's top-right corner.
-   Offsets follow the tile padding so the chip sits on the artwork corner itself.
-   aria-hidden in the markup — aria-selected already carries the meaning. */
+/* Позначка вибору: круглий жетон на куті ілюстрації. Тримається всередині
+   плитки (а не звисає на -7px, як у макеті): панель має overflow-y: auto, тож
+   горизонталь вона теж обрізає, і виступ спричинив би зайвий скрол.
+   aria-hidden у розмітці — сенс уже несе aria-selected. */
 .style-dropdown-check {
   position: absolute;
-  top: var(--spacing-xs);
-  right: var(--spacing-xs);
+  top: 11px;
+  right: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: var(--color-on-primary, #fff);
+  color: var(--color-on-primary);
+  border: var(--stroke-w) solid var(--stroke);
   font-size: var(--font-size-xs);
-  font-weight: bold;
+  font-weight: 800;
   line-height: 1;
-  /* Readable over any artwork. */
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
-/* Age-gate marker: red overlay badge on the artwork's top-left corner, always visible. */
+/* Вікова позначка: коралова плашка на протилежному куті, завжди видима.
+   Кораловий на світлому папері дає лише 2,81:1, тож текст на ньому завжди
+   чорний — так контраст лишається 5,8:1 у будь-якій темі. */
 .style-dropdown-lock {
   position: absolute;
-  top: var(--spacing-xs);
-  left: var(--spacing-xs);
-  padding: 2px var(--spacing-xs);
-  border-radius: var(--radius-sm);
-  background: var(--color-error, #d92d20);
-  color: #fff;
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  line-height: 1.2;
-  /* Readable over any artwork. */
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  top: 11px;
+  left: 11px;
+  padding: 3px 6px;
+  border-radius: 9px;
+  background: var(--flare);
+  color: #141210;
+  border: var(--stroke-w) solid #141210;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 /* Match TranslatePage.css: drop the press transform and its transition. */

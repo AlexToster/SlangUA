@@ -11,7 +11,8 @@
  *
  * Colours: the old rules referenced --tg-success-color-alpha-10 and friends,
  * none of which exist, so background and border resolved to nothing. They are
- * built with color-mix() from the tokens that do exist.
+ * built with color-mix() from the tokens that do exist. Контур — 2px, зсув
+ * фарби глибший (--shadow-lg), бо повідомлення лежить поверх усього екрана.
  */
 .toast {
   position: fixed;
@@ -25,7 +26,7 @@
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  border: var(--stroke-w) solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   animation: toast-slide-in 0.3s ease-out;
@@ -48,9 +49,11 @@
   margin-top: 2px;
 }
 
+/* Тип повідомлення несе плашка й колір контуру: напівпрозорих рамок
+   (color-mix … 40%, transparent) більше немає — контур завжди щільний. */
 .toast-success {
   background: color-mix(in srgb, var(--color-success) 12%, var(--color-bg));
-  border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+  border-color: var(--color-success);
 }
 
 .toast-success .toast-icon {
@@ -59,7 +62,7 @@
 
 .toast-error {
   background: color-mix(in srgb, var(--color-error) 12%, var(--color-bg));
-  border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
+  border-color: var(--color-error);
 }
 
 .toast-error .toast-icon {
@@ -68,7 +71,7 @@
 
 .toast-info {
   background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg));
-  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  border-color: var(--color-primary);
 }
 
 .toast-info .toast-icon {
@@ -87,24 +90,37 @@
   white-space: pre-line;
 }
 
+/* Дія в повідомленні — синя пігулка 44px. Прозорою вона бути не може: кнопка
+   мусить читатися як кнопка ще до наведення (раніше тло з'являлось лише на
+   :hover, тобто на дотику — ніколи). */
 .toast-action {
   flex-shrink: 0;
-  padding: var(--spacing-xs) var(--spacing-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
   font-family: inherit;
   font-size: var(--font-size-base);
-  font-weight: 600;
-  color: var(--color-primary);
-  background: transparent;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-md);
+  font-weight: 700;
+  color: var(--color-primary-text);
+  background: var(--color-primary);
+  border: var(--stroke-w) solid var(--color-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
   white-space: nowrap;
 }
 
 .toast-action:hover {
-  background: var(--color-primary);
-  color: var(--color-primary-text);
+  background: color-mix(in srgb, var(--color-primary) 85%, var(--ink));
+}
+
+.toast-action:active {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .toast-action:focus-visible {
@@ -112,25 +128,32 @@
   outline-offset: 2px;
 }
 
+/* Закрити — квадратний чип 44×44 на плашці --face (було 32×32 без тла). */
 .toast-close {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  color: var(--color-text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--face);
+  border: var(--stroke-w) solid var(--color-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: color var(--transition-fast), background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .toast-close:hover {
-  color: var(--color-text);
-  background: var(--color-surface);
+  background: var(--face-hover);
+}
+
+.toast-close:active {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .toast-close:focus-visible {

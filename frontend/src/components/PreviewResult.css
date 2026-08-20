@@ -1,15 +1,22 @@
 /* PreviewResult Component Styles */
+
+/* Відповідь — окремий блок на всю ширину, з глибшим зсувом фарби, ніж у решти:
+   це головне, що вирізняє його на екрані. `overflow: hidden` тут бути не може —
+   хвостик, який прив'язує блок до кнопки стилю (TranslatePage.css), стоїть на
+   top: -9px і був би зрізаний. */
 .preview-result {
+  position: relative;
   border-radius: var(--radius-lg);
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
-  overflow: hidden;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  background: var(--tg-bg-color, var(--color-bg));
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  box-shadow: var(--shadow-lg);
+  transition: border-color var(--transition-fast);
 }
 
+/* Акцент — колір контуру; розмите кільце прибрано (у різографі його немає, а
+   через помилку в імені змінної воно ще й друкувалося непрозорим синім). */
 .preview-result:focus-within {
   border-color: var(--tg-link-color, var(--color-primary));
-  box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20));
 }
 
 /* Empty state */
@@ -64,11 +71,13 @@
 .skeleton-line {
   height: 16px;
   border-radius: var(--radius-sm);
+  /* Плашка, а не контур: раніше смуги малювались кольором рамки (у різографі це
+     чорна фарба), і скелет читався як реальний текст. */
   background: linear-gradient(
     90deg,
-    var(--tg-border-color, var(--color-border)) 25%,
-    var(--tg-secondary-bg-color, var(--color-surface-hover)) 50%,
-    var(--tg-border-color, var(--color-border)) 75%
+    var(--face) 25%,
+    var(--face-hover) 50%,
+    var(--face) 75%
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
@@ -122,14 +131,21 @@
   color: var(--tg-hint-color, var(--color-text-muted));
 }
 
+/* Назва стилю в підвалі відповіді — плашка кольору неактивних кнопок (--face),
+   а не жовта: жовтий у цьому застосунку означає щось нове або збережене, а тут
+   він лише повторював те, що вже написано на кнопці стилю вище. Текст —
+   звичайне чорнило, контур — той самий, що в кнопок. Жовту плашку .badge у
+   global.css і бейджі в Історії це не зачіпає (власник просив саме про блок
+   з результатами). */
 .preview-style {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--spacing-xs);
-  font-weight: 600;
-  color: var(--tg-link-color, var(--color-primary));
-  background: var(--tg-link-color-alpha-10, var(--color-primary-alpha-10));
-  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-weight: 800;
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: 8px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -152,19 +168,17 @@
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+/* @keyframes spin — у styles/global.css (єдина копія на застосунок). */
 
 .preview-actions {
   display: flex;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm);
-  border-top: 1px solid var(--tg-border-color, var(--color-border));
+  border-top: 2px solid var(--color-divider-strong);
 }
 
-/* Error state */
+/* Error state. Плашка непрозора (фарба, домішана до паперу), як у банера й
+   тоста: напівпрозоре тло залежало від того, що просвічує знизу. */
 .preview-result.error {
   min-height: 140px;
   display: flex;
@@ -172,7 +186,7 @@
   justify-content: center;
   padding: var(--spacing-lg);
   border-color: var(--tg-destructive-color, var(--color-error));
-  background: var(--tg-destructive-color-alpha-05, var(--color-error-alpha-05));
+  background: color-mix(in srgb, var(--tg-destructive-color, var(--color-error)) 8%, var(--color-bg));
 }
 
 .preview-error {
@@ -195,25 +209,35 @@
   color: var(--tg-text-color, var(--color-text));
 }
 
+/* Повтор після помилки — така сама пігулка, як решта кнопок, лише червоною
+   фарбою. 44px замість колишніх ~25px: це мінімум для дотику. */
 .retry-btn {
-  padding: var(--spacing-xs) var(--spacing-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: 700;
   color: var(--tg-button-text-color, var(--color-on-primary));
   background: var(--tg-destructive-color, var(--color-error));
-  border: none;
-  border-radius: var(--radius-md);
+  border: var(--stroke-w) solid var(--stroke);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .retry-btn:hover {
-  opacity: 0.9;
+  background: color-mix(in srgb, var(--tg-destructive-color, var(--color-error)) 85%, var(--ink));
 }
 
+/* Один стан натискання на весь застосунок. */
 .retry-btn:active {
-  transform: scale(0.98);
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .retry-btn:focus-visible {
@@ -232,39 +256,51 @@
 
 .preview-result.success .preview-actions {
   padding-top: var(--spacing-sm);
-  border-top: 1px solid var(--tg-border-color, var(--color-border));
+  border-top: 2px solid var(--color-divider-strong);
 }
 
+/* Дії під відповіддю — ті самі пігулки: 44px, контур 2px, зсув фарби, один стан
+   натискання. Прозорого тла тут бути не може, кнопка мусить читатися як кнопка. */
 .preview-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-xs);
   flex: 1;
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
   white-space: nowrap;
+}
+
+.preview-action-btn:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .preview-action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
+/* Копіювати — плашка --face: другорядна дія, але не безбарвна. */
 .copy-btn {
-  color: var(--tg-link-color, var(--color-primary));
-  background: transparent;
-  border: 1px solid var(--tg-link-color, var(--color-primary));
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
 }
 
 .copy-btn:hover:not(:disabled) {
-  background: var(--tg-link-color, var(--color-primary));
-  color: var(--tg-button-text-color, var(--color-on-primary));
+  background: var(--face-hover);
 }
 
 .copy-btn:focus-visible {
@@ -272,17 +308,20 @@
   outline-offset: 2px;
 }
 
-.save-btn {
+/* Зберегти й поділитися — синьою фарбою: це головні дії над готовою відповіддю. */
+.save-btn,
+.share-btn {
   color: var(--tg-button-text-color, var(--color-on-primary));
   background: var(--tg-link-color, var(--color-primary));
-  border: 1px solid var(--tg-link-color, var(--color-primary));
 }
 
-.save-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
+.save-btn:hover:not(:disabled),
+.share-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tg-link-color, var(--color-primary)) 85%, var(--ink));
 }
 
-.save-btn:focus-visible {
+.save-btn:focus-visible,
+.share-btn:focus-visible {
   outline: 2px solid var(--tg-link-color, var(--color-primary));
   outline-offset: 2px;
 }
@@ -291,32 +330,20 @@
   animation: spin 1s linear infinite;
 }
 
-.share-btn {
-  color: var(--tg-button-text-color, var(--color-on-primary));
-  background: var(--tg-link-color, var(--color-primary));
-  border: 1px solid var(--tg-link-color, var(--color-primary));
-}
-
-.share-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .preview-meta {
     font-size: 11px;
   }
-  
+
+  /* Троє кнопок в один ряд: лишаються самі іконки, висота дотику — та сама.
+     Раніше це правило стояло двічі й скидало висоту разом із відступами. */
   .preview-action-btn {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-xs);
+    padding: 0 var(--spacing-sm);
+    font-size: var(--font-size-sm);
   }
-  
+
   .preview-action-btn span {
     display: none;
-  }
-  
-  .preview-action-btn {
-    justify-content: center;
   }
 }

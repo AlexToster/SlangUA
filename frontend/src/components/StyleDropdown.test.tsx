@@ -224,31 +224,22 @@ describe('StyleDropdown', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
-  // Геометрія панелі. Смуга навігації — скло ПОВЕРХ панелі: висоту панелі вона не
-  // обмежує (сітка навмисно заїжджає під неї), але перекритий низ компенсується
-  // внутрішнім відступом, інакше останній ряд плиток не догорнути.
+  // Геометрія панелі. Смуга навігації лежить поверх панелі, тому низ сітки мусить
+  // зупинитися вище її верхнього краю: інакше закруглений нижній край панелі
+  // ховається за смугою.
   describe('panel geometry', () => {
     const originalInnerHeight = window.innerHeight;
-    const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
 
     beforeEach(() => {
       window.innerHeight = 800;
-      // jsdom не робить розкладки: без цього сітка вважалася б порожньою і відступ
-      // був би не потрібен.
-      Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, value: 1200 });
     });
 
     afterEach(() => {
       window.innerHeight = originalInnerHeight;
-      if (scrollHeightDescriptor) {
-        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', scrollHeightDescriptor);
-      } else {
-        delete (HTMLElement.prototype as unknown as { scrollHeight?: number }).scrollHeight;
-      }
       document.querySelector('.bottom-nav')?.remove();
     });
 
-    function addGlassBar(top: number) {
+    function addNavBar(top: number) {
       const nav = document.createElement('nav');
       nav.className = 'bottom-nav';
       nav.getBoundingClientRect = () =>
@@ -257,22 +248,20 @@ describe('StyleDropdown', () => {
       return nav;
     }
 
-    it('is not clamped to the glass bar and pads the overlapped part instead', () => {
-      addGlassBar(700);
+    it('stops above the nav bar, leaving a gap for the rounded bottom edge', () => {
+      addNavBar(700);
       setup();
       const panel = openPanel();
 
-      // Тригер у jsdom має нульовий rect, тож місце під ним — уся висота вьюпорта
-      // мінус подвійний зазор; смуга з цього НЕ вирізається.
-      expect(panel.style.getPropertyValue('--style-dropdown-max-h')).toBe('784px');
-      // Низ панелі = 0 + зазор 8 + 784 = 792, тобто на 92px нижче краю смуги.
-      expect(panel.style.getPropertyValue('--style-dropdown-pad-b')).toBe('92px');
+      // Тригер у jsdom має нульовий rect, тож низ панелі — верх смуги (700) мінус
+      // зазор 8.
+      expect(panel.style.getPropertyValue('--style-dropdown-max-h')).toBe('692px');
     });
 
-    it('adds no padding when there is no glass bar in the DOM', () => {
+    it('falls back to the viewport when there is no nav bar in the DOM', () => {
       setup();
       const panel = openPanel();
-      expect(panel.style.getPropertyValue('--style-dropdown-pad-b')).toBe('0px');
+      expect(panel.style.getPropertyValue('--style-dropdown-max-h')).toBe('792px');
     });
   });
 });

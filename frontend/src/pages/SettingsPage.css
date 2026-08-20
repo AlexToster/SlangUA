@@ -1,8 +1,13 @@
 /* SettingsPage Component Styles
+
    Laid out to fit one phone screen: every row stays horizontal (label left,
    control right) and the descriptive hints are gone. The previous version
    switched .settings-item to `flex-direction: column` under 480px, which made
-   each of the rows three lines tall and pushed the page well past one screen. */
+   each of the rows three lines tall and pushed the page well past one screen.
+
+   Оформлення різографа: контур 2px замість «трохи іншого відтінку тла», зсув
+   фарби замість розмитих тіней, кнопки — пігулки з плашкою. Форма кнопки й
+   індикатора — у styles/global.css. */
 .settings-page {
   display: flex;
   flex-direction: column;
@@ -20,27 +25,24 @@
   justify-content: center;
 }
 
+/* Тільки розмір: дорожка, товщина й обертання — у .loading-spinner
+   (styles/global.css), звідти ж єдина копія @keyframes spin (тут була своя,
+   п'ята). Селектор із двома класами обов'язковий: global.css імпортується
+   останнім і при однаковій специфічності перекрив би ці 40px. */
 .settings-page.loading .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--tg-border-color, var(--color-border));
-  border-top-color: var(--tg-link-color, var(--color-primary));
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
+/* Пришпилена смуга з назвою — та сама форма, що .history-topbar і
+   .admin-header: папір, контур 2px знизу, той самий z-index. */
 .settings-header {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
-  background: var(--tg-bg-color, var(--color-bg));
   position: sticky;
   top: 0;
   z-index: 10;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--tg-bg-color, var(--color-bg));
+  border-bottom: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
 }
 
 /* Size, weight, centring and colour all come from .page-title in global.css. */
@@ -76,13 +78,16 @@
   color: var(--tg-text-color, var(--color-text));
 }
 
+/* Рядок налаштування. Розділювач між рядками лишається найтоншою лінією в
+   застосунку — 1px: тут це не контур предмета, а лінійка в таблиці, і при 2px
+   список із семи рядків читався б як сім окремих карток. */
 .settings-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--spacing-md);
   padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .settings-item:last-child {
@@ -136,11 +141,18 @@
   justify-content: stretch;
 }
 
-/* Toggle switch */
+/* Перемикач. Надрукований, а не «матеріальний»: дорожка — плашка з контуром
+   2px, кружечок — папір із таким самим контуром, без розмитої тіні під ним.
+   Зсуву фарби тут немає навмисно — це не кнопка, а стан, і зсув у щільному
+   списку лягав би на розділювач.
+
+   Висота 44px саме в <label>: сама дорожка 30px, але цілитися пальцем треба в
+   44 — раніше вся ціль була 26px. */
 .settings-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
+  min-height: 44px;
   cursor: pointer;
 }
 
@@ -154,23 +166,33 @@
 .settings-toggle-slider {
   position: relative;
   display: block;
-  width: 44px;
-  height: 26px;
-  background: var(--tg-border-color, var(--color-border));
-  border-radius: 13px;
+  width: 52px;
+  height: 30px;
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
   transition: background-color var(--transition-fast);
 }
 
+/* Кружечок кольору паперу з контуром читається і на плашці, і на синьому, і в
+   обох темах. Раніше тут стояв літеральний `white` — на темній темі це була
+   єдина біла пляма в застосунку.
+
+   box-sizing явно: `* { box-sizing: border-box }` з global.css не бере
+   псевдоелементи, а box-sizing не успадковується, тож 22px + два контури по 2px
+   давали 26px усередині 26px внутрішньої висоти дорожки — кружечок торкався б
+   обох країв і зрізався. */
 .settings-toggle-slider::before {
   content: '';
   position: absolute;
+  box-sizing: border-box;
   top: 2px;
   left: 2px;
   width: 22px;
   height: 22px;
-  background: white;
+  background: var(--paper);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transition: transform var(--transition-fast);
 }
 
@@ -178,12 +200,14 @@
   background: var(--tg-link-color, var(--color-primary));
 }
 
+/* 48px внутрішньої ширини − 2px відступ − 22px кружечок − 2px відступ = 22px. */
 .settings-toggle input:checked + .settings-toggle-slider::before {
-  transform: translateX(18px);
+  transform: translateX(22px);
 }
 
 .settings-toggle input:focus-visible + .settings-toggle-slider {
-  box-shadow: 0 0 0 3px var(--tg-link-color-alpha-20, var(--color-primary-alpha-20));
+  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline-offset: 2px;
 }
 
 .settings-toggle input:disabled + .settings-toggle-slider {
@@ -191,24 +215,41 @@
   cursor: not-allowed;
 }
 
-/* Buttons */
+/* Кнопка в рядку налаштувань — та сама пігулка, що всюди, тільки на 44px
+   (мінімум для дотику) замість 48: у списку з восьми рядків кожні зайві 4px
+   помножуються на вісім. Форма описана тут, а не через .btn з global.css, бо
+   розмітка цих кнопок класу .btn не має. */
 .settings-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  /* Тільки те, що справді змінюється: `all` анімував і зсув, і положення разом
+     із розкладкою. */
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
   white-space: nowrap;
+}
+
+/* Один стан натискання на весь застосунок: зсув зникає, штамп сідає на папір. */
+.settings-btn:not(:disabled):active {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .settings-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .settings-btn:focus-visible {
@@ -216,35 +257,39 @@
   outline-offset: 2px;
 }
 
-.settings-btn-primary {
-  color: var(--tg-button-text-color, var(--color-primary-text));
-  background: var(--tg-link-color, var(--color-primary));
-  border: 1px solid var(--tg-link-color, var(--color-primary));
-}
-
-.settings-btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
+/* Другорядна дія — плашка --face, а не прозоре тло: кнопка мусить читатися як
+   кнопка ще до наведення (на дотику :hover не настає ніколи). */
 .settings-btn-secondary {
-  color: var(--tg-link-color, var(--color-primary));
-  background: transparent;
-  border: 1px solid var(--tg-link-color, var(--color-primary));
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
 }
 
-.settings-btn-secondary:hover:not(:disabled) {
-  background: var(--tg-link-color-alpha-10, var(--color-primary-alpha-10));
+@media (hover: hover) {
+  .settings-btn-secondary:hover:not(:disabled) {
+    background: var(--face-hover);
+  }
 }
 
+/* Небезпечна дія. Текст — --on-blue, а не літеральний #ffffff: на світлому
+   папері це майже той самий світлий тон (5,2:1 на #cc2b48), а на темній темі
+   фарба стає кораловою, де білий давав лише 2,6:1 — там потрібен темний текст,
+   і --on-blue інвертується разом із темою. */
 .settings-btn-danger {
-  color: #ffffff;
+  color: var(--on-blue);
   background: var(--tg-destructive-color, var(--color-error));
-  border: 1px solid var(--tg-destructive-color, var(--color-error));
 }
 
-.settings-btn-danger:hover:not(:disabled) {
-  filter: brightness(1.1);
+/* filter: brightness() на плашці різографа вигорає в пастель, тому темніший
+   відтінок домішується самою фарбою. */
+@media (hover: hover) {
+  .settings-btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--tg-destructive-color, var(--color-error)) 85%, var(--ink));
+  }
 }
+
+/* .settings-btn-primary прибрано: розмітка його не рендерить (лишилися
+   -secondary і -danger), а для головної дії в застосунку є .btn.btn-primary у
+   global.css. */
 
 @media (max-width: 480px) {
   .settings-header {

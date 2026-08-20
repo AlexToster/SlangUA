@@ -1,22 +1,21 @@
-/* BottomNav Component Styles — скляна смуга з трьох гліфів */
+/* BottomNav Component Styles — надрукована смуга з трьох гліфів */
 :root {
-  /* Висота смуги = висота самої кнопки: вертикальних паддінгів немає, пігулка
-     гліфа розпирає смугу зсередини. Було 60px при пігулці 52px. */
+  /* Висота смуги. 48px — контракт: StyleDropdown міряє .bottom-nav, щоб додати
+     панелі вибору стилю нижній відступ на висоту перекриття, а .app-layout-content
+     тримає на цю ж висоту нижній паддінг. */
   --bottom-nav-height: 48px;
 }
 
 /* Смуга лежить ПОВЕРХ контенту: `position: absolute` у межах .app-layout —
-   оболонки фіксованої висоти з `overflow: hidden` (див. AppLayout.css). Саме
-   тому напівпрозоре тло має сенс: під смугою проїжджає сторінка, і
-   `backdrop-filter` розмиває саме її. Це не повернення до `position: fixed`,
-   від якого проєкт відмовився: fixed прив'язаний до вьюпорта, і Telegram
-   WebView міг прокрутити смугу за екран, а absolute у нескролюваній оболонці —
-   ні. Щоб останній елемент сторінки не ховався під склом, .app-layout-content
-   отримує нижній відступ на висоту смуги.
+   оболонки фіксованої висоти з `overflow: hidden` (див. AppLayout.css). Це не
+   повернення до `position: fixed`, від якого проєкт відмовився: fixed прив'язаний
+   до вьюпорта, і Telegram WebView міг прокрутити смугу за екран.
 
-   Рамки між вкладками навмисно немає: розділювачі перетворювали прозоре тло на
-   сітку й читалися важче за самі іконки. Немає й `overflow: hidden` — він
-   обрізав би неонове сяйво активного гліфа. */
+   Скла більше немає. Було: 15% поверхні + `backdrop-filter: blur(8px)
+   saturate(1.4)` + волосяна лінія + окремий @supports-фолбек для старих WebView.
+   У різографі напівпрозорих плівок не буває — смуга це папір із контуром 2px
+   згори, той самий, яким обведене все інше. Разом зі склом пішов і @supports:
+   щільне тло однакове в усіх WebView. Рамки між вкладками навмисно немає. */
 .bottom-nav {
   position: absolute;
   right: 0;
@@ -26,33 +25,16 @@
   display: flex;
   align-items: stretch;
   height: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
-  /* Згори й знизу відступів немає: рамка смуги обтягує кнопки. Safe area — це
-     єдиний нижній відступ, і він поза кнопками. */
+  /* Згори й знизу відступів немає: смуга обтягує кнопки. Safe area — єдиний
+     нижній відступ, і він поза кнопками. */
   padding: 0 var(--spacing-xs) var(--safe-area-bottom);
-  /* Майже прозоро: тло — лише 15% поверхні, решту дає розмитий контент під ним.
-     Було 30%; власник просив ще прозоріше, щоб смуга читалася як плівка, а не
-     як окрема панель. Нижче цього значення іконки на світлій темі починають
-     губитися в тексті сторінки, тому далі зменшувати не варто. */
-  background: color-mix(in srgb, var(--color-surface) 15%, transparent);
-  /* Розмиття вдвічі менше за початкове (16px): контент під склом лишається
-     впізнаваним, а не перетворюється на матову пляму. */
-  -webkit-backdrop-filter: blur(8px) saturate(1.4);
-  backdrop-filter: blur(8px) saturate(1.4);
-  /* Волосяна лінія замість колишньої 3px рамки — межа скла, а не окремий блок. */
-  border-top: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--paper);
+  border-top: var(--stroke-w) solid var(--stroke);
 }
 
-/* Старі WebView без backdrop-filter: без розмиття 15% тла лишили б іконки на
-   рухомому тексті, тому там смуга майже щільна. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bottom-nav {
-    background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
-  }
-}
-
-/* Три рівні вкладки: ширину задає CSS, а не inline `flex` у розмітці, бо
-   текстової вкладки на пів смуги більше немає. */
+/* Три рівні вкладки: ширину задає CSS, а не inline `flex` у розмітці. Уся
+   вкладка — зона дотику на всю висоту смуги, тож 48px мінімуму вона тримає
+   навіть при пігулці 36px. */
 .bottom-nav-item {
   display: flex;
   flex: 1;
@@ -64,68 +46,57 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Пігулка навколо гліфа — вона ж носій підсвітки, натискання й фокуса.
-   Гліф 38px (спершу було 28, потім 42 — власник попросив на крок сетки менше),
-   пігулка 60px шириною й на всю внутрішню висоту смуги: `height: 100%` замість
-   фіксованого числа, бо смуга тепер саме такої висоти, як кнопка, і будь-яка
-   зміна --bottom-nav-height має тягнути кнопку за собою автоматично.
-   Радіус --radius-md, а не --radius-lg: пігулка тепер обтягує всю висоту, і
-   16px заокруглення робили з неї капсулу. */
+/* Пігулка навколо гліфа — носій підсвітки, натискання й фокуса. 62×36 із
+   макета: вона більше не розпирає смугу на всю висоту, бо контур смуги тепер
+   видно, і плашка впритул до нього читалася б як частина рамки. */
 .bottom-nav-glyph {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px;
+  width: 62px;
   max-width: 100%;
-  height: 100%;
-  border-radius: var(--radius-md);
-  transition:
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
+  height: 36px;
+  border-radius: 13px;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .bottom-nav-icon {
   flex-shrink: 0;
 }
 
-/* Активна вкладка: акцентний колір + легке неонове сяйво. Сяйво навмисно
-   drop-shadow на самому гліфі (світиться контур штриха), а не box-shadow на
-   прямокутнику; пігулка додає ледь помітний ореол навколо. Радіуси сяйва
-   притерті (було 12/4/10px) після збільшення гліфа: пігулка тепер займає всю
-   внутрішню висоту смуги, і колишній ореол вилазив за верхню межу скла.
-   Колір — не єдиний маркер активності: NavLink проставляє aria-current="page". */
-.bottom-nav-item.active {
-  color: var(--tg-link-color, var(--color-primary));
-}
-
+/* Активна вкладка — залита фарбою плашка з вивернутим гліфом, як штамп. Неонове
+   сяйво (drop-shadow на гліфі + box-shadow на пігулці) прибрано: розмитого
+   світла в різографі немає. Активність несе не лише колір: змінюється форма
+   (з'являється плашка), а NavLink проставляє aria-current="page". */
 .bottom-nav-item.active .bottom-nav-glyph {
-  background: var(--color-primary-alpha-10);
-  box-shadow: 0 0 6px var(--color-primary-alpha-20);
-}
-
-.bottom-nav-item.active .bottom-nav-icon {
-  filter:
-    drop-shadow(0 0 3px var(--color-primary-alpha-50))
-    drop-shadow(0 0 7px var(--color-primary-alpha-20));
+  background: var(--ink);
+  color: var(--paper);
 }
 
 @media (hover: hover) {
   .bottom-nav-item:hover .bottom-nav-glyph {
-    background: color-mix(in srgb, var(--color-text) 8%, transparent);
+    background: var(--face);
   }
 
   .bottom-nav-item.active:hover .bottom-nav-glyph {
-    background: var(--color-primary-alpha-15);
+    background: color-mix(in srgb, var(--ink) 85%, var(--paper));
   }
 }
 
+/* Єдиний виняток зі спільного стану натискання (зсув фарби сходить у нуль +
+   translate(4px, 4px)): у вкладки немає зсуву, який можна зібрати, тож штамп
+   тут показує сама плашка. Зсувати гліф на 4px у смузі висотою 48px означало б
+   вивести його за контур. */
 .bottom-nav-item:active .bottom-nav-glyph {
-  transform: scale(0.92);
+  background: var(--face-hover);
+}
+
+.bottom-nav-item.active:active .bottom-nav-glyph {
+  background: color-mix(in srgb, var(--ink) 75%, var(--paper));
 }
 
 /* Обведення всередині пігулки (offset від'ємний): вертикальних паддінгів у смуги
-   більше немає, тож зовнішнє кільце виходило б за скло. */
+   немає, тож зовнішнє кільце перетнуло б її контур. */
 .bottom-nav-item:focus-visible {
   outline: none;
 }
@@ -138,9 +109,5 @@
 @media (prefers-reduced-motion: reduce) {
   .bottom-nav-glyph {
     transition: none;
-  }
-
-  .bottom-nav-item:active .bottom-nav-glyph {
-    transform: none;
   }
 }

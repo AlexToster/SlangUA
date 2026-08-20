@@ -472,9 +472,10 @@ export function TranslatePage() {
           placeholder="Напиши щось українською…"
         />
 
-        {/* The style trigger and the result are one card: the trigger is the
-            highlighted header, the contrasting rule below it is the only
-            separator. */}
+        {/* Пігулка стилю і відповідь — два окремі надруковані об'єкти з невеликим
+            зазором між ними; зв'язує їх хвостик, що виходить з-під пігулки
+            (див. .translate-output у TranslatePage.css). Спільної рамки навколо
+            них немає. */}
         <section className={clsx('translate-output', isOutputActive && 'active')} aria-label="Стиль і результат перекладу">
           <StyleDropdown
             styles={selectorStyles}

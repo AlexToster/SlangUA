@@ -1,21 +1,60 @@
 /* SlangUA Telegram Mini App - Global Styles */
 
-/* CSS Custom Properties for Telegram Theme Integration */
+/* Оформлення «Різограф»: дві фарби на папері, жорсткий контур, зсув фарби
+   замість тіні. Джерело — ілюстрації стилів: це друкована графіка з чорним
+   контуром і насиченими плашками, тож інтерфейс друкується тією ж технікою.
+
+   Ключове рішення шару токенів: різографські фарби підставлені під ті самі
+   імена, які компоненти вже читають (--tg-* і --color-*), тому переоформлення
+   не вимагає правок у кожному файлі. Зокрема --shadow-* тепер не розмиті тіні,
+   а жорсткий зсув, і всі наявні консюмери одразу друкують його. */
 :root {
   /* Keeps native UI (scrollbars, form controls, the on-screen keyboard) in step
      with the chosen theme. Overridden in the dark blocks below. */
   color-scheme: light;
 
-  /* Telegram theme colors (mapped from themeParams).
-     Світла тема — тепла, жовтувата (warm cream), у тон ілюстрацій стилів:
-     --tg-bg-color — тло за блоками, --tg-secondary-bg-color — самі блоки. */
-  --tg-bg-color: #f8f1de;
-  --tg-text-color: #12203a;
-  --tg-hint-color: #64748b;
-  --tg-link-color: #2563eb;
-  --tg-button-color: #2563eb;
-  --tg-button-text-color: #ffffff;
-  --tg-secondary-bg-color: #ede1c3;
+  /* --- Фарби. Світла тема: тепло-сірий газетний папір (не «AI cream»). --- */
+  --paper: #f2eee4;
+  --ink: #141210;
+  --stroke: var(--ink);
+  /* Плашка кнопки. Жодна кнопка не буває кольору тла — це окреме рішення
+     власника, а не смак: кнопка мусить читатися як кнопка без наведення. */
+  --face: #e6dcc3;
+  --face-hover: #dccfae;
+  /* Одна фарба зсуву на весь застосунок, але своя для кожної теми: на теплому
+     папері жовтий дає ~1,3:1 і зникає, тому світла тема друкує зсув бурштином
+     (2,39:1), а темна — жовтим. */
+  --offset: #d98a0b;
+  --sun: #f7c948;
+  --flare: #ff4a6e;
+  --ink-blue: #2b4bd8;
+  --on-blue: #f6f3ec;
+  /* Товщина контуру. Одне число на весь застосунок. */
+  --stroke-w: 2px;
+  /* Натискання: штамп сідає на папір. Єдиний стан на всі кнопки, поля й
+     плитки — замість чотирьох різних scale(). */
+  --press: translate(4px, 4px);
+
+  /* Telegram theme colors. Раніше тут стояла палітра Telegram; тепер це наші
+     фарби під тими самими іменами. У «Системній» темі Telegram більше не
+     підставляє свої кольори інлайном (див. utils/localSettings.ts) — звідти
+     приходить лише світло/темно. */
+  --tg-bg-color: var(--paper);
+  --tg-text-color: var(--ink);
+  --tg-hint-color: color-mix(in srgb, var(--ink) 52%, var(--paper));
+  --tg-link-color: var(--ink-blue);
+  --tg-button-color: var(--ink-blue);
+  --tg-button-text-color: var(--on-blue);
+  /* --tg-secondary-bg-color прибрано: у різографі «друга поверхня» — це не інший
+     відтінок тла, а той самий папір із контуром, тож усі його консюмери перейшли
+     на --color-bg (поле пошуку, картка історії, бейдж стилю) або на плашку
+     --face (кнопки, перемикач, діаграма). */
+  /* Ці три імена компоненти читали (31 + 15 + 4 посилання), але ніщо їх не
+     оголошувало: декларація була невалідна, і властивість ставала unset — так
+     попереджувальні банери втрачали і фон, і рамку. */
+  --tg-border-color: var(--stroke);
+  --tg-destructive-color: #cc2b48;
+  --tg-warning-color: var(--offset);
 
   /* Safe area insets */
   --safe-area-top: 0px;
@@ -26,58 +65,54 @@
   /* App colors */
   --color-primary: var(--tg-button-color);
   --color-primary-text: var(--tg-button-text-color);
+  /* Той самий колір під іменем, яке читають компоненти (8 посилань) — раніше
+     не був оголошений ніде. */
+  --color-on-primary: var(--tg-button-text-color);
   --color-bg: var(--tg-bg-color);
   --color-text: var(--tg-text-color);
   --color-text-secondary: var(--tg-hint-color);
-  --color-border: var(--tg-secondary-bg-color);
-  --color-surface: var(--tg-secondary-bg-color);
-  --color-error: #e74c3c;
-  --color-success: #27ae60;
-  --color-warning: #f39c12;
+  /* 13 посилань, жодного оголошення. Виводиться з фарби, а не з #64748b, який
+     давав 4,24:1 на світлому тлі й не проходив AA. */
+  --color-text-muted: var(--tg-hint-color);
+  /* Рамка — це контур, а не «трохи інший відтінок тла». Головна зміна
+     різографа, яку компоненти отримують без єдиної правки. */
+  --color-border: var(--stroke);
+  --color-error: var(--tg-destructive-color);
+  --color-success: #1f7a4d;
+  --color-warning: var(--offset);
+  /* Одне посилання (.preview-provider). */
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
-  /* Style tiles. Literal values, not --tg-* derivatives: the picture tiles must
-     stay separable from the panel behind them even when Telegram supplies its
-     own palette in "Системна" mode. The light set is the cream sampled from the
-     sticker sheet (#fef8e7); the tile is the lightest surface in the app so it
-     reads as an object lying on the panel, and the border is a soft warm tan —
-     deliberately low-contrast, so the primary-coloured ring on the selected tile
-     is still the loudest thing in the grid. */
-  --color-tile-bg: #fffaea;
-  --color-tile-bg-hover: #f6ead0;
-  --color-tile-border: #cbb488;
+  /* Плитки стилів. Раніше це були літеральні кольори, щоб Telegram їх не
+     перебивав у «Системній» темі; тепер Telegram фарб узагалі не підставляє,
+     тож плитка друкується тією ж плашкою, що й кнопка, і тим самим контуром.
+     Виділена плитка читається не рамкою, а синім кільцем усередині. */
+  --color-tile-bg: var(--face);
+  --color-tile-bg-hover: var(--face-hover);
+  --color-tile-border: var(--stroke);
 
-  /* Per-style accent colours, used by the history badges. */
-  --color-gen-z: #d946ef;
-  --color-street: #f59e0b;
-  --color-it-slang: #06b6d4;
-  --color-pofeni: #94a3b8;
-  --color-kancler: #8b5cf6;
-  --color-galician: #10b981;
+  /* Per-style accent colours видалені разом із шістьма різнокольоровими
+     бейджами історії (їхніми єдиними консюмерами): маджента / бірюза / violet
+     — це палітра з попереднього оформлення, а в різографі фарб усього сім.
+     Стиль позначає один бейдж — жовта плашка з чорним контуром (.badge), а 18+
+     друкується кораловою. */
 
-  /* Alpha derivatives. Component stylesheets referenced these names already,
-     but nothing defined them - so `box-shadow: 0 0 0 3px var(--…-alpha-20)`
-     and every `background: var(--…-alpha-15)` was an invalid declaration and
-     silently did nothing (no focus rings, colourless badges). */
-  --color-primary-alpha-10: color-mix(in srgb, var(--color-primary) 10%, transparent);
-  --color-primary-alpha-15: color-mix(in srgb, var(--color-primary) 15%, transparent);
-  --color-primary-alpha-20: color-mix(in srgb, var(--color-primary) 20%, transparent);
-  --color-primary-alpha-50: color-mix(in srgb, var(--color-primary) 50%, transparent);
-  --color-error-alpha-10: color-mix(in srgb, var(--color-error) 10%, transparent);
-  --color-error-alpha-20: color-mix(in srgb, var(--color-error) 20%, transparent);
-  --color-error-alpha-30: color-mix(in srgb, var(--color-error) 30%, transparent);
-  --color-success-alpha-10: color-mix(in srgb, var(--color-success) 10%, transparent);
-  --color-gen-z-alpha-15: color-mix(in srgb, var(--color-gen-z) 15%, transparent);
-  --color-street-alpha-15: color-mix(in srgb, var(--color-street) 15%, transparent);
-  --color-it-slang-alpha-15: color-mix(in srgb, var(--color-it-slang) 15%, transparent);
-  --color-pofeni-alpha-15: color-mix(in srgb, var(--color-pofeni) 15%, transparent);
-  --color-kancler-alpha-15: color-mix(in srgb, var(--color-kancler) 15%, transparent);
-  --color-galician-alpha-15: color-mix(in srgb, var(--color-galician) 15%, transparent);
+  /* Alpha derivatives видалені: у різографі немає напівпрозорих плашок. Там, де
+     потрібне «легке» тло стану (банер помилки, тост, помилка в результаті), фарба
+     домішується до паперу — color-mix(… 12%, var(--color-bg)) — і плашка не
+     залежить від того, що просвічує знизу. Розмитих кілець фокуса, які були
+     другим консюмером цих імен, теж більше немає: фокус показує контур. */
 
-  /* Contrast divider. Used where two previously separate blocks are merged into
-     one card and must still read as two zones: the editor and its action row,
-     the style trigger and the translation result. Deliberately stronger than
-     --color-border, which is barely visible against --color-surface. */
-  --color-divider-strong: color-mix(in srgb, var(--color-text) 32%, transparent);
+  /* Розділювач. У різографі розділювач — це той самий контур, тому тут не
+     напівпрозорий color-mix, а сама фарба: три наявні консюмери одразу
+     друкують лінію завтовшки з рамку. */
+  --color-divider-strong: var(--stroke);
+  /* Лінійка в таблиці — не контур предмета. Потрібна там, де рядків багато
+     (Налаштування, адмінка): при 2px чорного список із семи рядків читався б
+     як сім окремих карток. Виводиться з фарби, тому інвертується разом із
+     темою; окремого імені раніше не було, і кожен такий рядок посилався на
+     --color-border, тобто друкував повний контур. */
+  --color-divider: color-mix(in srgb, var(--ink) 22%, var(--paper));
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -86,16 +121,23 @@
   --spacing-lg: 24px;
   --spacing-xl: 32px;
 
-  /* Border radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Радіуси. На крок більші за попередні (8/12/16), бо контур 2px «з'їдає»
+     кут: при 8px кутик виглядає рубаним. */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  /* Зсув фарби замість тіні. Це те місце, завдяки якому переоформлення не
+     вимагає правок у компонентах: усі наявні посилання на --shadow-* (і 34
+     місця з box-shadow, що читають ці токени) починають друкувати різограф.
+     --shadow-md залишений як псевдонім --shadow-sm: у нього нуль консюмерів,
+     але видаляти ім'я означало б ловити невалідні декларації пізніше. */
+  --shadow-sm: 4px 4px 0 var(--offset);
+  --shadow-md: 4px 4px 0 var(--offset);
+  /* Глибший зсув — тільки для того, що лежить «поверх» паперу: результат
+     перекладу, панель вибору стилю, модальні вікна, тост. */
+  --shadow-lg: 6px 6px 0 var(--offset);
 
   /* Transitions */
   --transition-fast: 150ms ease;
@@ -135,41 +177,46 @@
   }
 }
 
-/* Dark theme (applied via data-theme attribute).
-   The theme picker in Settings works by setting this attribute; for that to be
-   visible, utils/localSettings must first withdraw Telegram's inline --tg-*
-   properties from <html>, because inline styles outrank this rule. */
+/* Темна тема (через атрибут data-theme).
+   Перемикач у Налаштуваннях працює саме через цей атрибут; щоб його було
+   видно, utils/localSettings спершу знімає інлайнові --tg-* властивості з
+   <html>, бо інлайн сильніший за будь-яке правило.
+
+   Тут перевизначені ЛИШЕ сирі фарби: усі --tg-* і --color-* оголошені як
+   var(--paper) / var(--ink) / … на тому самому елементі <html>, тож вони
+   перераховуються самі. Раніше цей блок дублював 10 оголошень — і саме там
+   найлегше було розійтися зі світлою темою. */
 [data-theme="dark"] {
   color-scheme: dark;
-  --tg-bg-color: #1c1c1e;
-  --tg-text-color: #ffffff;
-  --tg-hint-color: #8e8e93;
-  --tg-link-color: #0a84ff;
-  --tg-button-color: #0a84ff;
-  --tg-button-text-color: #ffffff;
-  --tg-secondary-bg-color: #2c2c2e;
-  /* Warm dark counterpart of the tile set: lighter than the panel it sits on
-     (--color-bg), so the tiles stop merging into it. */
-  --color-tile-bg: #2e2b25;
-  --color-tile-bg-hover: #3a352c;
-  --color-tile-border: #55503f;
+  --paper: #131210;
+  --ink: #f2eee4;
+  --face: #2a2622;
+  --face-hover: #363029;
+  /* На темному відбитку жовтий тримає ~11:1 і працює як зсув; бурштин там
+     тонув би у папері. */
+  --offset: var(--sun);
+  --ink-blue: #8fa6ff;
+  --on-blue: #10100e;
+  /* Коралова фарба на темному дає 5,8:1 — тут вона легальна як текст, тоді як
+     на світлому папері лише 2,81:1 і працює тільки як плашка. */
+  --tg-destructive-color: var(--flare);
+  --color-success: #57c98d;
 }
 
-/* System theme fallback: used when no explicit theme is chosen and no Telegram
-   palette is available, so the attribute is absent altogether. */
+/* Системна тема без явного вибору й без Telegram: атрибута немає взагалі.
+   Мусить повторювати блок вище рядок у рядок. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --tg-bg-color: #1c1c1e;
-    --tg-text-color: #ffffff;
-    --tg-hint-color: #8e8e93;
-    --tg-link-color: #0a84ff;
-    --tg-button-color: #0a84ff;
-    --tg-button-text-color: #ffffff;
-    --tg-secondary-bg-color: #2c2c2e;
-    --color-tile-bg: #2e2b25;
-    --color-tile-bg-hover: #3a352c;
-    --color-tile-border: #55503f;
+    --paper: #131210;
+    --ink: #f2eee4;
+    --face: #2a2622;
+    --face-hover: #363029;
+    --offset: var(--sun);
+    --ink-blue: #8fa6ff;
+    --on-blue: #10100e;
+    --tg-destructive-color: var(--flare);
+    --color-success: #57c98d;
   }
 }
 
@@ -261,7 +308,10 @@ body {
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--color-border);
+  /* Дорожка виводиться з фарби, а не з --color-border: рамка тепер це контур
+     (2px чорного), і суцільне чорне кільце читалося б як елемент, а не як
+     індикатор. */
+  border: 3px solid color-mix(in srgb, var(--ink) 22%, var(--paper));
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -284,10 +334,11 @@ body {
   margin-right: 8px;
 }
 
-/* Skeleton loading */
+/* Skeleton loading. Мерехтить між двома плашками, а не між папером і контуром:
+   з --color-border, який тепер є фарбою контуру, «хвиля» була б чорною. */
 .skeleton-line {
   height: 16px;
-  background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-border) 50%, var(--color-surface) 75%);
+  background: linear-gradient(90deg, var(--face) 25%, var(--face-hover) 50%, var(--face) 75%);
   background-size: 200% 100%;
   border-radius: var(--radius-sm);
   animation: shimmer 1.5s infinite;
@@ -303,27 +354,47 @@ body {
   100% { background-position: -200% 0; }
 }
 
-/* Button base */
+/* Кнопка. Одна форма на весь застосунок: плашка + контур 2px + зсув фарби,
+   пігулка. Замінює шість різних «outlined primary» на п'яти висотах.
+   Головне правило власника: кнопка ніколи не буває кольору тла, тому навіть
+   «другорядна» кнопка має плашку --face, а не прозоре тло. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
+  min-height: 48px;
   padding: var(--spacing-sm) var(--spacing-md);
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.5;
-  border: none;
-  border-radius: var(--radius-md);
+  background: var(--face);
+  color: var(--color-text);
+  border: var(--stroke-w) solid var(--stroke);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  /* Тільки те, що справді змінюється при натисканні: колір, зсув, положення.
+     `all` тут раніше анімував і box-shadow, і transform одночасно з layout. */
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* Єдиний стан натискання на весь застосунок: штамп сідає на папір — фарба
+   зсуву зникає, сам елемент з'їжджає на її місце. Замінює чотири різних
+   scale() (0.92 / 0.95 / 0.97 / 0.98). */
+.btn:not(:disabled):active {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .btn-primary {
@@ -332,30 +403,25 @@ body {
 }
 
 .btn-primary:not(:disabled):hover {
-  filter: brightness(1.1);
-}
-
-.btn-primary:not(:disabled):active {
-  filter: brightness(0.95);
+  background: color-mix(in srgb, var(--color-primary) 85%, var(--ink));
 }
 
 .btn-secondary {
-  background: var(--color-surface);
+  background: var(--face);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
 }
 
 .btn-secondary:not(:disabled):hover {
-  background: var(--color-border);
+  background: var(--face-hover);
 }
 
 .btn-danger {
   background: var(--color-error);
-  color: #fff;
+  color: var(--on-blue);
 }
 
 .btn-danger:not(:disabled):hover {
-  filter: brightness(1.1);
+  background: color-mix(in srgb, var(--color-error) 85%, var(--ink));
 }
 
 /* Toggle switch
@@ -369,25 +435,33 @@ body {
    list, which ignored the Telegram theme and opened as a white popup on a dark
    app - see components/SelectField.tsx, which replaces it. */
 
-/* Input & Textarea */
+/* Поле введення. Зсув фарби тут навішує лише .input: голий `textarea` — це
+   ще й .text-input усередині вже обведеної картки, і власний зсув друкувався
+   б удруге всередині неї. */
 .input,
 textarea {
   width: 100%;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--paper);
+  border: var(--stroke-w) solid var(--stroke);
   border-radius: var(--radius-md);
   padding: var(--spacing-sm) var(--spacing-md);
   font-size: var(--font-size-base);
   font-family: inherit;
   color: var(--color-text);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
 }
 
+.input {
+  min-height: 48px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Фокус — товща й інша фарба контуру, без розмитого кільця: у різографі немає
+   жодної розмитої тіні. */
 .input:focus,
 textarea:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .input::placeholder,
@@ -407,67 +481,21 @@ textarea {
    A duplicate `.toast` block here used to win over Toast.css and collapse the
    toast to ~50vw (`left: 50%` with no width). Toast.css owns the toast now. */
 
-/* Error Banner */
-.error-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: color-mix(in srgb, var(--color-error) 10%, var(--color-surface));
-  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-md);
-}
+/* Error Banner
+   Свідомо НЕ оформлений тут. global.css імпортується останнім (див. App.tsx),
+   тож дубль `.error-banner` з цього файлу перекривав ErrorBanner.css і забирав
+   у банера власний радіус, тло й анімацію. Разом із дублем прибрано п'ять
+   правил (.error-banner-content / -actions / -btn / -btn-primary /
+   -btn-secondary), яких ErrorBanner.tsx ніколи не рендерив. Банер повністю
+   належить ErrorBanner.css. */
 
-.error-banner-icon {
-  flex-shrink: 0;
-  color: var(--color-error);
-  margin-top: 2px;
-}
-
-.error-banner-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.error-banner-message {
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  margin-bottom: var(--spacing-sm);
-}
-
-.error-banner-actions {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.error-banner-btn {
-  padding: var(--spacing-xs) var(--spacing-md);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.error-banner-btn-primary {
-  background: var(--color-primary);
-  color: var(--color-primary-text);
-}
-
-.error-banner-btn-secondary {
-  background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-}
-
-/* Modal */
+/* Modal. Підкладка — одне затемнення на весь застосунок (раніше тут було
+   rgba(0,0,0,.5), а в TranslatePage.css rgb(0 0 0 / 45%)); скло
+   (backdrop-filter) прибрано разом з рештою розмиття. */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background: rgb(0 0 0 / 45%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -482,7 +510,8 @@ textarea {
 }
 
 .modal {
-  background: var(--color-bg);
+  background: var(--paper);
+  border: var(--stroke-w) solid var(--stroke);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   max-width: 360px;
@@ -532,19 +561,26 @@ textarea {
   color: var(--color-text);
 }
 
-/* Badge */
+/* Бейдж. Жовта плашка з контуром — той самий елемент, що позначає стиль у
+   результаті перекладу. Завжди чорний текст: жовтий і кораловий тримають
+   контраст лише в цьому напрямку. */
 .badge {
   display: inline-flex;
   align-items: center;
   padding: var(--spacing-xs) var(--spacing-sm);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  background: var(--sun);
+  color: #141210;
+  border: var(--stroke-w) solid #141210;
   border-radius: var(--radius-full);
 }
 
 .badge-success {
-  background: color-mix(in srgb, var(--color-success) 15%, transparent);
-  color: var(--color-success);
+  background: var(--color-success);
+  color: #141210;
 }
 
 /* Utility classes */
@@ -596,4 +632,30 @@ textarea {
 @keyframes page-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Глобальний скид анімацій. Досі prefers-reduced-motion враховувався лише в
+   трьох файлах із ~17 анімованих контекстів, і кожен новий компонент цю умову
+   забував — тому скид один і загальний.
+
+   Це єдине місце в проекті з !important, і воно потрібне саме тут: селектор
+   `*` має нульову специфічність, тож без нього будь-яке правило з класом
+   (.loading-spinner, .toast, .page-enter) перекриє скид. Обертання
+   індикаторів завантаження свідомо лишається: нерухомий спінер читається як
+   зламаний застосунок, а не як спокійніша анімація. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .loading-spinner,
+  .spinner-sm {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
 }

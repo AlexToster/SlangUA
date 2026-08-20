@@ -1,12 +1,21 @@
 /* ErrorBanner Component Styles */
+
+/* Надрукована смужка тривоги: плашка кольору стану, контур 2px тим самим
+   кольором (він тут працює як друга фарба) і зсув фарби, як у решти об'єктів.
+   Дубль цих правил у global.css прибрано — власником стилю банера є цей файл.
+
+   Плашка непрозора: 12% фарби, домішаної до паперу, а не 10% поверх нього.
+   Напівпрозоре тло залежало від того, що просвічує знизу (у списку історії це
+   могла бути картка) і на темній темі вигоряло; тост зроблений так само. */
 .error-banner {
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
   border-radius: var(--radius-lg);
-  background: var(--tg-destructive-color-alpha-10, var(--color-error-alpha-10));
-  border: 1px solid var(--tg-destructive-color-alpha-30, var(--color-error-alpha-30));
+  background: color-mix(in srgb, var(--tg-destructive-color, var(--color-error)) 12%, var(--color-bg));
+  border: var(--stroke-w) solid var(--tg-destructive-color, var(--color-error));
+  box-shadow: var(--shadow-sm);
   animation: error-banner-slide-in 0.3s ease-out;
 }
 
@@ -41,30 +50,37 @@
   word-break: break-word;
 }
 
+/* Повтор — така сама пігулка, як усі кнопки: 44px, контур, зсув фарби, один
+   стан натискання (було ~30px і scale(0.98)). */
 .error-banner-retry {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: 700;
   color: var(--tg-button-text-color, var(--color-on-primary));
   background: var(--tg-destructive-color, var(--color-error));
-  border: none;
-  border-radius: var(--radius-md);
+  border: var(--stroke-w) solid var(--stroke);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
   white-space: nowrap;
 }
 
 .error-banner-retry:hover {
-  opacity: 0.9;
+  background: color-mix(in srgb, var(--tg-destructive-color, var(--color-error)) 85%, var(--ink));
 }
 
 .error-banner-retry:active {
-  transform: scale(0.98);
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .error-banner-retry:focus-visible {
@@ -72,25 +88,33 @@
   outline-offset: 2px;
 }
 
+/* Закрити — квадратний чип 44×44 на плашці --face, як «очистити» в редакторі:
+   прозорих кнопок у застосунку немає. Було 28×28 без тла. */
 .error-banner-dismiss {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  color: var(--tg-hint-color, var(--color-text-muted));
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: color var(--transition-fast), background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .error-banner-dismiss:hover {
-  color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface-hover));
+  background: var(--face-hover);
+}
+
+.error-banner-dismiss:active {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .error-banner-dismiss:focus-visible {
@@ -98,39 +122,28 @@
   outline-offset: 2px;
 }
 
-/* Specific error type variants */
-.error-banner-offline {
-  background: var(--tg-warning-color-alpha-10, var(--color-warning-alpha-10));
-  border-color: var(--tg-warning-color-alpha-30, var(--color-warning-alpha-30));
-}
-
-.error-banner-offline .error-banner-icon {
-  color: var(--tg-warning-color, var(--color-warning));
-}
-
+/* Specific error type variants. Обидва «м'які» стани — жовта фарба замість
+   червоної: контур і плашка одного кольору, як у базовому банері. */
+.error-banner-offline,
 .error-banner-rate_limited {
-  background: var(--tg-warning-color-alpha-10, var(--color-warning-alpha-10));
-  border-color: var(--tg-warning-color-alpha-30, var(--color-warning-alpha-30));
+  background: color-mix(in srgb, var(--tg-warning-color, var(--color-warning)) 12%, var(--color-bg));
+  border-color: var(--tg-warning-color, var(--color-warning));
 }
 
+.error-banner-offline .error-banner-icon,
 .error-banner-rate_limited .error-banner-icon {
   color: var(--tg-warning-color, var(--color-warning));
 }
 
-.error-banner-unauthorized .error-banner-retry {
-  background: var(--tg-link-color, var(--color-primary));
-}
-
-.error-banner-unauthorized .error-banner-retry:hover {
-  filter: brightness(1.1);
-}
-
+/* Кнопка тут веде далі, а не повторює запит, тому синьою фарбою. */
+.error-banner-unauthorized .error-banner-retry,
 .error-banner-age_restricted_style .error-banner-retry {
   background: var(--tg-link-color, var(--color-primary));
 }
 
+.error-banner-unauthorized .error-banner-retry:hover,
 .error-banner-age_restricted_style .error-banner-retry:hover {
-  filter: brightness(1.1);
+  background: color-mix(in srgb, var(--tg-link-color, var(--color-primary)) 85%, var(--ink));
 }
 
 /* Responsive adjustments */
@@ -139,18 +152,18 @@
     padding: var(--spacing-sm) var(--spacing-md);
     flex-wrap: wrap;
   }
-  
+
   .error-banner-message {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     flex-basis: calc(100% - 24px);
     margin-top: var(--spacing-xs);
   }
-  
+
+  /* Лишається сама іконка; висота дотику — та сама. */
   .error-banner-retry {
-    font-size: var(--font-size-xs);
-    padding: var(--spacing-xs) var(--spacing-xs);
+    padding: 0 var(--spacing-sm);
   }
-  
+
   .error-banner-retry span {
     display: none;
   }

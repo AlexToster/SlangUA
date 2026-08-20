@@ -1,4 +1,10 @@
-/* HistoryPage Component Styles */
+/* HistoryPage Component Styles
+
+   Друкований список: кожен запис — окремий відбиток на папері (контур 2px і
+   зсув фарби замість розмитої тіні), а смуга з назвою та пошуком лежить поверх
+   нього як пришпилений аркуш. Спільні форми — кнопка, бейдж, індикатор
+   завантаження — у styles/global.css; тут лишається тільки те, що властиве
+   саме історії. */
 .history-page {
   display: flex;
   flex-direction: column;
@@ -24,29 +30,30 @@
   padding: var(--spacing-xl);
 }
 
+/* Тільки розмір: дорожка, товщина й обертання — у .loading-spinner
+   (styles/global.css), звідти ж єдина копія @keyframes spin (тут була своя,
+   четверта). Селектор нащадка обов'язковий: global.css імпортується останнім,
+   тож при однаковій специфічності його `width: 32px` перекрив би це правило —
+   саме так 40px тут раніше не діяли б. */
 .history-loading .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--tg-border-color, var(--color-border));
-  border-top-color: var(--tg-link-color, var(--color-primary));
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* Header + filters travel together. They used to be two independent sticky
    elements, with the filters pinned at a hard-coded `top: 48px` that no longer
    matches the (now much larger) title. One sticky wrapper needs no magic
-   number and keeps the search field reachable while the list scrolls. */
+   number and keeps the search field reachable while the list scrolls.
+
+   Контур несе сама смуга, а не кожен її рядок: раніше лінія була і під назвою,
+   і під фільтрами, а при товщині 2px це друкувалося б як дві рейки поспіль.
+   Назву від пошуку відділяє власний контур поля, не третя лінія. */
 .history-topbar {
   position: sticky;
   top: 0;
   z-index: 10;
   background: var(--tg-bg-color, var(--color-bg));
+  border-bottom: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
 }
 
 /* Title centred on the full width, counter pinned to the left corner on the
@@ -58,17 +65,18 @@
   align-items: center;
   justify-content: center;
   padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
-  background: var(--tg-bg-color, var(--color-bg));
 }
 
 .history-header h1 {
   margin: 0;
 }
 
+/* Лічильник збережених стоїть у правому куті шапки (власник просив перенести
+   його з лівого): заголовок лишається по центру смуги, а число не сусідить з
+   кнопкою «назад». */
 .history-stats {
   position: absolute;
-  left: var(--spacing-lg);
+  right: var(--spacing-lg);
   top: 50%;
   transform: translateY(-50%);
   font-size: var(--font-size-sm);
@@ -84,28 +92,38 @@
      default intrinsic width (plus the 150px filter) exceeded a phone screen and
      the whole page scrolled sideways. */
   min-width: 0;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--tg-border-color, var(--color-border));
-  background: var(--tg-bg-color, var(--color-bg));
+  padding: 0 var(--spacing-lg) var(--spacing-md);
 }
 
+/* Надруковане поле пошуку: папір, контур 2px, зсув фарби, 48px висоти — та
+   сама форма, що й .input у global.css (голий input[type=search] під той
+   селектор не потрапляє, тому розміри стоять тут).
+   appearance: none обов'язковий: без нього WebKit малює input[type=search]
+   власним системним контролом (searchfield) і на iOS ігнорує задану висоту й
+   радіус — поле лишалося б єдиним ненадрукованим предметом на екрані. */
 .history-search {
   flex: 1;
   min-width: 0;
+  min-height: 48px;
+  -webkit-appearance: none;
+  appearance: none;
   padding: var(--spacing-sm) var(--spacing-md);
   font-family: inherit;
+  /* 16px minimum: iOS Safari zooms the viewport on focus below that. */
   font-size: var(--font-size-base);
   color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
+  background: var(--tg-bg-color, var(--color-bg));
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
   border-radius: var(--radius-md);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast);
 }
 
+/* Фокус — інша фарба контуру. Розмите кільце прибрано: у різографі немає
+   жодної розмитої тіні. */
 .history-search:focus {
   outline: none;
   border-color: var(--tg-link-color, var(--color-primary));
-  box-shadow: 0 0 0 3px var(--tg-link-color-alpha-20, var(--color-primary-alpha-20));
 }
 
 .history-search::placeholder {
@@ -134,7 +152,7 @@
 
 .history-empty p:first-child {
   font-size: var(--font-size-lg);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--tg-text-color, var(--color-text));
   margin: 0 0 var(--spacing-xs);
 }
@@ -156,27 +174,33 @@
   min-width: 0;
 }
 
+/* Проміжок на крок більший, ніж був (8→16px): зсув фарби займає 4px під
+   карткою, і при 8px наступний запис ліг би просто на нього. */
 .history-item {
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 /* Компактна картка: 4px між рядками замість 8, і внутрішній відступ на один
-   токен менший. Картка все одно читається як окремий блок — за рахунок фону,
-   рамки й радіуса, а не порожнього місця. */
+   токен менший. Окремим блоком вона читається за рахунок контуру й зсуву
+   фарби, а не порожнього місця. */
 .history-entry {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-lg);
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  background: var(--tg-bg-color, var(--color-bg));
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast);
 }
 
-.history-entry:hover {
-  border-color: var(--tg-link-color-alpha-50, var(--color-primary-alpha-50));
-  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
+/* Наведення міняє лише фарбу контуру. Раніше тут з'являлася розмита тінь і
+   напівпрозора рамка (--…-alpha-50) — обидва прийоми з іншого оформлення. */
+@media (hover: hover) {
+  .history-entry:hover {
+    border-color: var(--tg-link-color, var(--color-primary));
+  }
 }
 
 .history-entry-header {
@@ -187,28 +211,31 @@
   gap: var(--spacing-xs);
 }
 
+/* Один бейдж на весь застосунок: жовта плашка, чорний контур, чорний текст —
+   той самий елемент, що позначає стиль у результаті перекладу (.preview-style,
+   .badge). Шість різнокольорових бейджів на напівпрозорих плашках були з
+   попередньої палітри: у різографі фарб усього сім, а назва стилю однаково
+   написана словами. */
 .history-style-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--spacing-xs);
+  padding: 2px var(--spacing-sm);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-radius: var(--radius-sm);
   white-space: nowrap;
-  /* Default look, so a style without its own colour token (GALICIAN has none)
-     still renders as a badge instead of bare text. */
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  color: var(--tg-text-color, var(--color-text));
+  background: var(--sun);
+  color: #141210;
+  border: var(--stroke-w) solid #141210;
+  border-radius: var(--radius-full);
 }
 
-.history-style-gen_z { background: var(--color-gen-z-alpha-15); color: var(--color-gen-z); }
-.history-style-street { background: var(--color-street-alpha-15); color: var(--color-street); }
-.history-style-it_slang { background: var(--color-it-slang-alpha-15); color: var(--color-it-slang); }
-.history-style-pofeni { background: var(--color-pofeni-alpha-15); color: var(--color-pofeni); }
-.history-style-kancler { background: var(--color-kancler-alpha-15); color: var(--color-kancler); }
-.history-style-galician { background: var(--color-galician-alpha-15); color: var(--color-galician); }
+/* Єдиний випадок, коли колір бейджа несе інформацію: 18+ друкується
+   кораловою фарбою, як і попередження на плитці стилю. */
+.history-style-pofeni {
+  background: var(--flare);
+}
 
 .history-time {
   font-size: var(--font-size-xs);
@@ -245,55 +272,77 @@
   font-style: italic;
 }
 
+/* Знайдений фрагмент — мазок маркера, а не надрукований об'єкт: жовта плашка
+   без контуру і без зсуву фарби, інакше кожен збіг усередині рядка читався б як
+   ще одна кнопка. Текст завжди чорний: на --sun це 5,8:1 у будь-якій темі, тоді
+   як системний колір <mark> у темній темі дає чорне на чорному. */
+.history-match {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--sun);
+  color: #141210;
+  font-weight: 700;
+}
+
 /* A rule between the source text and its translation - without it the two ran
-   together in one block. */
+   together in one block. Товщина — як у контуру: у різографі розділювач це та
+   сама лінія, тому тут --color-divider-strong, а не 1px «трохи іншого тла». */
 .history-translated {
   padding-top: var(--spacing-xs);
-  border-top: 1px solid var(--tg-border-color, var(--color-border));
+  border-top: var(--stroke-w) solid var(--color-divider-strong);
   font-size: var(--font-size-lg);
   font-weight: 500;
   color: var(--tg-text-color, var(--color-text));
 }
 
+/* Другої лінії тут немає навмисно: кнопки самі обведені контуром і лежать на
+   плашці, тож рядок дій відділяється ними, а не третьою рейкою в картці. */
 .history-entry-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-xs);
   padding-top: var(--spacing-xs);
-  border-top: 1px solid var(--tg-border-color, var(--color-border));
 }
 
-/* 36px → 32px: все ще ≥ рекомендованого мінімуму для дотику в межах картки,
-   але рядок дій забирає на 4px менше висоти. */
+/* 44×44 — мінімум для дотику. Раніше тут стояло 32×32 з коментарем, що це «все
+   ще ≥ рекомендованого мінімуму»: неправда, мінімум саме 44, і рядок дій
+   економив висоту за рахунок промаху пальцем. Плашка --face обов'язкова:
+   кнопка ніколи не буває кольору тла. Розмір самої піктограми задає розмітка
+   (20px у HistoryPage.tsx) — тут його більше не перебиваємо. */
 .history-favorite-btn,
 .history-delete-btn,
 .history-share-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  color: var(--tg-hint-color, var(--color-text-muted));
-  background: transparent;
-  border: 1px solid var(--tg-border-color, var(--color-border));
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.history-favorite-btn:hover,
-.history-delete-btn:hover,
-.history-share-btn:hover {
   color: var(--tg-text-color, var(--color-text));
-  border-color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface-hover));
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
+@media (hover: hover) {
+  .history-favorite-btn:hover,
+  .history-delete-btn:hover,
+  .history-share-btn:hover {
+    background: var(--face-hover);
+  }
+}
+
+/* Один стан натискання на весь застосунок: зсув зникає, штамп сідає на папір.
+   Замінює transform: scale(0.95). */
 .history-favorite-btn:active,
 .history-delete-btn:active,
 .history-share-btn:active {
-  transform: scale(0.95);
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .history-favorite-btn:focus-visible,
@@ -303,25 +352,24 @@
   outline-offset: 2px;
 }
 
+/* Обране — заповнене серце на кораловій плашці з тим самим контуром.
+   Напівпрозорих тл (--…-alpha-10 / -20) тут більше немає; чорний текст на
+   кораловій тримає ~7:1 в обох темах, тому фарба однакова і в світлій, і в
+   темній. */
 .history-favorite-btn.active {
-  color: var(--tg-destructive-color, var(--color-error));
-  border-color: var(--tg-destructive-color, var(--color-error));
-  background: var(--tg-destructive-color-alpha-10, var(--color-error-alpha-10));
+  color: #141210;
+  background: var(--flare);
 }
 
-.history-favorite-btn.active:hover {
-  color: var(--tg-destructive-color, var(--color-error));
-  border-color: var(--tg-destructive-color, var(--color-error));
-  background: var(--tg-destructive-color-alpha-20, var(--color-error-alpha-20));
+@media (hover: hover) {
+  .history-favorite-btn.active:hover {
+    background: color-mix(in srgb, var(--flare) 85%, var(--ink));
+  }
 }
 
-.history-favorite-btn svg,
-.history-delete-btn svg,
-.history-share-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
+/* Кнопка «Завантажити ще» — така сама пігулка 48px, як решта другорядних дій:
+   плашка --face, контур, зсув. Прозорою вона бути не може (на дотику стану
+   :hover не існує, а без плашки кнопка не читалася б як кнопка). */
 .history-load-more {
   display: flex;
   align-items: center;
@@ -331,27 +379,38 @@
      page wider than the viewport — the whole layout then scrolled sideways.
      `width: auto` on a stretched flex item already accounts for the margins. */
   width: auto;
-  padding: var(--spacing-md);
+  min-height: 48px;
+  padding: 0 var(--spacing-lg);
+  margin: 0 var(--spacing-lg) var(--spacing-xl);
   font-family: inherit;
   font-size: var(--font-size-base);
-  font-weight: 500;
-  color: var(--tg-link-color, var(--color-primary));
-  background: transparent;
-  border: 1px solid var(--tg-link-color, var(--color-primary));
-  border-radius: var(--radius-lg);
+  font-weight: 700;
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-  margin: 0 var(--spacing-lg) var(--spacing-xl);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
-.history-load-more:hover:not(:disabled) {
-  background: var(--tg-link-color, var(--color-primary));
-  color: var(--tg-button-text-color, var(--color-on-primary));
+@media (hover: hover) {
+  .history-load-more:hover:not(:disabled) {
+    background: var(--face-hover);
+  }
+}
+
+.history-load-more:not(:disabled):active {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .history-load-more:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .history-load-more:focus-visible {
@@ -359,14 +418,8 @@
   outline-offset: 2px;
 }
 
-.spinner-sm {
-  width: 16px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
+/* .spinner-sm тут не оголошений навмисно: він є в global.css, який
+   імпортується останнім, тож локальна копія все одно ніколи не діяла. */
 
 /* Responsive adjustments */
 @media (max-width: 480px) {
@@ -375,14 +428,14 @@
   }
 
   .history-stats {
-    left: var(--spacing-md);
+    right: var(--spacing-md);
     font-size: var(--font-size-xs);
   }
 
   /* Deliberately still a row: the topbar is sticky, and stacking the two
      controls stole a third of the screen from the list. */
   .history-filters {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 0 var(--spacing-md) var(--spacing-sm);
   }
 
   .history-filters .select-field {
@@ -397,8 +450,10 @@
     padding: var(--spacing-xs) var(--spacing-sm);
   }
 
+  /* Висота лишається 48px: вузький екран — не причина зменшувати ціль для
+     дотику, тому тут коротшають лише відступи. */
   .history-load-more {
     margin: 0 var(--spacing-md) var(--spacing-lg);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: 0 var(--spacing-md);
   }
 }

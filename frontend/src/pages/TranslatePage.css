@@ -17,18 +17,14 @@
   justify-content: center;
 }
 
+/* Лише розмір: колір дорожки, товщина і обертання — у .loading-spinner
+   (styles/global.css). Раніше тут стояла своя рамка з --color-border, яка після
+   переходу на контур друкувалася суцільним чорним кільцем, і власна копія
+   @keyframes spin. Специфічність цього селектора вища за глобальний, тож
+   декларації, яких тут немає, приходять звідти. */
 .translate-page.loading .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--tg-border-color, var(--color-border));
-  border-top-color: var(--tg-link-color, var(--color-primary));
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 .translate-main {
@@ -41,110 +37,88 @@
      able to overlay the result below it. */
 }
 
-/* Merged style trigger + result card.
-   No overflow: hidden here — that would clip the dropdown panel — so the
-   rounded corners are applied to the two children instead. */
+/* Кнопка стилю і відповідь — два надрукованих об'єкти, а не одна картка. Тут
+   лишається тільки їхнє взаємне розташування: пігулка, під нею відповідь на всю
+   ширину, зв'язані хвостиком (нижче). Власної рамки, плашки й тіні цей контейнер
+   не має — інакше під ними був би ще один прямокутник.
+   overflow: hidden тут стояти не може: він обріже панель вибору стилю. */
 .translate-output {
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 2px solid var(--tg-border-color, var(--color-border));
-  border-radius: var(--radius-lg);
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  /* 12px, а не --spacing-sm: власник просив невеликий відступ між блоками і
+     пігулкою стилю. Це стеля для цього зазору — хвостик відповіді дотягується
+     на ≈11,9px вище її верхнього краю (14px квадрат, повернутий на 45°, при
+     top: -9px), а нижче пігулки лежить ще 4px зсуву фарби, тож на 12px хвостик
+     сідає рівно на цю смугу і зв'язок читається. Більший зазор його відірве. */
+  gap: 12px;
 }
 
-/* Accent hand-off. The editor above owns the ring while it has focus
-   (.text-input-wrapper:focus-within). The moment a translation starts, and for
-   as long as a result is on screen, .active moves the same border+glow down
-   here, so one accent follows the active step instead of two rings competing.
-   The keyframe makes the glow arrive from the top edge - the "flowing down"
-   part - and settle into the full ring. */
-.translate-output.active {
+/* Пігулка друкується поверх хвостика: той виходить приблизно на 12px вище краю
+   відповіді, а відступ між блоками — 12px, тож він накриває смугу зсуву фарби
+   під пігулкою. Обидва блоки
+   позиційовані (.style-dropdown і .preview-result), і без z-index пізніший у
+   розмітці накрив би кнопку. Панель вибору стилю це не ламає: вона всередині
+   .style-dropdown, тож піднімається разом з ним. */
+.translate-output .style-dropdown {
+  z-index: 1;
+}
+
+/* Хвостик, що прив'язує відповідь до кружка обличчя в кнопці стилю: квадрат,
+   повернутий на 45°, з двома надрукованими сторонами. left: 19px — центр
+   кружка стоїть за 28px від краю блока (5px відступ + 21px радіус + 2px рамка),
+   а `left` тут міряється від внутрішнього краю рамки відповіді, тож 28-2-7=19.
+   Через це .preview-result не має overflow: hidden (див. PreviewResult.css).
+
+   box-sizing тут стоїть явно: у макеті хвостик — це <div>, який потрапляє під
+   `* { box-sizing: border-box }`, а `*` не добирається до псевдоелементів і
+   box-sizing не успадковується. Без цього рядка 14px + два контури по 2px
+   давали 18×18 — хвостик на чверть більший за намальований, і геометрія
+   left/top (порахована для 14px) перестала б сходитися. */
+.translate-output .preview-result::before {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  left: 19px;
+  top: -9px;
+  width: 14px;
+  height: 14px;
+  background: var(--tg-bg-color, var(--color-bg));
+  border-left: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-top: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  transform: rotate(45deg);
+}
+
+/* Порожній стан ще нічого не говорить — хвостика в нього немає. */
+.translate-output .preview-result.empty::before {
+  display: none;
+}
+
+/* Акцент на екрані завжди один. Поки фокус усередині редактора — друк, вставка,
+   «Випадкова фраза» — він належить йому; щойно починається переклад і поки
+   відповідь на екрані, .active фарбує контур відповіді (і її хвостик).
+   Синього світіння немає: у різографі розмитих кілець не буває, тому колишні
+   `box-shadow: 0 0 0 3px` і анімація translate-accent-flow прибрані.
+   Селектор із сусідом працює, бо .text-input-wrapper — попередній сусід
+   .translate-output у .translate-main; друга частина захисту — в
+   TranslatePage.tsx, де .active знімається, коли показана відповідь уже не
+   відповідає чернетці. */
+.translate-output.active .preview-result {
   border-color: var(--tg-link-color, var(--color-primary));
-  box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20));
-  animation: translate-accent-flow var(--transition-normal) ease;
 }
 
-@keyframes translate-accent-flow {
-  from { box-shadow: 0 -12px 14px -8px var(--tg-link-color, var(--color-primary-alpha-20)); }
-  to { box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20)); }
+.translate-output.active .preview-result::before {
+  border-left-color: var(--tg-link-color, var(--color-primary));
+  border-top-color: var(--tg-link-color, var(--color-primary));
 }
 
-/* Рамка на екрані завжди одна. Поки фокус усередині верхнього блока — друк,
-   вставка, кнопка «Випадкова фраза» — акцент належить редактору, тож нижню
-   рамку гасимо навіть тоді, коли результат уже показаний або переклад якраз
-   виконується. Раніше обидва правила були незалежні й рамки світилися разом.
-   Селектор працює, бо .text-input-wrapper (корінь TextInput) — попередній
-   сусід .translate-output у .translate-main; специфічність вища за .active,
-   тому просто перекриває його значення. Друга частина захисту — в
-   TranslatePage.tsx: .active знімається, коли показаний результат уже не
-   відповідає чернетці (потрібно там, де тап по кнопці не дає їй фокуса). */
-.text-input-wrapper:focus-within ~ .translate-output.active {
+.text-input-wrapper:focus-within ~ .translate-output.active .preview-result {
   border-color: var(--tg-border-color, var(--color-border));
-  box-shadow: none;
-  animation: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .translate-output {
-    transition: none;
-  }
-
-  .translate-output.active {
-    animation: none;
-  }
-}
-
-/* The trigger is the highlighted header of the card. */
-.translate-output .style-dropdown-trigger {
-  border: none;
-  border-bottom: 2px solid var(--color-divider-strong);
-  border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
-  background: var(--color-primary-alpha-15);
-  color: var(--tg-link-color, var(--color-primary));
-  font-weight: 600;
-}
-
-.translate-output .style-dropdown-trigger:hover,
-.translate-output .style-dropdown-trigger.open {
-  background: var(--color-primary-alpha-20);
-}
-
-.translate-output .style-dropdown-trigger:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-}
-
-/* Превю тягнеться на всю висоту кнопки, тож його лівий верхній кут мусить
-   повторювати кут картки (внутрішній радіус = --radius-lg мінус 2px рамки
-   .translate-output). Знизу кута немає: під кнопкою картка продовжується
-   результатом, і превю впирається в розділювач. */
-.translate-output .style-dropdown-trigger-thumb {
-  border-radius: calc(var(--radius-lg) - 2px) 0 0 0;
-}
-
-.translate-output .style-dropdown-chevron {
-  color: var(--tg-link-color, var(--color-primary));
-}
-
-/* The result is the body of the same card: no border, no ring, no own surface. */
-.translate-output .preview-result {
-  border: none;
-  border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
-  background: transparent;
-}
-
-.translate-output .preview-result:focus-within {
-  box-shadow: none;
-}
-
-.translate-output .preview-result.empty {
-  background: transparent;
-}
-
-.translate-output .preview-result.error {
-  background: var(--tg-destructive-color-alpha-05, var(--color-error-alpha-05));
+.text-input-wrapper:focus-within ~ .translate-output.active .preview-result::before {
+  border-left-color: var(--tg-border-color, var(--color-border));
+  border-top-color: var(--tg-border-color, var(--color-border));
 }
 
 .translate-age-modal-overlay {
@@ -158,11 +132,14 @@
   background: rgb(0 0 0 / 45%);
 }
 
+/* Обидва підтвердження (18+ і заміна тексту) — та сама надрукована картка:
+   папір, контур 2px, глибший зсув фарби, бо вона лежить поверх усього. */
 .translate-age-modal {
   width: min(100%, 24rem);
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
   background: var(--color-bg);
+  border: var(--stroke-w) solid var(--color-border);
   box-shadow: var(--shadow-lg);
 }
 
@@ -182,15 +159,43 @@
   margin-top: var(--spacing-lg);
 }
 
+/* «Скасувати» — плашка --face: прозорого тла в кнопок не буває, вони мусять
+   читатися як кнопки. «Підтвердити» — синьою фарбою. Форма в обох одна:
+   пігулка, контур, зсув фарби і той самий стан натискання. */
 .translate-age-modal-actions button {
   min-height: 44px;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-primary);
+  padding: 0 var(--spacing-md);
+  border: var(--stroke-w) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--face);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.translate-age-modal-actions button:hover:not(:disabled) {
+  background: var(--face-hover);
+}
+
+.translate-age-modal-actions button:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
+}
+
+.translate-age-modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
+}
+
+.translate-age-modal-actions button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .translate-age-modal-actions .confirm {
@@ -198,10 +203,23 @@
   color: var(--color-primary-text);
 }
 
+.translate-age-modal-actions .confirm:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 85%, var(--ink));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .translate-age-modal-actions button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .translate-main {
     padding: var(--spacing-sm) var(--spacing-md) var(--spacing-lg);
-    gap: var(--spacing-sm);
+    /* Той самий невеликий зазор, що й усередині .translate-output: на телефоні
+       редактор і пігулка стилю стояли за 8px один від одного і читались як один
+       блок. */
+    gap: 12px;
   }
 }

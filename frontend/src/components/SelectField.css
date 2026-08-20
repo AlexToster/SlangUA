@@ -1,6 +1,7 @@
 /* SelectField - themed replacement for a native <select>.
-   Trigger mirrors the app's input styling; the panel is portalled to <body>
-   with position: fixed, so scrolling ancestors cannot clip it. */
+   Тригер — така сама надрукована пігулка, як решта кнопок (плашка --face,
+   контур 2px, зсув фарби, 48px); панель портується в <body> з position: fixed,
+   тож жоден прокручуваний предок її не обріже. */
 .select-field {
   display: inline-flex;
   align-items: center;
@@ -8,28 +9,48 @@
   gap: var(--spacing-sm);
   width: 100%;
   min-width: 140px;
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 48px;
+  padding: 0 var(--spacing-md);
   font-family: inherit;
   font-size: var(--font-size-base);
+  font-weight: 700;
   text-align: left;
   color: var(--tg-text-color, var(--color-text));
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
-  border-radius: var(--radius-md);
+  background: var(--face);
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
+@media (hover: hover) {
+  .select-field:hover:not(:disabled) {
+    background: var(--face-hover);
+  }
+}
+
+/* Акцент — колір контуру. Розмите кільце прибрано: у різографі його немає, а
+   змінної --tg-link-color-alpha-20 не існувало, тож фактично друкувався
+   непрозорий синій ореол. */
 .select-field:focus-visible,
 .select-field.open {
   outline: none;
   border-color: var(--tg-link-color, var(--color-primary));
-  box-shadow: 0 0 0 3px var(--tg-link-color-alpha-20, var(--color-primary-alpha-20));
+}
+
+/* Один стан натискання на весь застосунок. */
+.select-field:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .select-field:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
 }
 
 .select-field-value {
@@ -50,6 +71,7 @@
   transform: rotate(180deg);
 }
 
+/* Панель — надрукований аркуш поверх сторінки: папір, контур 2px, глибший зсув. */
 .select-field-panel {
   position: fixed;
   z-index: var(--z-dropdown);
@@ -58,8 +80,8 @@
   max-height: min(50vh, 320px);
   overflow-y: auto;
   padding: var(--spacing-xs);
-  background: var(--tg-secondary-bg-color, var(--color-surface));
-  border: 1px solid var(--tg-border-color, var(--color-border));
+  background: var(--tg-bg-color, var(--color-bg));
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -68,13 +90,15 @@
   outline: none;
 }
 
+/* Рядок списку, а не кнопка: власної плашки не має, 44px — мінімум для дотику. */
 .select-field-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
   width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 44px;
+  padding: var(--spacing-xs) var(--spacing-md);
   font-family: inherit;
   font-size: var(--font-size-base);
   text-align: left;
@@ -85,12 +109,14 @@
   cursor: pointer;
 }
 
+/* Підсвітка з клавіатури й мишею — плашка; вибір — накреслення плюс синя
+   галочка, тож обидва стани лишаються різними навіть на одному рядку. */
 .select-field-option.highlighted {
-  background: var(--tg-link-color-alpha-10, var(--color-primary-alpha-10));
+  background: var(--face-hover);
 }
 
 .select-field-option.selected {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--tg-link-color, var(--color-primary));
 }
 

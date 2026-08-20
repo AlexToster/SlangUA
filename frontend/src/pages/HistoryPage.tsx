@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import {
@@ -32,6 +32,44 @@ const FAVORITE_FILTER_OPTIONS: SelectFieldOption<FavoriteFilter>[] = [
  * cap as `totalLimit` (HISTORY_MAX_ENTRIES on the server).
  */
 const HISTORY_LIMIT_FALLBACK = 100;
+
+/**
+ * Обводить у тексті збіги з пошуковим запитом.
+ *
+ * Логіка дзеркалить сервер (`history.service.ts`: `contains` з
+ * `mode: 'insensitive'` по цілому обрізаному запиту, окремо по originalText і
+ * translatedText), тож підсвічується саме той рядок, за яким відфільтровано
+ * список, а не кожне слово з нього окремо. Порівнюємо з `debouncedSearch` —
+ * тим значенням, якому відповідають показані записи, а не з тим, що зараз у полі.
+ */
+function highlightMatches(text: string, term: string): ReactNode {
+  const needle = term.trim();
+  if (!needle) return text;
+
+  const haystack = text.toLowerCase();
+  const lowered = needle.toLowerCase();
+  // toLowerCase() для деяких символів змінює довжину рядка (напр. 'İ' стає
+  // двома кодовими пунктами). Тоді індекси зі зведеного тексту не відповідають
+  // початковому, і різати його за ними означало б порізати не там — у такому
+  // разі показуємо текст без підсвітки.
+  if (haystack.length !== text.length || lowered.length !== needle.length) return text;
+
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (let at = haystack.indexOf(lowered); at !== -1; at = haystack.indexOf(lowered, from)) {
+    if (at > from) parts.push(text.slice(from, at));
+    parts.push(
+      <mark className="history-match" key={at}>
+        {text.slice(at, at + needle.length)}
+      </mark>
+    );
+    from = at + needle.length;
+  }
+
+  if (parts.length === 0) return text;
+  if (from < text.length) parts.push(text.slice(from));
+  return parts;
+}
 
 export function HistoryPage() {
   const queryClient = useQueryClient();
@@ -304,8 +342,8 @@ export function HistoryPage() {
                 </time>
               </div>
               <div className="history-entry-content">
-                <p className="history-original">{translation.originalText}</p>
-                <p className="history-translated">{translation.translatedText}</p>
+                <p className="history-original">{highlightMatches(translation.originalText, debouncedSearch)}</p>
+                <p className="history-translated">{highlightMatches(translation.translatedText, debouncedSearch)}</p>
               </div>
               <div className="history-entry-actions">
                 {canShareTranslation(translation) && (

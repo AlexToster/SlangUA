@@ -39,42 +39,32 @@ export function setLocalSettings(settings: Partial<LocalSettings>): LocalSetting
 
 /* Theme application.
 
-   Telegram delivers its palette as themeParams, which used to be written
-   straight onto <html> as inline custom properties (--tg-bg-color and friends).
-   Inline styles beat every stylesheet rule, so while they were present the
-   `[data-theme="dark"]` palette in global.css could never take effect: the
-   picker changed the attribute and nothing visibly happened. The snapshot is
-   therefore kept here and *withdrawn* from the element whenever the user picks
-   an explicit theme, and reinstated when they go back to "Системна". */
+   З палітри Telegram беремо ЛИШЕ яскравість — світло чи темно. Самі фарби
+   завжди наші (див. styles/global.css): різограф — це папір і дві фарби, і
+   якщо в «Системній» темі підставити bg_color/text_color/button_color від
+   Telegram, застосунок стане звичайним сірим Telegram-діалогом.
 
-const TELEGRAM_THEME_VARS = [
-  '--tg-bg-color',
-  '--tg-text-color',
-  '--tg-hint-color',
-  '--tg-link-color',
-  '--tg-button-color',
-  '--tg-button-text-color',
-  '--tg-secondary-bg-color',
-] as const;
+   Історично цей модуль тримав знімок кольорів Telegram і писав його інлайном
+   на <html>. Інлайн сильніший за будь-яке правило стилелиста, тож поки він був
+   там, палітра `[data-theme="dark"]` у global.css не могла подіяти: перемикач
+   міняв атрибут, а видимо не змінювалося нічого. Тепер інлайнових фарб немає
+   взагалі, і єдине, що приходить від Telegram — прапорець isDark. */
 
-let telegramTheme: { vars: Record<string, string>; isDark: boolean } | null = null;
+let telegramIsDark: boolean | null = null;
 
 /**
- * Hand the Telegram palette over to the theme layer. Called by
+ * Hand Telegram's brightness over to the theme layer. Called by
  * services/telegram.ts on start-up and on every `themeChanged` event; it
  * re-applies the user's choice, so an incoming Telegram theme never overrides
  * an explicit selection.
  */
-export function setTelegramTheme(vars: Record<string, string>, isDark: boolean) {
-  telegramTheme = { vars, isDark };
+export function setTelegramTheme(isDark: boolean) {
+  telegramIsDark = isDark;
   applyTheme(getLocalSettings().theme);
 }
 
 export function applyTheme(theme: LocalSettings['theme']) {
   const root = document.documentElement;
-
-  // Always start from a clean slate: no inline palette, so the stylesheet wins.
-  TELEGRAM_THEME_VARS.forEach((name) => root.style.removeProperty(name));
 
   if (theme !== 'system') {
     root.setAttribute('data-theme-override', theme);
@@ -84,11 +74,8 @@ export function applyTheme(theme: LocalSettings['theme']) {
 
   root.removeAttribute('data-theme-override');
 
-  if (telegramTheme) {
-    Object.entries(telegramTheme.vars).forEach(([name, value]) => {
-      root.style.setProperty(name, value);
-    });
-    root.setAttribute('data-theme', telegramTheme.isDark ? 'dark' : 'light');
+  if (telegramIsDark !== null) {
+    root.setAttribute('data-theme', telegramIsDark ? 'dark' : 'light');
     return;
   }
 
