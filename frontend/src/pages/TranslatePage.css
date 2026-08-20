@@ -71,6 +71,21 @@
   to { box-shadow: 0 0 0 3px var(--tg-link-color, var(--color-primary-alpha-20)); }
 }
 
+/* Рамка на екрані завжди одна. Поки фокус усередині верхнього блока — друк,
+   вставка, кнопка «Випадкова фраза» — акцент належить редактору, тож нижню
+   рамку гасимо навіть тоді, коли результат уже показаний або переклад якраз
+   виконується. Раніше обидва правила були незалежні й рамки світилися разом.
+   Селектор працює, бо .text-input-wrapper (корінь TextInput) — попередній
+   сусід .translate-output у .translate-main; специфічність вища за .active,
+   тому просто перекриває його значення. Друга частина захисту — в
+   TranslatePage.tsx: .active знімається, коли показаний результат уже не
+   відповідає чернетці (потрібно там, де тап по кнопці не дає їй фокуса). */
+.text-input-wrapper:focus-within ~ .translate-output.active {
+  border-color: var(--tg-border-color, var(--color-border));
+  box-shadow: none;
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .translate-output {
     transition: none;

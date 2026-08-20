@@ -223,4 +223,56 @@ describe('StyleDropdown', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument();
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
+
+  // Геометрія панелі. Смуга навігації — скло ПОВЕРХ панелі: висоту панелі вона не
+  // обмежує (сітка навмисно заїжджає під неї), але перекритий низ компенсується
+  // внутрішнім відступом, інакше останній ряд плиток не догорнути.
+  describe('panel geometry', () => {
+    const originalInnerHeight = window.innerHeight;
+    const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
+
+    beforeEach(() => {
+      window.innerHeight = 800;
+      // jsdom не робить розкладки: без цього сітка вважалася б порожньою і відступ
+      // був би не потрібен.
+      Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, value: 1200 });
+    });
+
+    afterEach(() => {
+      window.innerHeight = originalInnerHeight;
+      if (scrollHeightDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', scrollHeightDescriptor);
+      } else {
+        delete (HTMLElement.prototype as unknown as { scrollHeight?: number }).scrollHeight;
+      }
+      document.querySelector('.bottom-nav')?.remove();
+    });
+
+    function addGlassBar(top: number) {
+      const nav = document.createElement('nav');
+      nav.className = 'bottom-nav';
+      nav.getBoundingClientRect = () =>
+        ({ top, bottom: window.innerHeight, height: window.innerHeight - top, left: 0, right: 390, width: 390, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+      document.body.appendChild(nav);
+      return nav;
+    }
+
+    it('is not clamped to the glass bar and pads the overlapped part instead', () => {
+      addGlassBar(700);
+      setup();
+      const panel = openPanel();
+
+      // Тригер у jsdom має нульовий rect, тож місце під ним — уся висота вьюпорта
+      // мінус подвійний зазор; смуга з цього НЕ вирізається.
+      expect(panel.style.getPropertyValue('--style-dropdown-max-h')).toBe('784px');
+      // Низ панелі = 0 + зазор 8 + 784 = 792, тобто на 92px нижче краю смуги.
+      expect(panel.style.getPropertyValue('--style-dropdown-pad-b')).toBe('92px');
+    });
+
+    it('adds no padding when there is no glass bar in the DOM', () => {
+      setup();
+      const panel = openPanel();
+      expect(panel.style.getPropertyValue('--style-dropdown-pad-b')).toBe('0px');
+    });
+  });
 });

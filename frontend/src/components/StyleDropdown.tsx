@@ -18,9 +18,12 @@ const PANEL_MIN_HEIGHT = 240; // якщо тригер майже внизу, п
 
 /**
  * Нижня межа вільного місця під елементом: край найближчого прокручуваного
- * предка (або вьюпорта), піднятий над нижньою навігацією. Смуга навігації —
- * напівпрозоре скло поверх скрол-контейнера (див. BottomNav.css), тому останні
- * ~60px цього контейнера вільним місцем не є: панель не має заїжджати під неї.
+ * предка (або вьюпорта). Скляну смугу навігації тут НЕ враховуємо — панель
+ * навмисно заїжджає під неї (так просив власник: сітка «провалюється» за нижнє
+ * меню, і крізь скло видно, що вона продовжується). Раніше тут був клемп по
+ * .bottom-nav — його прибрано; замість нього панель отримує внутрішній нижній
+ * відступ на висоту перекриття (див. navOverlap), щоб останній ряд плиток можна
+ * було догорнути з-під скла.
  */
 function scrollBoundaryBottom(element: HTMLElement): number {
   let bottom = window.innerHeight;
@@ -31,11 +34,18 @@ function scrollBoundaryBottom(element: HTMLElement): number {
       break;
     }
   }
-  // Міряємо саму смугу, а не читаємо --bottom-nav-height: так ліміт правильний і
-  // коли смуги в DOM немає (тести рендерять компонент окремо).
-  const nav = document.querySelector('.bottom-nav');
-  if (nav) bottom = Math.min(bottom, nav.getBoundingClientRect().top);
   return bottom;
+}
+
+/**
+ * Наскільки нижній край панелі (у координатах вьюпорта) перекриває скляна смуга.
+ * Міряємо саму смугу, а не читаємо --bottom-nav-height: так значення правильне і
+ * коли смуги в DOM немає (тести рендерять компонент окремо) — тоді 0.
+ */
+function navOverlap(panelBottom: number): number {
+  const nav = document.querySelector('.bottom-nav');
+  if (!nav) return 0;
+  return Math.max(0, Math.round(panelBottom - nav.getBoundingClientRect().top));
 }
 
 interface StyleDropdownProps {
@@ -59,6 +69,7 @@ export function StyleDropdown({
   // Зберігаємо set невдалих src; скидаємо його при зміні вибраного стилю.
   const [failedArt, setFailedArt] = useState<Set<string>>(() => new Set());
   const [panelMaxHeight, setPanelMaxHeight] = useState<number | null>(null);
+  const [panelPadBottom, setPanelPadBottom] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -120,14 +131,24 @@ export function StyleDropdown({
 
   // Міряємо доступну висоту під тригером, поки панель відкрита: на відкритті,
   // на resize (поява клавіатури) і на прокрутку контейнера — тригер при цьому
-  // рухається, тож ліміт треба перерахувати.
+  // рухається, тож ліміт треба перерахувати. Другим значенням рахуємо, скільки
+  // нижнього краю панелі з'їдає скляна смуга: рівно на стільки додаємо
+  // внутрішній відступ, щоб останній ряд плиток догортався з-під скла.
   useEffect(() => {
     if (!isOpen) return;
     const measure = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
-      const room = scrollBoundaryBottom(trigger) - trigger.getBoundingClientRect().bottom - PANEL_GAP * 2;
-      setPanelMaxHeight(Math.max(Math.round(room), PANEL_MIN_HEIGHT));
+      const triggerBottom = trigger.getBoundingClientRect().bottom;
+      const room = scrollBoundaryBottom(trigger) - triggerBottom - PANEL_GAP * 2;
+      const height = Math.max(Math.round(room), PANEL_MIN_HEIGHT);
+      const overlap = navOverlap(triggerBottom + PANEL_GAP + height);
+      // Відступ має сенс лише коли сітка справді дістає до смуги. Якщо вона вся
+      // влазить вище — порожня смуга внизу панелі виглядала б як помилка.
+      const panel = listRef.current;
+      const content = panel ? panel.scrollHeight - panelPadBottom : Number.POSITIVE_INFINITY;
+      setPanelMaxHeight(height);
+      setPanelPadBottom(content > height - overlap ? overlap : 0);
     };
     measure();
     window.addEventListener('resize', measure);
@@ -136,7 +157,7 @@ export function StyleDropdown({
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, { capture: true });
     };
-  }, [isOpen]);
+  }, [isOpen, panelPadBottom]);
 
   // Keep the highlighted option inside the scrollable panel.
   useEffect(() => {
@@ -272,9 +293,10 @@ export function StyleDropdown({
           id={listId}
           className="style-dropdown-panel"
           style={
-            panelMaxHeight !== null
-              ? ({ '--style-dropdown-max-h': `${panelMaxHeight}px` } as React.CSSProperties)
-              : undefined
+            {
+              ...(panelMaxHeight !== null ? { '--style-dropdown-max-h': `${panelMaxHeight}px` } : {}),
+              '--style-dropdown-pad-b': `${panelPadBottom}px`,
+            } as React.CSSProperties
           }
           role="listbox"
           tabIndex={-1}

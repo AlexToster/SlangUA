@@ -117,16 +117,22 @@
      390px viewport, so the rem cap must clear that or tall screens would scroll
      for no reason. --style-dropdown-max-h is measured on open (StyleDropdown.tsx)
      and holds the room actually left below the trigger inside the app's scroll
-     container, minus the glass navigation bar that overlays its bottom edge:
-     without it the part of the panel hanging below the fold extends that
-     container's scrollable area and raises a second scrollbar on the page.
+     container: without it the part of the panel hanging below the fold extends
+     that container's scrollable area and raises a second scrollbar on the page.
+     The bar is deliberately NOT subtracted — the panel is meant to slide under
+     the glass — so the overlap comes back as --style-dropdown-pad-b below.
      The dvh fallback applies only until the measurement lands (and in tests). */
   max-height: min(var(--style-dropdown-max-h, 78dvh), 36rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  /* Halved (was sm/md): the padding is chrome, the tiles need the width. */
-  padding: var(--spacing-xs) var(--spacing-sm);
+  /* Halved (was sm/md): the padding is chrome, the tiles need the width.
+     --style-dropdown-pad-b is the measured height of the glass bar covering the
+     panel's bottom edge (0 when the grid ends above it, or when there is no bar):
+     as scrollable overflow it lets the last tile row be scrolled clear of the
+     glass instead of staying half-hidden behind it. */
+  padding: var(--spacing-xs) var(--spacing-sm)
+    calc(var(--spacing-xs) + var(--style-dropdown-pad-b, 0px));
   animation: style-dropdown-pop 0.2s ease;
 }
 

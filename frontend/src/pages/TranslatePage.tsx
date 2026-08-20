@@ -437,10 +437,16 @@ export function TranslatePage() {
     && !!currentPreview
     && (!previewStyleIsAgeRestricted || profile?.ageConfirmedAdult === true);
 
-  // The accent ring marks the step the user is on. While typing it belongs to the
-  // editor (:focus-within in TextInput.css); once a translation is running or a
-  // result is on screen it moves down to the style+result card.
-  const isOutputActive = previewMutation.isPending || !!currentPreview;
+  // The accent ring marks the step the user is on, and only one block may carry it.
+  // While the editor has focus it owns the ring (:focus-within in TextInput.css,
+  // plus the suppression rule in TranslatePage.css that outranks .active). Down
+  // here .active is granted only while a translation is running or while the result
+  // on screen still belongs to the current draft: a stale result must not keep
+  // glowing after the text changed. That draft comparison also covers WebViews
+  // where tapping "Випадкова фраза" leaves focus outside the editor, so the CSS
+  // rule alone would not fire.
+  const isOutputActive =
+    previewMutation.isPending || (!!currentPreview && currentPreview.originalText.trim() === draftText.trim());
 
   if (stylesLoading) {
     return (

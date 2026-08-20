@@ -25,8 +25,11 @@
   align-items: stretch;
   height: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
   padding: var(--spacing-xs) var(--spacing-xs) calc(var(--spacing-xs) + var(--safe-area-bottom));
-  /* Майже прозоро: тло — лише 30% поверхні, решту дає розмитий контент під ним. */
-  background: color-mix(in srgb, var(--color-surface) 30%, transparent);
+  /* Майже прозоро: тло — лише 15% поверхні, решту дає розмитий контент під ним.
+     Було 30%; власник просив ще прозоріше, щоб смуга читалася як плівка, а не
+     як окрема панель. Нижче цього значення іконки на світлій темі починають
+     губитися в тексті сторінки, тому далі зменшувати не варто. */
+  background: color-mix(in srgb, var(--color-surface) 15%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   backdrop-filter: blur(16px) saturate(1.4);
   /* Волосяна лінія замість колишньої 3px рамки — межа скла, а не окремий блок. */
@@ -34,7 +37,7 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-/* Старі WebView без backdrop-filter: без розмиття 30% тла лишили б іконки на
+/* Старі WebView без backdrop-filter: без розмиття 15% тла лишили б іконки на
    рухомому тексті, тому там смуга майже щільна. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bottom-nav {
@@ -55,14 +58,21 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Пігулка навколо гліфа — вона ж носій підсвітки, натискання й фокуса. */
+/* Пігулка навколо гліфа — вона ж носій підсвітки, натискання й фокуса.
+   Гліф побільшав у півтора раза (28px → 42px), тому пігулка вже не коло на 44px,
+   а прямокутник 64×52: 52px — це рівно внутрішня висота смуги
+   (--bottom-nav-height 60px мінус 4px паддінга згори та знизу), тож кнопка
+   доросла до межі скла й не виходить за неї, а сама висота смуги не змінилась.
+   Радіус --radius-lg замість --radius-full: на такому співвідношенні сторін
+   повне заокруглення виглядало б як капсула на пів вкладки. */
 .bottom-nav-glyph {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-full);
+  width: 64px;
+  max-width: 100%;
+  height: 52px;
+  border-radius: var(--radius-lg);
   transition:
     background-color var(--transition-fast),
     box-shadow var(--transition-fast),
@@ -75,21 +85,23 @@
 
 /* Активна вкладка: акцентний колір + легке неонове сяйво. Сяйво навмисно
    drop-shadow на самому гліфі (світиться контур штриха), а не box-shadow на
-   прямокутнику; пігулка додає ледь помітний ореол навколо. Колір — не єдиний
-   маркер активності: NavLink проставляє aria-current="page". */
+   прямокутнику; пігулка додає ледь помітний ореол навколо. Радіуси сяйва
+   притерті (було 12/4/10px) після збільшення гліфа: пігулка тепер займає всю
+   внутрішню висоту смуги, і колишній ореол вилазив за верхню межу скла.
+   Колір — не єдиний маркер активності: NavLink проставляє aria-current="page". */
 .bottom-nav-item.active {
   color: var(--tg-link-color, var(--color-primary));
 }
 
 .bottom-nav-item.active .bottom-nav-glyph {
   background: var(--color-primary-alpha-10);
-  box-shadow: 0 0 12px var(--color-primary-alpha-20);
+  box-shadow: 0 0 6px var(--color-primary-alpha-20);
 }
 
 .bottom-nav-item.active .bottom-nav-icon {
   filter:
-    drop-shadow(0 0 4px var(--color-primary-alpha-50))
-    drop-shadow(0 0 10px var(--color-primary-alpha-20));
+    drop-shadow(0 0 3px var(--color-primary-alpha-50))
+    drop-shadow(0 0 7px var(--color-primary-alpha-20));
 }
 
 @media (hover: hover) {
