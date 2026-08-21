@@ -12,6 +12,7 @@ import { IAIProvider, TranslateRequest, TranslateResponse, ProviderConfig } from
 import { config } from '../../config';
 import { loadStyle } from '../../style-engine/loader.js';
 import { KeyExhaustionKind, KeyPool } from './key-pool';
+import { classifyKeyExhaustionFromMessage } from './key-exhaustion.js';
 import { AllKeysExhaustedError } from './errors';
 import { logger } from '../../lib/logger';
 
@@ -250,46 +251,12 @@ export abstract class BaseAdapter implements IAIProvider {
    * The base implementation matches provider-agnostic wording, which covers
    * Gemini's messages as well; SDKs with structured errors (OpenAI-compatible,
    * Anthropic) override it and inspect the status code first.
+   *
+   * The heuristic itself lives in `./key-exhaustion` so the STT service can use
+   * the same one without being an `IAIProvider`.
    */
   protected classifyKeyExhaustion(error: unknown): KeyExhaustionKind | null {
-    if (!(error instanceof Error)) {
-      return null;
-    }
-
-    const message = error.message.toLowerCase();
-
-    // A spent budget: hours, not seconds.
-    if (message.includes('insufficient_quota') ||
-        message.includes('quota exceeded') ||
-        message.includes('exceeded your current quota') ||
-        (message.includes('billing') && message.includes('quota'))) {
-      return 'quota';
-    }
-
-    // A key that will never work until someone fixes the configuration. Kept
-    // narrow on purpose: "forbidden" alone can also mean a content policy
-    // refusal, which has nothing to do with the key.
-    if (message.includes('invalid api key') ||
-        message.includes('api key not valid') ||
-        message.includes('api key expired') ||
-        message.includes('invalid_api_key') ||
-        message.includes('api_key_invalid')) {
-      return 'invalid';
-    }
-
-    // Short-term limits. Gemini reports a spent free-tier day the same way, so
-    // this is deliberately the cheap classification: a minute of cooldown, not
-    // an hour.
-    if (message.includes('rate limit') ||
-        message.includes('rate_limit') ||
-        message.includes('too many requests') ||
-        message.includes('resource has been exhausted') ||
-        message.includes('resource_exhausted') ||
-        message.includes('429')) {
-      return 'rate';
-    }
-
-    return null;
+    return classifyKeyExhaustionFromMessage(error);
   }
 
   /**

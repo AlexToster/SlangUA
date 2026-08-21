@@ -15,6 +15,7 @@ import OpenAI from 'openai';
 import { BaseAdapter, NO_API_KEY } from './base.adapter';
 import { TranslateRequest, TranslateResponse, ProviderConfig } from './types';
 import { KeyExhaustionKind } from './key-pool';
+import { classifyOpenAIKeyExhaustion } from './key-exhaustion.js';
 
 /**
  * Per-instance description of an OpenAI-compatible endpoint.
@@ -178,34 +179,13 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
   /**
    * Classify a key-level failure from a structured SDK error.
    *
-   * 402 and a 429 that names the quota mean a spent budget; a plain 429 is a
-   * short-term limit. 401 is a rejected key. 403 is deliberately absent: on
-   * compatible endpoints it is at least as often a model or region restriction,
-   * which no amount of key rotation fixes.
+   * The heuristic lives in `./key-exhaustion` because the STT service speaks the
+   * same wire format over its own key pool without being an `IAIProvider`. It
+   * ends in the same message-based fallback the base class uses, so overriding
+   * here loses nothing.
    */
   protected classifyKeyExhaustion(error: unknown): KeyExhaustionKind | null {
-    if (error instanceof OpenAI.APIError) {
-      const code = typeof error.code === 'string' ? error.code.toLowerCase() : '';
-      const message = error.message.toLowerCase();
-      const namesQuota = code === 'insufficient_quota' ||
-        message.includes('insufficient_quota') ||
-        message.includes('quota') ||
-        message.includes('credit');
-
-      if (error.status === 402) {
-        return 'quota';
-      }
-      if (error.status === 429) {
-        return namesQuota ? 'quota' : 'rate';
-      }
-      if (error.status === 401) {
-        return 'invalid';
-      }
-      if (error.status !== undefined) {
-        return null;
-      }
-    }
-    return super.classifyKeyExhaustion(error);
+    return classifyOpenAIKeyExhaustion(error);
   }
 
   /**
