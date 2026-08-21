@@ -67,9 +67,13 @@ export const shareRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =
     const rendered = translatedText;
     if (graphemes(rendered) > 3800) return reply.status(422).send({ error: 'Unprocessable Entity', code: 'SHARE_TEXT_TOO_LONG', message: 'Translation is too long to send inline' });
     const { token, expiresAt } = await sharePayloadService.create({ userId, telegramId: request.user.telegramId, translatedText, style: metadata.title });
-    // `shareText` is the finished message, rendered here so the client never
-    // composes what gets sent. The Mini App hands it to Telegram's own share
-    // sheet (t.me/share/url); `inlineQuery` stays for the inline-mode path.
+    // `shareText` is the message body, rendered here so the client never
+    // composes what a recipient reads as the user's own words. The Mini App
+    // hands it to Telegram's own share sheet (t.me/share/url) and appends only
+    // its own constant app link after it; `inlineQuery` stays for the
+    // inline-mode path, which sends the body alone. The 3,800-cluster ceiling
+    // above is conservative against Telegram's 4,096 partly to leave room for
+    // that link.
     return { inlineQuery: `s_${token}`, shareText: rendered, expiresAt: expiresAt.toISOString() };
   });
 

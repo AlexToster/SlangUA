@@ -16,9 +16,9 @@ The backend endpoint, encrypted payload store and webhook handler are implemente
 2. `Send in Telegram` is available only when the host exposes `Telegram.WebApp.openTelegramLink` or `Telegram.WebApp.switchInlineQuery`, and the result is eligible to share.
 3. The client calls `POST /share/inline` with an opaque `previewId` or a saved `translationId`.
 4. The backend resolves only a result owned by the authenticated user, renders the message text server-side, creates a short-lived encrypted share payload, and returns both the finished `shareText` and an opaque inline query token.
-5. Primary path: the Mini App passes `shareText` to `t.me/share/url` through `openTelegramLink`. Telegram opens its own chat chooser with the message prepared, and the user picks a chat and sends it explicitly.
+5. Primary path: the Mini App passes `shareText` to `t.me/share/url` through `openTelegramLink` and Telegram opens its own chat chooser with the message prepared; the user picks a chat and sends it explicitly. The message is the translation, a blank line, and the Mini App's own link (`VITE_SHARE_URL`, default `https://t.me/SlangUA_bot`) — in that order, so the recipient reads the translation first. The link travels inside the `text` parameter and the intent's `url` parameter is left empty (`?url=&text=…`), because Telegram treats a non-empty `url` as the subject of the share and puts it on the first line.
 6. Fallback path, used only when the response carries no `shareText`: the Mini App calls `switchInlineQuery(token, ['users', 'bots', 'groups', 'channels'])`, Telegram opens the selected chat in inline mode, and the bot resolves the token server-side and returns exactly one inline article result that the user selects to send.
-7. Either way the sent message contains the translated text only — no app name, no style label, and not the original input. An `SlangUA · <style>` header used to be prepended; Telegram rendered the app name as a link to the bot inside what looked like the user's own message, so it was removed from the message body. The style label survives only as the title of the inline result card in Telegram's picker, which is never sent.
+7. Either way the message body is the translated text — no app name header, no style label, and not the original input. An `SlangUA · <style>` header used to be prepended; Telegram rendered the app name as a link to the bot inside what looked like the user's own message, so it was removed from the message body. The style label survives only as the title of the inline result card in Telegram's picker, which is never sent. The only addition is the app link on the share-sheet path, on its own line after the translation (item 5); the inline fallback sends the translation alone.
 
 Copy remains the universal fallback. Saving to History remains independent: sharing never creates a `Translation` record.
 
@@ -92,7 +92,7 @@ This is especially relevant to KANCLER, whose result may be 2–4× longer than 
 ## 7. Acceptance criteria for the implementation task
 
 - No preview or History record becomes public before an explicit Share action.
-- A sent message contains exactly the translation the user saw, with no header — on both the `t.me/share/url` path and the inline fallback.
+- A sent message contains exactly the translation the user saw, with no header — followed by the app's own link on the `t.me/share/url` path, and by nothing at all on the inline fallback.
 - A user can share a saved result after its preview TTL has expired, using an owned `translationId`.
 - An inline token cannot be resolved by a different Telegram user.
 - POFENI sharing is rejected server-side unless the caller has `ageConfirmedAdult: true`, and the client hides the button in the same case.

@@ -99,4 +99,4 @@
 | ------ | ---------------- | ---- |
 | `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | База для запитів до backend. У production передається як build-arg у [`Dockerfile`](../Dockerfile). |
 | `VITE_FEEDBACK_URL` | `https://t.me/+1lYdnphwsLBlZWMy` | Посилання на канал обговорення в розділі «Зворотний зв'язок» Налаштувань. Telegram-посилання відкриваються через `openTelegramLink`. |
-| `VITE_SHARE_URL` | `https://t.me/SlangUA_bot` | Посилання, що супроводжує надісланий переклад: `t.me/share/url` вимагає параметр `url`. Вкажіть свого бота, якщо розгортаєте власний. |
+| `VITE_SHARE_URL` | `https://t.me/SlangUA_bot` | Посилання на застосунок, що дописується **після** надісланого перекладу. Вкажіть свого бота, якщо розгортаєте власний. |

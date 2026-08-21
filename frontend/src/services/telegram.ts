@@ -271,9 +271,8 @@ export function openTelegramInlineQuery(query: string): void {
 }
 
 /**
- * Link that accompanies a shared translation. t.me/share/url treats `url` as
- * the thing being shared and `text` as its description, so a valid link has to
- * be present; the Mini App's own entry point is the natural choice.
+ * Link to the Mini App that accompanies a shared translation. It is appended
+ * after the translation, never before it.
  */
 const SHARE_LINK = (import.meta.env.VITE_SHARE_URL as string | undefined) || 'https://t.me/SlangUA_bot';
 
@@ -287,13 +286,22 @@ const SHARE_LINK = (import.meta.env.VITE_SHARE_URL as string | undefined) || 'ht
  * sent - exactly the reported bug. t.me/share/url hands Telegram the finished
  * text instead, so the chosen chat receives a normal, sendable message.
  *
+ * The link rides inside `text`, after the translation, and the intent's own
+ * `url` parameter is left empty. Telegram treats `url` as the subject of the
+ * share and puts it on the *first* line of the composed message, which is the
+ * one place this link must not be: the recipient should read the translation
+ * first. `?url=&text=…` is the form clients accept for a text-only share, so
+ * the whole message - translation, blank line, link - is composed here.
+ *
  * `text` must come from the server (POST /share/inline), which is where the
- * age-restriction and length rules are enforced.
+ * age-restriction and length rules are enforced; SHARE_LINK is the only thing
+ * the client adds, and it is a constant, not user content.
  *
  * Must be called directly from a user-initiated action.
  */
 export function shareTranslationText(text: string): void {
-  const url = `https://t.me/share/url?url=${encodeURIComponent(SHARE_LINK)}&text=${encodeURIComponent(text)}`;
+  const message = `${text}\n\n${SHARE_LINK}`;
+  const url = `https://t.me/share/url?url=&text=${encodeURIComponent(message)}`;
 
   const openLink = window.Telegram?.WebApp?.openTelegramLink;
   if (typeof openLink === 'function') {
