@@ -1,14 +1,29 @@
 import { useRef, useEffect } from 'react';
-import { Clipboard, Dices, X, AlertCircle } from 'lucide-react';
+import { Mic, Square, Dices, X, AlertCircle, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import './TextInput.css';
 
+/** What the microphone shows; `undefined` for the whole prop means no microphone. */
+export type VoiceInputState = 'idle' | 'requesting' | 'recording' | 'processing';
+
+export interface VoiceInputControl {
+  state: VoiceInputState;
+  /** Countdown shown on the button while recording; `null` at every other time. */
+  remainingSeconds: number | null;
+  onToggle: () => void;
+}
+
 interface TextInputProps {
   value: string;
-  onChange: (text: string) => void;
-  onPaste: () => void;
   onRandomPhrase: () => void;
   isRandomPhraseDisabled: boolean;
+  onChange: (text: string) => void;
+  /**
+   * Omitted when the deployment holds no STT key or the WebView cannot record.
+   * A microphone that is present but never able to work is worse than none, so
+   * the caller decides existence and this component only renders a state.
+   */
+  voice?: VoiceInputControl;
   graphemeCount: number;
   maxGraphemes: number;
   isWarningZone: boolean;
@@ -16,7 +31,14 @@ interface TextInputProps {
   placeholder: string;
 }
 
-export function TextInput({ value, onChange, onPaste, onRandomPhrase, isRandomPhraseDisabled, graphemeCount, maxGraphemes, isWarningZone, isOverLimit, placeholder }: TextInputProps) {
+const VOICE_LABELS: Record<VoiceInputState, string> = {
+  idle: 'Записати голосом',
+  requesting: 'Дозвольте доступ до мікрофона',
+  recording: 'Зупинити запис',
+  processing: 'Розпізнаю мову',
+};
+
+export function TextInput({ value, onChange, voice, onRandomPhrase, isRandomPhraseDisabled, graphemeCount, maxGraphemes, isWarningZone, isOverLimit, placeholder }: TextInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea
@@ -79,16 +101,36 @@ export function TextInput({ value, onChange, onPaste, onRandomPhrase, isRandomPh
         </div>
       </div>
       <div className="text-input-footer">
-        <button
-          type="button"
-          className="text-input-paste-btn"
-          onClick={onPaste}
-          aria-label="Вставити з буфера обміну"
-          disabled={graphemeCount >= maxGraphemes}
-        >
-          <Clipboard size={18} />
-          <span>Вставити</span>
-        </button>
+        {/* Стоїть на місці колишньої «Вставити»: та кнопка прибрана з інтерфейсу,
+            поки вирішується, чи повертати її (readTextFromClipboard і опис у
+            документації лишилися). Тільки піктограма — четвертий підпис у цьому
+            рядку не вміщався навіть на 360px. */}
+        {voice && (
+          <button
+            type="button"
+            className={clsx('text-input-mic-btn', `is-${voice.state}`)}
+            onClick={voice.onToggle}
+            aria-label={VOICE_LABELS[voice.state]}
+            /* Кнопка-перемикач: скрінрідер має чути «увімкнено», а не лише новий підпис. */
+            aria-pressed={voice.state === 'recording'}
+            disabled={voice.state === 'processing' || (voice.state === 'idle' && graphemeCount >= maxGraphemes)}
+            data-testid="mic-button"
+          >
+            {voice.state === 'processing' ? (
+              <Loader2 className="spinning" size={18} />
+            ) : voice.state === 'recording' ? (
+              <Square size={18} />
+            ) : (
+              <Mic size={18} />
+            )}
+            {/* Лічильник у куті кнопки, а не окремим елементом рядка: власної
+                ширини він не займає. aria-hidden — підпис кнопки вже сказав, що
+                йде запис, а секунда за секундою в aria-live була б спамом. */}
+            {voice.state === 'recording' && voice.remainingSeconds !== null && (
+              <span className="text-input-mic-timer" aria-hidden="true">{voice.remainingSeconds}</span>
+            )}
+          </button>
+        )}
         <button
           type="button"
           className="text-input-random-btn"
