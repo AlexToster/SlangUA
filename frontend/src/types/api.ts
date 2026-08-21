@@ -28,7 +28,19 @@ export interface UserProfile {
    * answers 404 to anyone the server does not recognise as an admin.
    */
   isAdmin: boolean;
+  /**
+   * Also deployment-derived: `true` only when the server holds an STT key. A
+   * deployment without one has no voice input at all, so the microphone is not
+   * rendered rather than rendered and failing with `503 STT_UNAVAILABLE`.
+   */
+  voiceInputAvailable: boolean;
   createdAt: string;
+}
+
+export interface TranscriptionResult {
+  text: string;
+  /** Echoed back by the server so a support report says which model produced this. */
+  model: string;
 }
 
 export interface PreviewResult {
