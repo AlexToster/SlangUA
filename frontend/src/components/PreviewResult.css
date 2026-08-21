@@ -115,6 +115,10 @@
   /* Same token as .text-input: the result must never look smaller than the
      text the user typed. */
   font-size: var(--font-size-editor);
+  /* Та сама вага, що в .text-input і в перекладу в Історії
+     (.history-translated): на 20px звичайні 400 читалися тонко, а введений
+     текст і відповідь мусять важити однаково. */
+  font-weight: 500;
   line-height: var(--line-height-relaxed);
   color: var(--tg-text-color, var(--color-text));
   white-space: pre-wrap;

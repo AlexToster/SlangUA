@@ -45,6 +45,10 @@
   padding-bottom: calc(var(--spacing-sm) + var(--font-size-xs) + var(--spacing-xs));
   font-family: inherit;
   font-size: var(--font-size-editor);
+  /* Та сама вага, що в перекладу в Історії (.history-translated): звичайні 400
+     на 20px читалися тонко. Пара «редактор ↔ результат» тримається разом, тож
+     .preview-text має цю саму вагу. */
+  font-weight: 500;
   line-height: var(--line-height-relaxed);
   color: var(--tg-text-color, var(--color-text));
   background: transparent;
@@ -201,7 +205,18 @@
     display: none;
   }
 
-  .text-input-paste-btn,
+  /* Без підпису лишається сама піктограма, тож кнопка мусить бути колом, а не
+     вертикальним овалом: при padding: 0 8px піктограма 20px давала 40×44, і
+     --radius-full закруглював це у звужений по горизонталі овал. Фіксовані
+     44×44 — так само, як у .text-input-clear-btn, — дають коло. «Випадкова
+     фраза» підпис зберігає, тому лишається пігулкою. */
+  .text-input-paste-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+  }
+
   .text-input-random-btn {
     min-height: 44px;
     padding: 0 var(--spacing-sm);
