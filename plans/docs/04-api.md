@@ -324,7 +324,8 @@ Clears the whole history of the authenticated user, favorites included. Scoped t
   | `languageCode` | `string \| null` | Preferred language from Telegram |
   | `defaultSlangStyle` | `SlangStyle \| null` | User's preferred slang style |
   | `ageConfirmedAdult` | `boolean` | User has confirmed they are an adult (mutable preference) |
-  | `isAdmin` | `boolean` | Server-computed: this Telegram id is on the `ADMIN_TELEGRAM_IDS` allowlist **and** the deployment has an admin password hash. Not stored in Postgres and not settable by the client; it only tells the client whether to render the admin entry point. See [§7 Admin routes](#7-admin-routes) |
+  | `isAdmin` | `boolean` | Server-computed: this Telegram id is on the `ADMIN_TELEGRAM_IDS` allowlist **and** the deployment has an admin password hash. Not stored in Postgres and not settable by the client; it only tells the client whether to render the admin entry point. See [§8 Admin routes](#8-admin-routes) |
+  | `voiceInputAvailable` | `boolean` | Server-computed the same way: `true` only when the deployment has an `STT_API_KEY`. Not stored in Postgres and not settable by the client; it tells the client whether to render the microphone button, so a deployment without voice input never offers a control that would answer `503 STT_UNAVAILABLE`. See [§7 Voice input routes](#7-voice-input-routes) |
   | `createdAt` | `datetime` | Registration timestamp |
 - **Error codes**: `401` — missing/invalid JWT; `404 USER_NOT_FOUND` — the authenticated user no longer exists; `429` — user rate limit (30 req/min per user); `503 RATE_LIMITER_UNAVAILABLE`
 
@@ -334,13 +335,52 @@ Clears the whole history of the authenticated user, favorites included. Scoped t
   |-------|------|----------|-------------|
   | `defaultSlangStyle` | `SlangStyle \| null` | No | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER`, `GALICIAN` (see [Database Design](03-database.md#enum-slangstyle)); `null` clears the preference |
   | `ageConfirmedAdult` | `boolean` | No | Mutable preference field (not immutable like Telegram-sourced fields) |
-  **Excludes**: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` (Telegram-sourced identity fields are immutable via API), `isAdmin` (deployment configuration, not user data — sending it is a `400 VALIDATION_ERROR` like any other unknown field), and `notificationsEnabled` (the notifications feature was removed; only the deprecated database column remains, so the field is rejected like any other unknown one)
+  **Excludes**: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` (Telegram-sourced identity fields are immutable via API), `isAdmin` and `voiceInputAvailable` (deployment configuration, not user data — sending either is a `400 VALIDATION_ERROR` like any other unknown field), and `notificationsEnabled` (the notifications feature was removed; only the deprecated database column remains, so the field is rejected like any other unknown one)
 - Unknown request fields are rejected with `400`.
 - `ageConfirmedAdult` is self-attestation for the product age gate; it is not external identity or age verification.
-- **Success response (200)**: Updated `User` profile (same shape as `GET /user/me`, `isAdmin` included — the client replaces its cached profile with this body, so omitting the flag here would make the admin entry point disappear after any settings change)
+- **Success response (200)**: Updated `User` profile (same shape as `GET /user/me`, `isAdmin` and `voiceInputAvailable` included — the client replaces its cached profile with this body, so omitting either flag here would make the admin entry point or the microphone disappear after any settings change)
 - **Error codes**: `400 VALIDATION_ERROR` (unknown or wrongly typed fields) and `400 IMMUTABLE_FIELD` (attempt to modify a Telegram-sourced field); `401` missing/invalid JWT; `404 USER_NOT_FOUND`; `429` user rate limit; `503 RATE_LIMITER_UNAVAILABLE`
 
-## 7. Admin routes
+## 7. Voice input routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/transcribe` | Yes (JWT) | Transcribe a short recording into text the user can then edit and translate |
+
+Voice input is an input method for the Translate screen, not a translation path of its own: the endpoint returns text and nothing else happens. The client appends that text to the draft, and it becomes a `Translation` row only if the user goes on to preview and save it like anything they typed.
+
+### `POST /transcribe`
+- **Request body**:
+  | Field | Type | Required | Constraints |
+  |-------|------|----------|-------------|
+  | `audio` | `string` | Yes | Base64 of the recorded container, no `data:` URL prefix. Decoded size must not exceed `STT_MAX_AUDIO_BYTES` |
+  | `mimeType` | `string` | Yes | The recorder's own `mimeType`, codec parameters included; 1–120 characters |
+- Base64 in JSON rather than `multipart/form-data`: `@fastify/multipart` is not a dependency, and a 30-second Opus capture fits inside a JSON body. The route carries its own `bodyLimit`, derived from `STT_MAX_AUDIO_BYTES` with room for the base64 expansion, so an over-long capture is refused before the body is buffered.
+- Unknown request fields are rejected with `400`.
+- `mimeType` is passed rather than sniffed because it is the only reliable format signal, and the containers differ by platform: Android Chromium records `audio/webm;codecs=opus`, iOS WKWebView `audio/mp4`. The server maps the type to a filename extension for the upstream upload and refuses anything outside its allowlist (`webm`, `ogg`, `opus`, `mp4`, `mpeg`, `wav`, `x-wav`, `x-m4a`, `flac`), so it never forwards arbitrary bytes to a paid provider.
+- **Success response (200)**: `{ "text": "string", "model": "string" }` — the trimmed transcript and the model that produced it
+- **Error codes**:
+  - `400 VALIDATION_ERROR` — malformed body, `audio` not base64, unknown field
+  - `400 STT_EMPTY_AUDIO` — the base64 decoded to zero bytes
+  - `401` — missing/invalid JWT
+  - `413 STT_AUDIO_TOO_LARGE` — decoded audio above `STT_MAX_AUDIO_BYTES`
+  - `415 STT_UNSUPPORTED_AUDIO_TYPE` — container outside the allowlist
+  - `422 STT_NO_SPEECH` — the provider answered with an empty transcript (silence, or a clip too short to hold a word). Distinct from a failure because the client says something different for it
+  - `429 RATE_LIMIT_EXCEEDED` — this endpoint's own budget (`STT_RATE_LIMIT_*`, 6 req/min per user by default)
+  - `429 STT_QUOTA_EXCEEDED` — every key in the STT pool is parked. Carries a `Retry-After` header and a `retryAfter` field in seconds, because on a free tier an exhausted minute is a normal state rather than an incident
+  - `503 STT_UNAVAILABLE` — the deployment has no `STT_API_KEY`, so voice input is switched off
+  - `503 STT_FAILED` — upstream or transport fault. The message is generic on purpose: the provider's own text can quote the request
+  - `503 RATE_LIMITER_UNAVAILABLE`
+
+**Why its own rate limiter.** Every call spends upstream transcription quota that all users of the deployment share, so this endpoint gets a budget separate from the per-user translate limit. The limiter runs before the handler, so a blocked request costs nothing upstream.
+
+**Why its own keys.** `STT_API_KEY` is a comma-separated list read by a `KeyPool` with pool id `stt`, independent of the AI provider pools ([§9 SttService](#sttservice)). A spent transcription quota must not park a key the translator still needs, even when both live on the same provider account.
+
+**Audio is never persisted.** The decoded buffer exists inside the handler and is written to no store: not Postgres, not Redis, not a temp file, not a log line. The transcript is returned and not stored either. This is asserted by `test/integration/transcribe.integration.test.ts`, not merely documented here.
+
+**The age gate does not apply.** It belongs to the styles that produce restricted output, and transcription produces none.
+
+## 8. Admin routes
 
 Admin access is deployment configuration, not a user role: membership comes from `ADMIN_TELEGRAM_IDS` in the environment, and nothing in Postgres can grant it. That variable is empty by default, and while it is empty the whole surface behaves as if it had never been registered. The routes below cover the Stage A access layer, the Stage B operator kill-switch for AI providers, and the Stage C/D read-only observability views.
 
@@ -482,7 +522,7 @@ Two consequences are load-bearing for anyone changing these routes:
 
 Both admin limiters run after the gate, so they are keyed by the admin's own user id and a stranger can never consume someone else's budget: `ADMIN_LOGIN_RATE_LIMIT_*` for the login endpoint and `ADMIN_RATE_LIMIT_*` (120 req/min by default) for the authenticated routes. Like everywhere else, the Redis-backed limiter fails closed with `503 RATE_LIMITER_UNAVAILABLE`.
 
-## 8. Service Responsibilities
+## 9. Service Responsibilities
 
 This section describes the Service-layer responsibilities for each module, consistent with the Backend Layering established in [Backend Architecture](01-backend.md#backend-layering) (Fastify Route → Service → Prisma Client). Route-layer responsibilities (validation, response formatting) are covered there and not repeated here.
 
@@ -551,6 +591,19 @@ This section describes the Service-layer responsibilities for each module, consi
   - `GET /user/me` → `User` profile (telegramId, username, firstName, lastName, languageCode, createdAt, preferences)
   - `PATCH /user/me` → Updated `User` profile (same shape)
 
+### SttService
+- **Business logic owned**:
+  - One transcription attempt per key: build the `Uploadable` from the decoded buffer, name it `speech.<ext>` after the normalized container, and call the OpenAI-compatible `/v1/audio/transcriptions` of `STT_BASE_URL`
+  - Rotation over its own `KeyPool` (id `stt`): on an exhaustion the key is parked for the matching `STT_KEY_COOLDOWN_*` window and the next one gets a turn; when every key is parked the caller sees `AllKeysExhaustedError` and the route turns it into `429 STT_QUOTA_EXCEEDED`. A transport or `5xx` fault is not a key problem and is rethrown after a single attempt rather than walking the pool
+  - `normalizeAudioMimeType()` — the container allowlist and the mime → extension mapping, exported because the route validates before the service is reached
+  - `isAvailable()` — whether the deployment has any key at all, which is what `GET|PATCH /user/me` report as `voiceInputAvailable`
+  - Pinning `language` to `STT_LANGUAGE` and `temperature` to `0`: Whisper mistakes short Ukrainian clips for Russian often enough to matter, and a provider changing its default temperature must not start paraphrasing colloquial speech
+- **Prisma models read/written**: None. Audio and transcripts are request-scoped by design.
+- **Other components called**: the `openai` client (one instance cached per key, `maxRetries: 0` so the pool decides retries, not the SDK), `KeyPool` and `classifyOpenAIKeyExhaustion` from `services/ai/`
+- **Not an `IAIProvider`**: it speaks the same wire format but has no prompt, no style, no fallback chain and no circuit breaker, so it sits outside the AI provider abstraction and only borrows the key-pool machinery.
+- **Returns to Route layer**:
+  - `transcribe({ audio, audioType })` → `{ text, model }` with `text` trimmed; an empty string is a valid answer and becomes `422 STT_NO_SPEECH`
+
 ### AdminAuthService
 - **Business logic owned**:
   - Allowlist membership (`ADMIN_TELEGRAM_IDS`, parsed once and cached) and the `isConfigured()` / `hasAdminAccess()` decisions that `GET|PATCH /user/me` report as `isAdmin`
@@ -599,7 +652,7 @@ This section describes the Service-layer responsibilities for each module, consi
   - `list(limit)` → `ErrorFeedEntry[]`, newest first, clamped to `ADMIN_ERROR_FEED_MAX`. A Redis failure propagates: an empty feed must mean "nothing failed", not "nothing could be read".
 - **Why the entry shape is a whitelist, not a filter**: the fields are built one by one from the request and a sanitized snapshot left on it by whichever code produced the reply (the global error handler, or a handler that answers `5xx` itself — see [`GET /admin/errors`](#get-adminerrors)), rather than copied from the error object. That snapshot is two strings on purpose: holding a reference to the error would make it a one-line change for someone later to log a stack, a body or a translation into Redis.
 
-## 9. Ops endpoints
+## 10. Ops endpoints
 
 These two live outside `/api/v1` and outside the versioned contract: they exist for orchestrators and deploy scripts, not for the Mini App. No auth, no request body, no cursor.
 
@@ -619,11 +672,11 @@ These two live outside `/api/v1` and outside the versioned contract: they exist 
 - Unlike liveness it stays behind the coarse per-IP limiter, because it touches both stores. A probe interval measured in seconds is orders of magnitude below the budget.
 - Consumed by the `api` service healthcheck in `docker-compose.production.yml` via `node -e "fetch(...)"` — the slim base image ships neither curl nor wget.
 
-## 10. Cross-references
+## 11. Cross-references
 
 See [Backend Architecture](01-backend.md) for module responsibilities, [Database Design](03-database.md) for entity and enum definitions, and [Security](06-security.md) for authentication and rate-limiting rules.
 
-## 11. Out of scope / deferred
+## 12. Out of scope / deferred
 
 Full OpenAPI/Swagger spec generation deferred to Stage 5 implementation (generated from TypeBox/Zod schemas), not hand-written here.
 

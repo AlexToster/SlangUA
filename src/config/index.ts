@@ -136,6 +136,47 @@ export const envSchema = z.object({
   // burn a timeout on every request. See provider.factory.ts.
   OLLAMA_ENABLED: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
 
+  // Speech-to-text (voice input in the text field)
+  //
+  // Deliberately separate from the AI provider block above, with its own keys:
+  // transcription is not translation, it has no style engine, no circuit
+  // breaker and no fallback chain, and mixing the keys would let a spent
+  // transcription quota park a key the translator still needs. The service
+  // speaks the OpenAI-compatible `/v1/audio/transcriptions` format, so pointing
+  // it at another compatible endpoint is a config change; the default is Groq,
+  // whose free tier serves whisper-large-v3-turbo.
+  //
+  // With no key configured the endpoint answers 503 STT_UNAVAILABLE and the
+  // client hides the microphone - the same "is a key present?" availability
+  // rule the AI providers use.
+  STT_API_KEY: z.string().optional(),
+  STT_BASE_URL: z.string().url().default('https://api.groq.com/openai/v1'),
+  STT_MODEL: z.string().default('whisper-large-v3-turbo'),
+  // Passed as the `language` hint. Set explicitly rather than left to
+  // autodetection: the input is Ukrainian colloquial speech, and Whisper
+  // mistakes short Ukrainian clips for Russian often enough to matter.
+  STT_LANGUAGE: z.string().default('uk'),
+  STT_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  // Server-side ceiling on the decoded audio, enforced before the upstream call.
+  // The client caps recording at 30 s, which is ~120 KB of Opus; 1 MiB leaves
+  // room for iOS's less efficient AAC without letting the endpoint be used as a
+  // file-upload channel. The route's own bodyLimit is derived from this.
+  STT_MAX_AUDIO_BYTES: z.coerce.number().int().positive().default(1048576),
+
+  // How long an exhausted transcription key stays parked, in milliseconds.
+  // Same three kinds and the same reasoning as AI_KEY_COOLDOWN_*, but its own
+  // values: on a free tier a per-minute limit is the normal state here, not an
+  // incident.
+  STT_KEY_COOLDOWN_RATE_MS: z.coerce.number().int().positive().default(60000),
+  STT_KEY_COOLDOWN_QUOTA_MS: z.coerce.number().int().positive().default(3600000),
+  STT_KEY_COOLDOWN_INVALID_MS: z.coerce.number().int().positive().default(3600000),
+
+  // Transcription Rate Limiting (own budget: one request carries audio and
+  // costs upstream quota that is shared by every user of the app)
+  STT_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  STT_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(6),
+  STT_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:stt'),
+
   // Rate Limiting
   GLOBAL_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   GLOBAL_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),

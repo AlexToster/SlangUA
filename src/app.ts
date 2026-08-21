@@ -8,6 +8,7 @@ import { historyRoutes } from './routes/history.js';
 import { userRoutes } from './routes/user.js';
 import { stylesRoutes } from './routes/styles.js';
 import { shareRoutes } from './routes/share.js';
+import { transcribeRoutes } from './routes/transcribe.js';
 import { adminRoutes } from './routes/admin.js';
 import { connectRedis, disconnectRedis, getRedisClient } from './lib/redis.js';
 import { prisma } from './lib/prisma.js';
@@ -224,6 +225,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(userRoutes, { prefix: '/api/v1' });
   await app.register(stylesRoutes, { prefix: '/api/v1' });
   await app.register(shareRoutes, { prefix: '/api/v1' });
+  // Registered even with no STT_API_KEY: the route then answers a named 503
+  // STT_UNAVAILABLE, which is what tells a stale client to stop offering the
+  // microphone. `/user/me` carries the same fact as `voiceInputAvailable`.
+  await app.register(transcribeRoutes, { prefix: '/api/v1' });
   // Registered unconditionally: with no ADMIN_TELEGRAM_IDS configured every
   // route answers Fastify's own 404, so a deployment without an admin has an
   // admin API that is indistinguishable from not having one.

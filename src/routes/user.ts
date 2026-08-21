@@ -6,6 +6,7 @@ import { createRateLimiter } from '../plugins/rate-limit.js';
 import { SLANG_STYLE_VALUES } from '../constants/index.js';
 import { authenticate } from '../plugins/authenticate.js';
 import { adminAuthService } from '../services/admin/admin-auth.service.js';
+import { sttService } from '../services/stt/stt.service.js';
 
 export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
   // Rate limiters for user endpoints (30 requests/minute)
@@ -28,6 +29,10 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           // tells the client whether to show the admin entry point. False for
           // everyone on a deployment without ADMIN_TELEGRAM_IDS.
           isAdmin: z.boolean(),
+          // Also deployment-derived: true only when STT_API_KEY is configured.
+          // The client hides the microphone button when false, so a deployment
+          // without voice input never offers a control that would 503.
+          voiceInputAvailable: z.boolean(),
           createdAt: z.string().datetime(),
         }),
         401: z.object({
@@ -70,6 +75,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
       defaultSlangStyle: profile.defaultSlangStyle,
       ageConfirmedAdult: profile.ageConfirmedAdult,
       isAdmin: adminAuthService.hasAdminAccess(profile.telegramId),
+      voiceInputAvailable: sttService.isAvailable(),
       createdAt: profile.createdAt.toISOString(),
     };
   });
@@ -94,6 +100,10 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
           // this response, so omitting it here would hide the admin button
           // until the next full reload.
           isAdmin: z.boolean(),
+          // Same field as in GET: the client replaces its cached profile with
+          // this response, so omitting it would hide the microphone until the
+          // next full reload.
+          voiceInputAvailable: z.boolean(),
           createdAt: z.string().datetime(),
         }),
         400: z.object({
@@ -135,6 +145,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =>
         defaultSlangStyle: updatedProfile.defaultSlangStyle,
         ageConfirmedAdult: updatedProfile.ageConfirmedAdult,
         isAdmin: adminAuthService.hasAdminAccess(updatedProfile.telegramId),
+        voiceInputAvailable: sttService.isAvailable(),
         createdAt: updatedProfile.createdAt.toISOString(),
       };
     } catch (error) {

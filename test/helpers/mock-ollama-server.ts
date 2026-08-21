@@ -5,6 +5,14 @@ interface MockOllamaConfig {
   shouldFail: boolean;
   failAfterCalls?: number;
   customResponse?: string;
+  /**
+   * Force `/v1/audio/transcriptions` to answer with this status instead of a
+   * transcript. Used to exercise key rotation and the exhausted-quota path;
+   * `shouldFail` above belongs to the chat endpoint and is left alone.
+   */
+  sttFailStatus?: number;
+  /** Transcript to return. An empty string is a valid answer: silence. */
+  sttText?: string;
 }
 
 interface MockOllamaServer {
@@ -12,8 +20,20 @@ interface MockOllamaServer {
   close: () => Promise<void>;
 }
 
+/** What the mock saw in the last multipart upload, for assertions. */
+export interface SttRequestInfo {
+  filename: string | null;
+  fileContentType: string | null;
+  model: string | null;
+  language: string | null;
+  authorization: string | null;
+  bytes: number;
+}
+
 let server: Server | null = null;
 let callCount = 0;
+let sttCallCount = 0;
+let lastSttRequest: SttRequestInfo | null = null;
 let config: MockOllamaConfig = { shouldFail: false };
 
 const DEFAULT_RESPONSES: Record<string, string> = {
@@ -126,6 +146,56 @@ function handleChatRequest(
   });
 }
 
+/**
+ * OpenAI-compatible `/v1/audio/transcriptions`.
+ *
+ * The body is multipart, but nothing here needs a real parser: the fields the
+ * tests assert on (the uploaded filename and its content type, the model, the
+ * language) are read off the raw payload, which also keeps this helper free of
+ * a multipart dependency. The audio bytes themselves are counted and dropped.
+ */
+function handleTranscriptionRequest(req: IncomingMessage, res: ServerResponse) {
+  const chunks: Buffer[] = [];
+  req.on('data', (chunk) => {
+    chunks.push(Buffer.from(chunk));
+  });
+  req.on('end', () => {
+    sttCallCount++;
+    const raw = Buffer.concat(chunks);
+    // Headers, not audio: decoding the whole payload as latin1 keeps the byte
+    // count honest while still matching the ASCII part boundaries.
+    const text = raw.toString('latin1');
+
+    const field = (name: string) =>
+      text.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`))?.[1] ?? null;
+
+    lastSttRequest = {
+      filename: text.match(/filename="([^"]*)"/)?.[1] ?? null,
+      fileContentType: text.match(/filename="[^"]*"\r\nContent-Type: ([^\r]+)/)?.[1] ?? null,
+      model: field('model'),
+      language: field('language'),
+      authorization: (req.headers['authorization'] as string | undefined) ?? null,
+      bytes: raw.length,
+    };
+
+    if (config.sttFailStatus) {
+      res.writeHead(config.sttFailStatus, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        error: {
+          message: config.sttFailStatus === 429
+            ? 'Rate limit reached for model whisper-large-v3-turbo'
+            : 'Mock transcription failure',
+          type: 'mock_error',
+        },
+      }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ text: config.sttText ?? 'привіт, як ся маєш' }));
+  });
+}
+
 function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const parsedUrl = parse(req.url || '', true);
 
@@ -142,8 +212,12 @@ function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (parsedUrl.pathname === '/v1/chat/completions' && req.method === 'POST') {
     handleChatRequest(req, res, generateOpenAIResponse);
+  } else if (parsedUrl.pathname === '/v1/audio/transcriptions' && req.method === 'POST') {
+    handleTranscriptionRequest(req, res);
   } else if (parsedUrl.pathname === '/__admin/reset' && req.method === 'POST') {
     callCount = 0;
+    sttCallCount = 0;
+    lastSttRequest = null;
     config = { shouldFail: false };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
@@ -180,6 +254,8 @@ export async function mockOllamaServer(port: number = 0): Promise<MockOllamaServ
             server!.close(() => {
               server = null;
               callCount = 0;
+              sttCallCount = 0;
+              lastSttRequest = null;
               config = { shouldFail: false };
               resolveClose();
             });
@@ -207,4 +283,18 @@ export function getCallCount(): number {
 
 export function resetCallCount(): void {
   callCount = 0;
+}
+
+/** Transcription calls served since the last reset - proves rotation happened. */
+export function getSttCallCount(): number {
+  return sttCallCount;
+}
+
+export function resetSttState(): void {
+  sttCallCount = 0;
+  lastSttRequest = null;
+}
+
+export function getLastSttRequest(): SttRequestInfo | null {
+  return lastSttRequest ? { ...lastSttRequest } : null;
 }
