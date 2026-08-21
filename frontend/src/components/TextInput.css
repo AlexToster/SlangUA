@@ -84,6 +84,11 @@
 .text-input-random-btn {
   display: inline-flex;
   align-items: center;
+  /* Вміст стоїть по центру, а не від лівого краю: пігулкам з підписом це нічого
+     не змінює (їхня ширина — по вмісту), але «Вставити» у згорнутому виді має
+     фіксовані 44×44 при padding: 0, і піктограма 18px без цього рядка сідала
+     ліворуч, лишаючи 22px порожнього місця праворуч. */
+  justify-content: center;
   gap: var(--spacing-xs);
   min-height: 44px;
   padding: 0 var(--spacing-md);
