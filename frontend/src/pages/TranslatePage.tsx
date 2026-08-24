@@ -8,11 +8,11 @@ import {
   canUseTelegramSharing,
   openTelegramInlineQuery,
   shareTranslationText,
-  readTextFromClipboard,
   triggerHapticFeedback,
 } from '../services/telegram';
 import { countGraphemes } from '../utils/text';
 import { consumePreviewAttempt, MAX_AUTOMATIC_PREVIEW_ATTEMPTS } from '../utils/previewAttempts';
+import { useVoiceInput, type VoiceNotice } from '../hooks/useVoiceInput';
 import { StyleDropdown } from '../components/StyleDropdown';
 import { TextInput } from '../components/TextInput';
 import { PreviewResult } from '../components/PreviewResult';
@@ -333,26 +333,38 @@ export function TranslatePage() {
     setErrorBanner(null);
   }, []);
 
-  // Handle paste
-  const handlePaste = useCallback(async () => {
-    try {
-      const text = await readTextFromClipboard();
-      const graphemeCount = countGraphemes(text);
-      if (graphemeCount > MAX_GRAPHEMES) {
-        setToast({ message: `Текст занадто довгий (макс. ${MAX_GRAPHEMES} символів)`, type: 'error' });
-        return;
-      }
-      isDemoDraftRef.current = false;
-      setDraftText(text);
-      triggerHapticFeedback('impact');
-    } catch {
-      document.getElementById('translate-input')?.focus();
+  // Голосовий ввід. Розпізнане дописується в кінець чернетки, а не замінює її:
+  // користувач міг почати набирати руками, і надиктована фраза — продовження.
+  // Один setDraftText на весь транскрипт, тому наявний debounce у 900 мс дає
+  // рівно один preview, а не по одному на слово.
+  const handleTranscript = useCallback((text: string) => {
+    const base = draftText.trimEnd();
+    const merged = base ? `${base} ${text}` : text;
+    if (countGraphemes(merged) > MAX_GRAPHEMES) {
       setToast({
-        message: 'Telegram не надав доступ до буфера. Поле активне: затисніть його та оберіть «Вставити».',
-        type: 'info',
+        message: `Разом із наявним текстом вийде більше ${MAX_GRAPHEMES} символів. Скоротіть чернетку.`,
+        type: 'error',
       });
+      return;
     }
-  }, []);
+    isDemoDraftRef.current = false;
+    setDraftText(merged);
+    setSavedTranslationId(null);
+    setErrorBanner(null);
+  }, [draftText]);
+
+  // Тост, а не errorBanner: банер належить перекладу, і збій мікрофона не має
+  // затирати повідомлення про невдалий preview.
+  const handleVoiceNotice = useCallback((notice: VoiceNotice) => setToast(notice), []);
+
+  const voice = useVoiceInput({
+    // Поки /user/me не прилетів — мікрофона немає: кнопка, що з'являється після
+    // відповіді, краща за кнопку, що зникає.
+    enabled: profile?.voiceInputAvailable === true,
+    onTranscript: handleTranscript,
+    onNotice: handleVoiceNotice,
+  });
+  const isVoiceBusy = voice?.state === 'recording' || voice?.state === 'processing';
 
   const insertRandomPhrase = useCallback((phrase: SamplePhrase) => {
     lastRandomPhraseIdRef.current = phrase.id;
@@ -462,9 +474,9 @@ export function TranslatePage() {
         <TextInput
           value={draftText}
           onChange={handleTextChange}
-          onPaste={handlePaste}
+          voice={voice}
           onRandomPhrase={handleRandomPhrase}
-          isRandomPhraseDisabled={!selectedStyle || previewMutation.isPending}
+          isRandomPhraseDisabled={!selectedStyle || previewMutation.isPending || isVoiceBusy}
           graphemeCount={graphemeCount}
           maxGraphemes={MAX_GRAPHEMES}
           isWarningZone={isWarningZone}

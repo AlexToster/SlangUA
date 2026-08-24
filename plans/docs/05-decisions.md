@@ -43,6 +43,16 @@ Hence three properties that follow from the distinction rather than from conveni
 
 The cost is accepted openly: this is the one piece of Redis state that is not easily re-creatable, and a `FLUSHDB` re-enables everything that was switched off. The alternative — a Postgres column — would give the AI layer a relational dependency it does not otherwise have, to protect a handful of fields an operator can re-flip in seconds from a panel that shows the current state plainly.
 
+## Voice Input Goes Through Our Own Endpoint
+
+Three cheaper paths were considered first and each fails on the one thing this feature is for — recognizing colloquial Ukrainian inside the Telegram WebView.
+
+The Web Speech API costs nothing and needs no server, but `SpeechRecognition` is a Chromium feature that routes audio through Google's service, is absent from iOS WKWebView (which is what Telegram embeds on iOS), and is not something the Telegram Android WebView reliably exposes either. A feature that works for part of the users and cannot be diagnosed for the rest is worse than one path that behaves identically everywhere. Telegram's own voice messages are not an alternative either: they are a Bot API artifact, not something a Mini App can capture, and a flow where the user leaves the app, records a voice message to the bot and comes back is a different product. Sending audio straight from the client to a provider was rejected outright, because it puts a transcription key in the bundle.
+
+So the client records with `MediaRecorder` and posts the clip to `POST /api/v1/transcribe`, which speaks the OpenAI-compatible `/v1/audio/transcriptions` of whatever `STT_BASE_URL` points at (Groq's `whisper-large-v3-turbo` by default). The provider is two environment variables rather than a code change, the key never leaves the server, and the route enforces authentication, its own per-minute budget, a container allowlist and a size ceiling — see [04-api.md §7](04-api.md#7-voice-input-routes).
+
+Two consequences are decisions in their own right. The transcription keys are **their own** `KeyPool` (`STT_API_KEY`, pool id `stt`) rather than the AI pools, because a spent transcription quota must not park a key the translator still needs, even on the same provider account. And the transcript is treated as **typed text**: it is appended to the draft, and it becomes a `Translation` row only if the user previews and saves it like anything else. Voice is an input method, not a translation path, which is why nothing in the preview/save contract changed and why no audio is ever persisted ([06-security.md](06-security.md#voice-input)).
+
 ## Simplified Backend Layering
 
 This project intentionally uses a simplified Route → Service → Prisma architecture suitable for a solo-developer MVP. This is a proactive architectural decision.

@@ -15,7 +15,7 @@ See [Backend Architecture](01-backend.md) for the integration of the Auth Module
 
 ### Admin Access
 
-The admin surface (`/api/v1/admin/*`, contract in [API Design](04-api.md#7-admin-routes)) is governed by three rules, each answering a different failure mode.
+The admin surface (`/api/v1/admin/*`, contract in [API Design](04-api.md#8-admin-routes)) is governed by three rules, each answering a different failure mode.
 
 **Admin-ness is deployment configuration, never user data.** Membership is the comma-separated numeric Telegram id list in `ADMIN_TELEGRAM_IDS`; there is no admin column in Postgres. A database row could be flipped by anything holding write access, and a restore from backup could resurrect a former admin. Ids only, never usernames: a username can be changed by its owner and is not what Telegram signs into `initData`. The list is empty by default, and while it is empty the panel does not exist.
 
@@ -31,7 +31,7 @@ The admin surface (`/api/v1/admin/*`, contract in [API Design](04-api.md#7-admin
 
 **Guessing defences.** Wrong password and active lockout are reported identically (`401 ADMIN_PASSWORD_INVALID`), differing only in the `Retry-After` a client needs in order to back off; distinguishing them would confirm that earlier guesses were being counted. Neither the hash, the attempt count nor the submitted password ever appears in a response. Failures are counted per Telegram id — never globally — so one admin cannot lock out another, and the counter expires with the lockout window so isolated typos months apart never accumulate.
 
-See [API Design](04-api.md#7-admin-routes) for the endpoint contracts and error codes.
+See [API Design](04-api.md#8-admin-routes) for the endpoint contracts and error codes.
 
 ### The operator kill-switch for AI providers
 
@@ -70,6 +70,14 @@ Redis is used for request‑frequency counters per `userId` or `IP` with sliding
 Redis is a required runtime dependency. If it cannot connect at startup or becomes unavailable, rate-limited requests fail closed with `503 RATE_LIMITER_UNAVAILABLE`; the service never claims to run with rate limiting disabled. A coarse global IP limiter (`GLOBAL_RATE_LIMIT_*`) covers all routes except `/health`, while sensitive routes also have narrower user-based limits. The two token-minting routes are keyed by IP rather than user, because no authenticated user exists yet, and they carry their own tighter budget (`AUTH_RATE_LIMIT_*` for `POST /auth/telegram`, `REFRESH_RATE_LIMIT_*` for `POST /auth/refresh`, 20 req/min each by default) instead of the generic per-user allowance.
 
 The admin routes add two more budgets, both applied *after* the allowlist gate so that they are keyed by the admin's own user id and no stranger can consume them: `ADMIN_LOGIN_RATE_LIMIT_*` (5 attempts per 5 minutes by default) in front of the password check, and `ADMIN_RATE_LIMIT_*` (120 req/min) on the authenticated routes. The login limiter is a second, independent line of defence next to the lockout described above — the generic 100 req/min budget is no obstacle to password guessing.
+
+`POST /api/v1/transcribe` carries its own narrow budget too (`STT_RATE_LIMIT_*`, 6 req/min per user by default), for a different reason than the admin ones: each call spends transcription quota at an external provider that every user of the deployment shares, so the cost of abuse is not CPU but a feature switching itself off for everybody. The limiter runs before the handler, so a throttled request never reaches the provider. Authentication is not optional on that route for the same reason — an unauthenticated transcribe endpoint is a free speech-to-text proxy hosted at the operator's expense.
+
+## Voice input
+
+Recorded audio is request-scoped and is written nowhere: not Postgres, not Redis, not a temporary file, not a log line. The decoded buffer lives inside the `POST /api/v1/transcribe` handler for the duration of one upstream call, and the transcript is returned to the client rather than stored — it becomes a `Translation` row only if the user then submits it like text they typed. `test/integration/transcribe.integration.test.ts` asserts the invariant instead of leaving it to review.
+
+The server refuses containers outside a small allowlist before contacting the provider, and bounds the decoded size with `STT_MAX_AUDIO_BYTES` (plus a route-level `bodyLimit` derived from it), so it cannot be used to forward arbitrary bytes to a paid endpoint. Transcription keys are their own pool (`STT_API_KEY`), separate from the AI provider keys, so a spent transcription quota cannot park a key the translator needs; as everywhere else, a key is never used as an identifier and never reaches a log line. A provider's own error text is never forwarded to the client, because it can quote the request.
 
 ## Secrets
 

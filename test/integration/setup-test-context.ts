@@ -45,6 +45,10 @@ async function initializeTestContext(): Promise<void> {
     const mockOllamaUrl = mockServer.url;
     mockOllamaClose = mockServer.close;
     process.env.OLLAMA_BASE_URL = mockOllamaUrl;
+    // The same server also answers /v1/audio/transcriptions, so voice input is
+    // exercised against a real HTTP round trip without a provider account. The
+    // port is dynamic, which is why this cannot live in the vitest env block.
+    process.env.STT_BASE_URL = `${mockOllamaUrl}/v1`;
 
     console.log(`Mock Ollama: ${mockOllamaUrl}`);
 

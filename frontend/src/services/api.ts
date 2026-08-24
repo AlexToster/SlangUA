@@ -17,6 +17,7 @@ import type {
   AdminProviderList,
   AdminMetrics,
   AdminErrorFeed,
+  TranscriptionResult,
 } from '../types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
@@ -167,6 +168,18 @@ class ApiService {
   // Styles
   async getStyles(): Promise<Style[]> {
     const response = await this.client.get<Style[]>('/styles');
+    return response.data;
+  }
+
+  // Voice input
+  //
+  // The audio rides base64-encoded inside the JSON body: the server has no
+  // multipart parser, and a 30-second capture stays well inside the route's own
+  // bodyLimit. `mimeType` is the recorder's own value, passed through verbatim -
+  // the container differs by platform (Android gives WebM/Opus, iOS gives MP4)
+  // and the transcription provider infers the format from it.
+  async transcribe(audio: string, mimeType: string, signal?: AbortSignal): Promise<TranscriptionResult> {
+    const response = await this.client.post<TranscriptionResult>('/transcribe', { audio, mimeType }, { signal });
     return response.data;
   }
 

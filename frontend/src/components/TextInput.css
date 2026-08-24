@@ -77,17 +77,13 @@
   border-top: 2px solid var(--color-divider-strong);
 }
 
-/* «Вставити» і «Випадкова фраза» — пігулки з плашкою --face, контуром 2px і
-   зсувом фарби, як решта кнопок застосунку. Прозорого тла тут бути не може:
-   кнопка мусить читатися як кнопка без наведення. 44px — мінімум для дотику. */
-.text-input-paste-btn,
+/* «Випадкова фраза» — пігулка з плашкою --face, контуром 2px і зсувом фарби, як
+   решта кнопок застосунку. Прозорого тла тут бути не може: кнопка мусить
+   читатися як кнопка без наведення. 44px — мінімум для дотику.
+   (Тут же була «Вставити» з тим самим виглядом — кнопку прибрано з інтерфейсу.) */
 .text-input-random-btn {
   display: inline-flex;
   align-items: center;
-  /* Вміст стоїть по центру, а не від лівого краю: пігулкам з підписом це нічого
-     не змінює (їхня ширина — по вмісту), але «Вставити» у згорнутому виді має
-     фіксовані 44×44 при padding: 0, і піктограма 18px без цього рядка сідала
-     ліворуч, лишаючи 22px порожнього місця праворуч. */
   justify-content: center;
   gap: var(--spacing-xs);
   min-height: 44px;
@@ -106,23 +102,42 @@
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: background-color var(--transition-fast), box-shadow var(--transition-fast),
-    transform var(--transition-fast);
+    transform var(--transition-fast), padding var(--transition-normal), gap var(--transition-normal);
 }
 
-.text-input-paste-btn:hover:not(:disabled),
+/* Під час запису кнопка звужується до кубиків і віддає місце рядку запису.
+   13px по боках + піктограма 18px = ті самі 44px, що в решти чипів. */
+.text-input-random-btn.is-collapsed {
+  padding: 0 13px;
+  gap: 0;
+}
+
+/* Підпис згортається шириною, а не display: none — інакше кнопка перестрибувала
+   б у нову ширину одним кадром. max-width анімується, width: auto ні. */
+.text-input-random-btn-label {
+  display: inline-block;
+  max-width: 12rem;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--transition-normal), opacity var(--transition-fast);
+}
+
+.text-input-random-btn.is-collapsed .text-input-random-btn-label {
+  max-width: 0;
+  opacity: 0;
+}
+
 .text-input-random-btn:hover:not(:disabled) {
   background: var(--face-hover);
 }
 
 /* Один стан натискання на весь застосунок: фарба зсуву зникає, штамп сідає на
    її місце. Раніше тут було scale(0.98) — одне з чотирьох різних значень. */
-.text-input-paste-btn:active:not(:disabled),
 .text-input-random-btn:active:not(:disabled) {
   box-shadow: 0 0 0 var(--offset);
   transform: var(--press);
 }
 
-.text-input-paste-btn:disabled,
 .text-input-random-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -130,10 +145,170 @@
   transform: var(--press);
 }
 
-.text-input-paste-btn:focus-visible,
 .text-input-random-btn:focus-visible {
   outline: 2px solid var(--tg-link-color, var(--color-primary));
   outline-offset: 2px;
+}
+
+/* Мікрофон. У спокої — коло 44×44 на місці колишньої «Вставити», залите синім,
+   як «Поділитись»: це єдина кнопка рядка, що починає власну дію, і плашка
+   --face робила її четвертим однаковим чипом у ряду. Підпису немає в жодній
+   ширині: четверта пігулка з текстом не вміщалася в рядок навіть на 360px, а
+   згорнута до піктограми кнопка з підписом «на широких» дала б два різні
+   інтерфейси для однієї дії.
+
+   Під час запису та сама кнопка стає рядком запису. Розтягується через flex-grow:
+   він інтерполюється як число, тому розгортання не потребує ні вимірювань, ні
+   JS-анімації — вільне місце приходить від «Випадкової фрази», що згортається в
+   ту саму мить. overflow: hidden — щоб доріжка шкали і лінійка ліміту не
+   вилазили за контур у мить розгортання. */
+.text-input-mic-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  flex: 0 1 auto;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--tg-button-text-color, var(--color-on-primary));
+  background: var(--tg-button-color, var(--color-primary));
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    box-shadow var(--transition-fast), transform var(--transition-fast),
+    flex-grow var(--transition-normal), padding var(--transition-normal),
+    gap var(--transition-normal);
+}
+
+/* Рядок запису: пігулка забирає майже весь вільний простір рядка, вміст стає в
+   ряд ліворуч. Плашка вертається до паперової — синього тут немає, бо кнопка вже
+   не «почати», а «зупинити».
+
+   flex-grow: 0.8, а не 1 — доросла пігулка забирає лишень чотири п'ятих вільного
+   місця, решту з'їдає авто-відступ правого чипа, тому він лишається притиснутим
+   до краю. Ширший рядок виглядав задовгим при тих самих трьох елементах. */
+.text-input-mic-btn.is-recording,
+.text-input-mic-btn.is-processing {
+  flex-grow: 0.8;
+  justify-content: flex-start;
+  padding: 0 var(--spacing-sm);
+  gap: var(--spacing-sm);
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
+}
+
+/* Так само, як «Поділитись»: наведення підмішує фарбу в синій, а не бере --face-hover. */
+.text-input-mic-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tg-button-color, var(--color-primary)) 85%, var(--ink));
+}
+
+.text-input-mic-btn:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
+}
+
+.text-input-mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: 0 0 0 var(--offset);
+  transform: var(--press);
+}
+
+/* Розпізнавання — єдиний вимкнений стан, який мусить лишатися при повній фарбі:
+   пігулка ще тримає місце рядка, і пів-прозорий рядок читався б як збій. */
+.text-input-mic-btn.is-processing:disabled {
+  opacity: 1;
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.text-input-mic-btn:focus-visible {
+  outline: 2px solid var(--tg-link-color, var(--color-primary));
+  outline-offset: 2px;
+}
+
+/* Запис мусить читатися з іншого кінця екрана, але червоне тут — контур, точка й
+   лінійка ліміту, а не залита кнопка: заливка була єдиною такою плашкою в
+   застосунку і виглядала як помилка. */
+.text-input-mic-btn.is-recording {
+  border-color: var(--tg-destructive-color, var(--color-error));
+}
+
+.text-input-mic-btn.is-recording:hover {
+  background: var(--face);
+}
+
+/* Скільки з півхвилини вже витрачено. Лінійка вздовж низу пігулки замість
+   другого числа: ліміт видно, а рахувати нічого не треба. */
+.text-input-mic-btn.is-recording::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--tg-destructive-color, var(--color-error));
+  transform: scaleX(var(--rec-progress, 0));
+  transform-origin: left center;
+}
+
+/* Точка «запис іде». Помітно більша за 10px першої версії: у рядку, який мусить
+   читатися з іншого кінця екрана, вона — головний знак, а не деталь. Блимає
+   сходинками (steps), а не плавно: у різографі немає ні розмиття, ні плавного
+   світіння — фарба або лягла, або ні. */
+.text-input-rec-dot {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-full);
+  background: var(--tg-destructive-color, var(--color-error));
+  animation: rec-blink 1s steps(1, end) infinite;
+}
+
+@keyframes rec-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
+}
+
+/* Відлік іде вгору й тільки в секундах: стеля — 30, тому хвилин тут не буває, а
+   «03» читається як «сказано три секунди», а не як дедлайн. Кегль основного
+   тексту, а не --font-size-sm: два знаки на всю пігулку мають бути видні, не
+   вчитуючись. */
+.text-input-rec-time {
+  flex-shrink: 0;
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* «Розпізнаю…» — той самий кегль, що відлік; обрізається трьома точками, якщо
+   рядок раптом вужчий за підпис. */
+.text-input-rec-label {
+  flex-shrink: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+/* Обертання спільне на застосунок (@keyframes spin — у styles/global.css), але
+   застосовується адресно, тому потрібен цей рядок. */
+.text-input-mic-btn .spinning {
+  flex-shrink: 0;
+  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-input-rec-dot {
+    animation: none;
+  }
 }
 
 .char-counter {
@@ -164,12 +339,17 @@
 }
 
 /* Кнопка «очистити» — квадратний чип 44×44 (мінімум для дотику, було 42), який
-   flex-рядок відтискає до правого краю. */
-.text-input-clear-btn {
+   flex-рядок відтискає до правого краю. «Скасувати запис» стоїть у тому самому
+   місці й має ту саму форму: це один правий чип, який під час запису означає
+   «кинути запис», а решту часу — «очистити текст». Двох хрестиків поруч не
+   буває, тому сплутати їх ніде. */
+.text-input-clear-btn,
+.text-input-cancel-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-left: auto;
+  flex-shrink: 0;
   width: 44px;
   height: 44px;
   padding: 0;
@@ -183,16 +363,25 @@
     transform var(--transition-fast);
 }
 
-.text-input-clear-btn:hover {
+/* Скасування відрізняється від очищення контуром, а не плашкою: та сама фарба,
+   якою обведений рядок запису й горить його точка. */
+.text-input-cancel-btn {
+  border-color: var(--tg-destructive-color, var(--color-error));
+}
+
+.text-input-clear-btn:hover,
+.text-input-cancel-btn:hover {
   background: var(--face-hover);
 }
 
-.text-input-clear-btn:active {
+.text-input-clear-btn:active,
+.text-input-cancel-btn:active {
   box-shadow: 0 0 0 var(--offset);
   transform: var(--press);
 }
 
-.text-input-clear-btn:focus-visible {
+.text-input-clear-btn:focus-visible,
+.text-input-cancel-btn:focus-visible {
   outline: 2px solid var(--tg-link-color, var(--color-primary));
   outline-offset: 2px;
 }
@@ -206,22 +395,9 @@
     min-height: 100px;
   }
 
-  .text-input-paste-btn span {
-    display: none;
-  }
-
-  /* Без підпису лишається сама піктограма, тож кнопка мусить бути колом, а не
-     вертикальним овалом: при padding: 0 8px піктограма 20px давала 40×44, і
-     --radius-full закруглював це у звужений по горизонталі овал. Фіксовані
-     44×44 — так само, як у .text-input-clear-btn, — дають коло. «Випадкова
-     фраза» підпис зберігає, тому лишається пігулкою. */
-  .text-input-paste-btn {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    gap: 0;
-  }
-
+  /* Мікрофон у спокої — фіксовані 44×44 у будь-якій ширині, тому згортати його
+     нема куди; у записі він розтягується сам, забираючи місце в цієї кнопки.
+     Раніше на цьому місці «Вставити» ховала свій підпис. */
   .text-input-random-btn {
     min-height: 44px;
     padding: 0 var(--spacing-sm);

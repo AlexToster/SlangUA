@@ -69,6 +69,25 @@ export default defineConfig({
       // An hour, not a week: the TTL is asserted, and a value distinguishable
       // from the default proves it comes from the configuration.
       ADMIN_ERROR_FEED_TTL_SECONDS: '3600',
+      // Voice input. Two keys so a rotation test can watch the first one get
+      // parked; STT_BASE_URL is set in setup-test-context.ts because the mock
+      // server's port is dynamic.
+      STT_API_KEY: 'test-stt-key-one-not-real,test-stt-key-two-not-real',
+      STT_MODEL: 'whisper-large-v3-turbo',
+      STT_LANGUAGE: 'uk',
+      // Deliberately tiny: a 4 KiB ceiling makes the oversize case cheap to
+      // construct, and the route's bodyLimit is derived from this value.
+      STT_MAX_AUDIO_BYTES: '4096',
+      STT_RATE_LIMIT_WINDOW_MS: '60000',
+      STT_RATE_LIMIT_MAX_REQUESTS: '5',
+      // Effectively no cooldown. The cooldown arithmetic is KeyPool's own unit
+      // test; here a real 60-second park would survive into the next test in the
+      // file, because the cooldown store is an in-process singleton and the
+      // suites share one app instance. Rotation is still observable: every key
+      // gets exactly one turn per request either way.
+      STT_KEY_COOLDOWN_RATE_MS: '1',
+      STT_KEY_COOLDOWN_QUOTA_MS: '1',
+      STT_KEY_COOLDOWN_INVALID_MS: '1',
     },
   },
   resolve: {
