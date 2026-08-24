@@ -27,6 +27,7 @@ describe('POST /api/v1/transcribe', () => {
   let app: FastifyInstance;
   let prisma: any;
   let token: string;
+  let flushRedis: () => Promise<void>;
   let generateValidInitData: (options?: any) => string;
 
   const post = (payload: unknown, bearer: string | null = token) =>
@@ -42,17 +43,32 @@ describe('POST /api/v1/transcribe', () => {
     const context = await import('./test-context.js');
     app = context.getAppInstance();
     prisma = context.getPrismaClient();
+    flushRedis = context.flushRedis;
     generateValidInitData = (await import('../helpers/telegram-initdata.js')).generateValidInitData;
-  });
 
-  beforeEach(async () => {
+    // One handshake for the whole file. A fresh user per test read better, but
+    // /auth/telegram has a limiter of its own - ten requests a window here - and
+    // this suite has more tests than that: from the eleventh onwards the
+    // handshake answered 429, `accessToken` came back undefined and every
+    // assertion in the test became a 401 instead of what it was checking. The
+    // per-user STT bucket is emptied by flushing Redis instead of by minting a
+    // new user id.
     await prisma.translation.deleteMany();
     await prisma.refreshToken.deleteMany();
     await prisma.user.deleteMany();
-    // A fresh user per test means a fresh rate-limit bucket: the limiter keys by
-    // user id, and the id is an autoincrement.
+    await flushRedis();
     const auth = await app.inject({ method: 'POST', url: '/api/v1/auth/telegram', payload: { initData: generateValidInitData() } });
+    // Fails here, once, rather than as a wall of 401s further down.
+    expect(auth.statusCode).toBe(200);
     token = JSON.parse(auth.body).accessToken;
+  });
+
+  beforeEach(async () => {
+    // Clears the rate-limit buckets - the endpoint's own per-user budget above
+    // all, which the limiter test spends in full - while the user and the token
+    // from beforeAll stay valid: the access token is a stateless JWT.
+    await flushRedis();
+    await prisma.translation.deleteMany();
     resetSttState();
     setMockConfig({ sttFailStatus: undefined, sttText: undefined });
   });
