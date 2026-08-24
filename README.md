@@ -119,18 +119,14 @@ SlangUA — **AI style translator**, а не словник, чат-бот, ге
 
 ## Можливості
 
-- **Шість контрастних стилів** — від TikTok до бюрократа, з age gate для 18+.
-- **Telegram Mini App** — працює всередині Telegram, без реєстрації та паролів:
-  вхід через `initData`.
+- **Багатостильова стилізація (Style Engine):** Підтримка стилів `GEN_Z` (зумерський/TikTok), `STREET` (вуличний), `KANCLER` (бюрократичний) та інших
+- **Telegram Mini App (TWA) Integration** — працює всередині Telegram, без реєстрації та паролів:
+  вхід через `initData`, шеринг в Telegram.
 - **Історія та улюблені** — останні 100 перекладів; позначені зірочкою
   зберігаються без обмежень.
-- **Шеринг лише в Telegram** — переклад іде у вибраний чат як текст, без
-  публічних посилань на твій текст.
-  [Чому саме так](plans/docs/09-telegram-sharing.md).
-- **Будь-яка LLM** — OpenAI, Anthropic, Gemini, OpenRouter, локальний Ollama або
-  будь-який OpenAI-сумісний ендпоінт; додається змінними середовища, без зміни
-  коду. Автоматичний fallback між провайдерами і ротація ключів за лімітами.
-- **Панель оператора** — вхід за Telegram-allowlist плюс пароль, кіл-світч
+- **Демо-режим "Випадкова фраза":** Швидке генерування тестів без необхідності ручного введення
+- **Будь-яка ШІ модель (Multi-Provider AI Architecture)** — Підтримка декількох AI-провайдерів: OpenAI,   Anthropic, Gemini, OpenRouter, локальний Ollama або  будь-який OpenAI-сумісний ендпоінт; додається   змінними середовища, без зміни  коду. Автоматичний fallback між провайдерами.
+- **Панель адміністратора** — вхід за Telegram-allowlist плюс пароль, кіл-світч
   провайдера, навантаження по хвилинах і добах, стрічка останніх `5xx`.
   Вимкнена за замовчуванням: без `ADMIN_TELEGRAM_IDS` маршрутів просто не існує.
 
@@ -141,13 +137,13 @@ SlangUA — **AI style translator**, а не словник, чат-бот, ге
 
 Хочеш свій інстанс — далі про локальний запуск.
 
-## Швидкий старт
+### 🚀 Швидкий запуск (Quick Start)
 
 > ~5 хвилин, якщо PostgreSQL і Redis уже запущені. Потрібен хоча б один AI-ключ
 > або локальний Ollama: без жодного провайдера сервер підніметься, але переклад
 > повертатиме помилку.
 
-### Передумови
+#### Передумови
 
 - **Node.js ≥ 20** та npm.
 - **PostgreSQL** і **Redis** — локально або у Docker.
@@ -156,28 +152,49 @@ SlangUA — **AI style translator**, а не словник, чат-бот, ге
 - Щонайменше один AI-провайдер: ключ до OpenAI / Anthropic / Gemini /
   OpenRouter **або** локальний Ollama.
 
-### Backend
+#### 1. Клонування репозиторію та встановлення залежностей
 
 ```bash
-# 1. Встановити залежності
+git clone https://github.com/AlexToster/SlangUA.git
+cd SlangUA
 npm install
-
-# 2. Створити .env на основі шаблону та заповнити змінні
-cp .env.example .env
-
-# 3. Згенерувати Prisma Client
-npm run prisma:generate
-
-# 4. Застосувати міграції до бази
-npm run prisma:migrate
-
-# 5. Запустити dev-сервер (http://localhost:3000)
-npm run dev
 ```
 
-Production-збірка: `npm run build`, запуск — `npm start`.
+#### 2. Налаштування змінних оточення
 
-### Frontend
+Створіть `.env` копією шаблона — він містить усі змінні схеми з коментарями:
+
+```bash
+cp .env.example .env
+```
+
+Мінімум, який треба заповнити своїми значеннями:
+
+```dotenv
+DATABASE_URL="postgresql://user:password@localhost:5432/slangua?schema=public"
+REDIS_URL="redis://localhost:6379"
+JWT_SECRET="щонайменше-32-символи"
+REFRESH_TOKEN_HMAC_SECRET="інший-секрет-щонайменше-32-символи"
+TELEGRAM_BOT_TOKEN="123456789:токен-від-BotFather"
+PREVIEW_ROOT_KEY="base64-рівно-32-байтів"   # openssl rand -base64 32
+```
+
+Плюс хоча б один AI-провайдер — наприклад `GEMINI_API_KEY`, `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY` чи `OPENROUTER_API_KEY` (кожен приймає список ключів через
+кому), або локальний Ollama, якому ключ не потрібен.
+
+#### 3. Міграції та запуск
+
+```bash
+npm run prisma:generate   # Prisma Client
+npm run prisma:migrate    # міграції до локальної бази
+npm run dev               # http://localhost:3000
+```
+
+Production-збірка: `npm run build`, запуск — `npm start`
+(на сервері міграції застосовуються через `npx prisma migrate deploy`).
+
+#### Frontend
 
 ```bash
 cd frontend
@@ -241,21 +258,12 @@ npm run test:unit # без Docker
 
 ## Технології
 
-| Шар | Стек |
-| --- | ---- |
-| Backend | Node.js ≥ 20 · TypeScript · Fastify · Prisma · PostgreSQL · Redis · Zod |
-| Frontend | React · Vite · Telegram Mini App SDK · звичайний CSS, по файлу на компонент (Tailwind свідомо не використовується) |
-| AI | OpenAI · Anthropic · Gemini · OpenRouter · Ollama, через adapter pattern |
-
-**Про AI-шар.** Класів адаптерів три, а не п'ять: `OpenAICompatibleAdapter`
-обслуговує всіх, хто розмовляє форматом OpenAI Chat Completions (OpenAI,
-OpenRouter, локальна Ollama через `/v1`), власні класи мають лише Anthropic і
-Gemini. Провайдер — це набір змінних середовища, а не enum і не код, тому Groq,
-DeepSeek, vLLM чи проксі підключаються через `AI_EXTRA_INSTANCES` без міграції
-бази і без змін у клієнті. Кожен ключ можна задати списком через кому —
-вичерпаний відкладається, запит обслуговує наступний. Ланцюжок fallback можна
-розірвати вручну: кіл-світч оператора вимикає провайдера до явного повернення,
-не «лікуючись» ні кулдауном, ні рестартом.
+### 🛠️ Технологічний стек
+- **Backend:** Node.js, TypeScript, Fastify, OpenAPI/Swagger (автодокументація API)[cite: 1]
+- **Database & ORM:** PostgreSQL, Prisma ORM[cite: 1, 9]
+- **AI Integrations:** Google Gemini API (Основний)[cite: 8], OpenAI, Anthropic Claude, Ollama
+- **Authentication & Security:** JWT (Refresh/Access tokens), Telegram WebApp Validation[cite: 1]
+- **Frontend / Client:** React (Telegram Mini App)[cite: 9]
 
 Як додати провайдера — [AGENTS.md](AGENTS.md).
 
@@ -267,11 +275,12 @@ Telegram Mini App → Fastify → Translation Service → AI Service → AI Prov
                                               Style Engine (бібліотека)
                                     registry · prompt · examples · lexicon
 ```
-
-**Style Engine** будує системний промпт — і більше нічого: без бізнес-логіки,
+- **Прагматичний layered-дизайн:** Свідомий вибір прямої та чистої структури `Route → Service → Prisma` без надлишкового оверінжинірингу для MVP[cite: 5].
+- **Style Engine** будує системний промпт — і більше нічого: без бізнес-логіки,
 без бази даних, без викликів LLM. Його споживає `base.adapter.ts`, тому це не
-ланка в ланцюжку виклику, а бібліотека збоку. Публічний контракт зафіксований,
-щоб згодом перевести стилі з файлів у базу або API, не переписуючи споживачів.
+ланка в ланцюжку виклику, а бібліотека збоку.
+- **Кешування та розпреділені блокування:** Кешування готових популярних відповідей (за хешем тексту + стилю + провайдера) та захист від паралельних повторних запитів[cite: 1].
+- **Rate Limiting:** Захист від спаму за Telegram ID / IP
 
 Детально: [архітектура](plans/architecture.md) ·
 [backend](plans/docs/01-backend.md) · [frontend](plans/docs/02-frontend.md) ·
@@ -346,7 +355,7 @@ PR і issue вітаються. Перед початком — [CONTRIBUTING.md
 ### 👤 Обов'язкова згадка автора (Attribution)
 Ви можете вільно використовувати, копіювати, змінювати та форкати цей код для власних чи комерційних проєктів, **за умови збереження оригінальної згадки про автора**:
 
-- **Оригінальний автор:** Alex Shkutia ([@AlexToster](https://github.com/AlexToster))
+- **Оригінальний автор:** Oleksandr Shkutia ([@AlexToster](https://github.com/AlexToster))
 - **Оригінальний репозиторій:** [github.com/AlexToster/SlangUA](https://github.com/AlexToster/SlangUA)
 
 При форках, розгортанні власної версії або використанні коду у своїх проєктах, будь ласка, залишайте посилання на оригінальний репозиторій у файлі `README.md` або в описі вашого проєкту.
