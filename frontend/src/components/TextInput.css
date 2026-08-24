@@ -150,10 +150,12 @@
   outline-offset: 2px;
 }
 
-/* Мікрофон. У спокої — коло 44×44 на місці колишньої «Вставити». Підпису немає
-   в жодній ширині: четверта пігулка з текстом не вміщалася в рядок навіть на
-   360px, а згорнута до піктограми кнопка з підписом «на широких» дала б два
-   різні інтерфейси для однієї дії.
+/* Мікрофон. У спокої — коло 44×44 на місці колишньої «Вставити», залите синім,
+   як «Поділитись»: це єдина кнопка рядка, що починає власну дію, і плашка
+   --face робила її четвертим однаковим чипом у ряду. Підпису немає в жодній
+   ширині: четверта пігулка з текстом не вміщалася в рядок навіть на 360px, а
+   згорнута до піктограми кнопка з підписом «на широких» дала б два різні
+   інтерфейси для однієї дії.
 
    Під час запису та сама кнопка стає рядком запису. Розтягується через flex-grow:
    він інтерполюється як число, тому розгортання не потребує ні вимірювань, ні
@@ -172,8 +174,8 @@
   height: 44px;
   padding: 0;
   overflow: hidden;
-  color: var(--tg-text-color, var(--color-text));
-  background: var(--face);
+  color: var(--tg-button-text-color, var(--color-on-primary));
+  background: var(--tg-button-color, var(--color-primary));
   border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-sm);
@@ -184,18 +186,26 @@
     gap var(--transition-normal);
 }
 
-/* Рядок запису: пігулка забирає весь вільний простір рядка, вміст стає в ряд
-   ліворуч. Плашка лишається паперовою — заливки тут немає. */
+/* Рядок запису: пігулка забирає майже весь вільний простір рядка, вміст стає в
+   ряд ліворуч. Плашка вертається до паперової — синього тут немає, бо кнопка вже
+   не «почати», а «зупинити».
+
+   flex-grow: 0.8, а не 1 — доросла пігулка забирає лишень чотири п'ятих вільного
+   місця, решту з'їдає авто-відступ правого чипа, тому він лишається притиснутим
+   до краю. Ширший рядок виглядав задовгим при тих самих трьох елементах. */
 .text-input-mic-btn.is-recording,
 .text-input-mic-btn.is-processing {
-  flex-grow: 1;
+  flex-grow: 0.8;
   justify-content: flex-start;
   padding: 0 var(--spacing-sm);
   gap: var(--spacing-sm);
+  color: var(--tg-text-color, var(--color-text));
+  background: var(--face);
 }
 
+/* Так само, як «Поділитись»: наведення підмішує фарбу в синій, а не бере --face-hover. */
 .text-input-mic-btn:hover:not(:disabled) {
-  background: var(--face-hover);
+  background: color-mix(in srgb, var(--tg-button-color, var(--color-primary)) 85%, var(--ink));
 }
 
 .text-input-mic-btn:active:not(:disabled) {
@@ -248,12 +258,14 @@
   transform-origin: left center;
 }
 
-/* Точка «запис іде». Блимає сходинками (steps), а не плавно: у різографі немає
-   ні розмиття, ні плавного світіння — фарба або лягла, або ні. */
+/* Точка «запис іде». Помітно більша за 10px першої версії: у рядку, який мусить
+   читатися з іншого кінця екрана, вона — головний знак, а не деталь. Блимає
+   сходинками (steps), а не плавно: у різографі немає ні розмиття, ні плавного
+   світіння — фарба або лягла, або ні. */
 .text-input-rec-dot {
   flex-shrink: 0;
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border-radius: var(--radius-full);
   background: var(--tg-destructive-color, var(--color-error));
   animation: rec-blink 1s steps(1, end) infinite;
@@ -265,10 +277,12 @@
 }
 
 /* Відлік іде вгору й тільки в секундах: стеля — 30, тому хвилин тут не буває, а
-   «03» читається як «сказано три секунди», а не як дедлайн. */
+   «03» читається як «сказано три секунди», а не як дедлайн. Кегль основного
+   тексту, а не --font-size-sm: два знаки на всю пігулку мають бути видні, не
+   вчитуючись. */
 .text-input-rec-time {
   flex-shrink: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
