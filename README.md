@@ -8,8 +8,9 @@
 
 **Один текст. Шість українських стилів.**
 
-AI-перекладач звичайної української у сучасні стилі мовлення —
-зміст залишається, форма змінюється до невпізнання.
+Демонстрація того, як AI працює з українським контекстом — гумором, діалектами
+і соціальними регістрами мовлення. Зміст тексту залишається, форма змінюється
+до невпізнання.
 
 [![CI](https://github.com/AlexToster/SlangUA/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexToster/SlangUA/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
@@ -20,46 +21,28 @@ AI-перекладач звичайної української у сучас�
 
 ### [🚀 Спробувати в Telegram](https://t.me/SlangUA_bot) · [🎬 Демо](#демо) · [🎨 Стилі](#стилі) · [📚 Документація](plans/docs/README.md)
 
-<sub><b>English:</b> SlangUA rewrites plain Ukrainian text into six contrasting
-modern registers — Gen Z, street, IT, bureaucratic, prison and Galician —
-keeping the meaning intact while changing the form as much as possible.
-It is a style translator, not a dictionary, chatbot or machine translator.
-Telegram Mini App on top of Fastify, Prisma and a multi-provider LLM layer
-(OpenAI, Anthropic, Gemini, OpenRouter, local Ollama). MVP in development.</sub>
+<sub><b>English:</b> SlangUA rewrites plain Ukrainian into six contrasting
+registers — Gen Z, street, IT, bureaucratic, prison and Galician — keeping the
+meaning intact while changing the form as far as it will go. It is a Telegram
+Mini App built to show what an LLM can do with Ukrainian context: humour,
+dialect and social register.</sub>
 
 </div>
 
 ## Демо
 
-Один і той самий текст, шість контрастних стилів:
+Один і той самий текст у різних стилях:
 
 > **Оригінал:** «Я йду додому, там мене чекають друзі.»
 
 | Стиль | Результат |
 | ----- | --------- |
-| 🔥 **GEN_Z** — TikTok / Discord | 🖼 ⟨вставити реальний вивід⟩ |
 | 🚬 **STREET** — двір і вулиця | «Йду в хату, там братва... ой, пацани вже чекають.» |
-| 💻 **IT_SLANG** — технічний спіч | 🖼 ⟨вставити реальний вивід⟩ |
-| 🏛 **KANCLER** — бюрократ | 🖼 ⟨вставити реальний вивід; тут має бути видно подовження у 2–4 рази⟩ |
 | ⛓ **POFENI** — жаргон, 18+ | «Двигаю до себе — там кореші вже чекають.» |
-| 🍺 **GALICIAN** — львівська ґвара | 🖼 ⟨вставити реальний вивід⟩ |
 
-<details>
-<summary><b>Ще приклади — справжні пари з <code>examples.json</code></b></summary>
+🖼 ⟨додати вивід GEN_Z, IT_SLANG, KANCLER і GALICIAN для цього ж речення⟩
 
-Це не ілюстрації для README, а ті самі приклади, які Style Engine підкладає
-моделі у промпт: `src/style-engine/styles/*/examples.json`.
-
-| Стиль | Було | Стало |
-| ----- | ---- | ----- |
-| `GEN_Z` | Це дуже соромно, я не можу в це повірити. | Крінж чиста вода, не можу це зачіпнути. |
-| `STREET` | Це коштує багато грошей, я не можу це дозволити. | Це бабло велике, на таку роздачу у мене немає. |
-| `IT_SLANG` | Мені потрібно розгорнути нову версію на продакшн. | Треба задеплоїти хотфікс на продакшн, ролбек не варіант. |
-| `KANCLER` | Дай мені відповідь. | Прошу надати вичерпну відповідь у визначений термін, беручи до уваги вищевикладені обставини та відповідно до чинного порядку розгляду звернень. |
-| `POFENI` | Не бреши, говори правду, інакше буду проблеми. | Не гони. Базар по поняттях, інакше буде зашквар. |
-| `GALICIAN` | Давай швидко сходимо в магазин по хліб, поки не пізно. | Ходи борше до склепу за булкою, най ся не спізнимо. |
-
-</details>
+Решта стилів із прикладами — у таблиці [Стилі](#стилі).
 
 <div align="center">
 
@@ -77,10 +60,9 @@ Telegram Mini App on top of Fastify, Prisma and a multi-provider LLM layer
 | <img src="docs/assets/screenshot-translate.png" width="240" alt="Екран перекладу"> | <img src="docs/assets/screenshot-styles.png" width="240" alt="Вибір стилю"> | <img src="docs/assets/screenshot-history.png" width="240" alt="Історія перекладів"> |
 -->
 
-> **Чесно про стан:** MVP у розробці. Backend готовий, фронтенд і
-> Telegram-шеринг допилюються ([Stage 7](plans/ROADMAP.md)). Стиль `POFENI` —
-> 18+. Якість виводу залежить від обраної LLM: локальна
-> 7B-модель дасть слабший результат, ніж модель класу GPT-4.
+> **Чесно про стан:** якість виводу залежить від обраної LLM — локальна
+> 7B-модель дасть слабший результат, ніж модель класу GPT-4. Стиль `POFENI` —
+> 18+. Де проєкт зараз за етапами — у [Статусі](#статус).
 
 ## Що це таке
 
@@ -89,16 +71,18 @@ SlangUA — **AI style translator**, а не словник, чат-бот, ге
 
 > зміст зберігається повністю, форма змінюється максимально.
 
-Кожен стиль має власний словник, промпт, приклади та «особистість», і стилі
-навмисно контрастні між собою — результат мусить бути впізнаваним з першого
-рядка, без підпису, який це стиль.
+За цим стоїть питання цікавіше за сам переклад: чи здатна модель триматися
+українського контексту — гумору, діалекту, соціального регістру — там, де
+загальний «переклад у сленг» зазвичай дає кальку з англійської. Тому кожен
+стиль має власний словник, промпт, приклади та «особистість», а стилі навмисно
+контрастні між собою: результат мусить бути впізнаваним з першого рядка, без
+підпису, який це стиль.
 
-Трансформація не однакова за силою: **KANCLER** свідомо роздуває речення у 2–4
-рази, **GEN_Z** тримає приблизно ту саму довжину, **POFENI** говорить крізь
-тюремну ієрархію і «поняття» — це інший регістр, ніж **STREET** (двір і вулиця).
+Різниця між ними не лише в лексиці. **POFENI** говорить крізь тюремну ієрархію
+і «поняття» — це інший регістр, ніж **STREET** (двір і вулиця), а **GALICIAN**
+тримає львівську ґвару, а не «західний акцент».
 
-Технічно: [як побудований Style Engine](plans/docs/07-styles.md) ·
-[архітектурні рішення](plans/docs/05-decisions.md)
+Технічно: [як побудований Style Engine](plans/docs/07-styles.md).
 
 ## Стилі
 
@@ -119,16 +103,21 @@ SlangUA — **AI style translator**, а не словник, чат-бот, ге
 
 ## Можливості
 
-- **Багатостильова стилізація (Style Engine):** Підтримка стилів `GEN_Z` (зумерський/TikTok), `STREET` (вуличний), `KANCLER` (бюрократичний) та інших
-- **Telegram Mini App (TWA) Integration** — працює всередині Telegram, без реєстрації та паролів:
-  вхід через `initData`, шеринг в Telegram.
+- **Шість контрастних стилів** — у кожного власний словник, промпт і приклади;
+  `POFENI` — 18+, за age gate.
+- **Telegram Mini App** — працює всередині Telegram, без реєстрації та паролів:
+  вхід через `initData`, шеринг результату в обраний чат.
 - **Історія та улюблені** — останні 100 перекладів; позначені зірочкою
   зберігаються без обмежень.
-- **Демо-режим "Випадкова фраза":** Швидке генерування тестів без необхідності ручного введення
-- **Будь-яка ШІ модель (Multi-Provider AI Architecture)** — Підтримка декількох AI-провайдерів: OpenAI,   Anthropic, Gemini, OpenRouter, локальний Ollama або  будь-який OpenAI-сумісний ендпоінт; додається   змінними середовища, без зміни  коду. Автоматичний fallback між провайдерами.
-- **Панель адміністратора** — вхід за Telegram-allowlist плюс пароль, кіл-світч
-  провайдера, навантаження по хвилинах і добах, стрічка останніх `5xx`.
-  Вимкнена за замовчуванням: без `ADMIN_TELEGRAM_IDS` маршрутів просто не існує.
+- **Голосовий ввід** — надиктувати текст українською замість набирати;
+  розпізнане дописується в чернетку, аудіо не зберігається ніде.
+- **«Випадкова фраза»** — готова фраза одним дотиком, щоб спробувати стиль
+  без придумування тексту.
+- **Будь-яка LLM** — від OpenAI чи Gemini до локального Ollama і будь-якого
+  OpenAI-сумісного ендпоінта; провайдер додається змінними середовища, без
+  зміни коду, з автоматичним fallback і ротацією ключів за лімітами.
+- **Панель оператора** — кіл-світч провайдера, навантаження по хвилинах і
+  добах, стрічка останніх `5xx`. Вимкнена за замовчуванням.
 
 ## Спробувати
 
@@ -258,12 +247,16 @@ npm run test:unit # без Docker
 
 ## Технології
 
-### 🛠️ Технологічний стек
-- **Backend:** Node.js, TypeScript, Fastify, OpenAPI/Swagger (автодокументація API)[cite: 1]
-- **Database & ORM:** PostgreSQL, Prisma ORM[cite: 1, 9]
-- **AI Integrations:** Google Gemini API (Основний)[cite: 8], OpenAI, Anthropic Claude, Ollama
-- **Authentication & Security:** JWT (Refresh/Access tokens), Telegram WebApp Validation[cite: 1]
-- **Frontend / Client:** React (Telegram Mini App)[cite: 9]
+- **Backend** — Node.js, TypeScript, Fastify, Prisma, PostgreSQL, Redis.
+- **Frontend** — React і Vite всередині Telegram Mini App, без CSS-фреймворків.
+- **Автентифікація** — Telegram `initData` з перевіркою HMAC, далі власні JWT:
+  короткий access-токен і refresh-токен, що живе в базі.
+- **AI** — OpenAI, Anthropic, Gemini, OpenRouter, Ollama і будь-який
+  OpenAI-сумісний ендпоінт. Порядок за замовчуванням —
+  `openai → anthropic → gemini → ollama → openrouter`, змінюється однією
+  змінною `AI_PROVIDER_PRIORITY`.
+- **Транскрипція** — будь-який OpenAI-сумісний Whisper-ендпоінт, за
+  замовчуванням Groq `whisper-large-v3-turbo`.
 
 Як додати провайдера — [AGENTS.md](AGENTS.md).
 
@@ -275,22 +268,23 @@ Telegram Mini App → Fastify → Translation Service → AI Service → AI Prov
                                               Style Engine (бібліотека)
                                     registry · prompt · examples · lexicon
 ```
-- **Прагматичний layered-дизайн:** Свідомий вибір прямої та чистої структури `Route → Service → Prisma` без надлишкового оверінжинірингу для MVP[cite: 5].
-- **Style Engine** будує системний промпт — і більше нічого: без бізнес-логіки,
-без бази даних, без викликів LLM. Його споживає `base.adapter.ts`, тому це не
-ланка в ланцюжку виклику, а бібліотека збоку.
-- **Кешування та розпреділені блокування:** Кешування готових популярних відповідей (за хешем тексту + стилю + провайдера) та захист від паралельних повторних запитів[cite: 1].
-- **Rate Limiting:** Захист від спаму за Telegram ID / IP
 
-Детально: [архітектура](plans/architecture.md) ·
-[backend](plans/docs/01-backend.md) · [frontend](plans/docs/02-frontend.md) ·
-[база даних](plans/docs/03-database.md) · [API](plans/docs/04-api.md) ·
-[безпека](plans/docs/06-security.md)
+- **Прагматичний layered-дизайн** — `Route → Service → Prisma` без проміжних
+  шарів: для MVP це свідоме рішення, зафіксоване в
+  [архітектурних рішеннях](plans/docs/05-decisions.md).
+- **Style Engine** будує системний промпт — і більше нічого: без бізнес-логіки,
+  без бази даних, без викликів LLM. Його споживає `base.adapter.ts`, тому це не
+  ланка в ланцюжку виклику, а бібліотека збоку.
+- **Кеш прев'ю** — щойно перекладений текст лежить у Redis зашифрованим
+  (ключі HKDF від `PREVIEW_ROOT_KEY`) із TTL 10 хвилин і стає рядком у базі лише
+  після явного «Зберегти».
+- **Rate limiting** — за внутрішнім id користувача, а до автентифікації за IP;
+  окремі бюджети на рукостискання, збереження і транскрипцію. Лімітер fails
+  closed: недоступний Redis дає `503`, а не безкоштовний прохід до платної LLM.
 
 ## Статус
 
-Активна розробка MVP. Стан по етапах — у [ROADMAP](plans/ROADMAP.md),
-тут — коротко:
+Стан по етапах — у [ROADMAP](plans/ROADMAP.md), тут коротко:
 
 | Що | Стан |
 | --- | --- |
@@ -312,6 +306,7 @@ Telegram Mini App → Fastify → Translation Service → AI Service → AI Prov
 Повний індекс — [plans/docs/README.md](plans/docs/README.md). Найкорисніше:
 
 - [Архітектура](plans/architecture.md) — діаграми і побудова
+- [Архітектурні рішення](plans/docs/05-decisions.md) — що вибрано і чому саме так
 - [Style Engine](plans/docs/07-styles.md) — стилі, словники, приклади
 - [API](plans/docs/04-api.md) — маршрути, DTO, контракти
 - [Безпека](plans/docs/06-security.md) — автентифікація, rate limiting, дані
@@ -323,7 +318,10 @@ Telegram Mini App → Fastify → Translation Service → AI Service → AI Prov
 
 > **Мова документації:** README, [AGENTS.md](AGENTS.md) і
 > [CONTRIBUTING.md](CONTRIBUTING.md) — українською; технічна документація в
-> `plans/**` — англійською. Дотримуйтеся цього для нових документів.
+> `plans/**` — англійською, крім двох файлів про сам текст
+> ([07-styles](plans/docs/07-styles.md), [08-frontend-design](plans/docs/08-frontend-design.md)),
+> де приклади й копірайт UI лишаються українськими. Дотримуйтеся цього для
+> нових документів.
 
 ---
 
@@ -345,20 +343,17 @@ PR і issue вітаються. Перед початком — [CONTRIBUTING.md
 
 ## Ліцензія
 
-[MIT](LICENSE) © AlexToster
----
+[MIT](LICENSE) © 2026 Oleksandr Shkutia
+([@AlexToster](https://github.com/AlexToster))
 
-## 📄 Ліцензія та Умови Використання (License & Attribution)
+Код можна вільно використовувати, змінювати й форкати, зокрема в комерційних
+проєктах: MIT вимагає лише зберігати текст ліцензії разом зі згадкою автора.
 
-Цей проєкт є повністю відкритим (Open Source) і розповсюджується під ліцензією **[MIT License](./LICENSE)**.
-
-### 👤 Обов'язкова згадка автора (Attribution)
-Ви можете вільно використовувати, копіювати, змінювати та форкати цей код для власних чи комерційних проєктів, **за умови збереження оригінальної згадки про автора**:
-
-- **Оригінальний автор:** Oleksandr Shkutia ([@AlexToster](https://github.com/AlexToster))
-- **Оригінальний репозиторій:** [github.com/AlexToster/SlangUA](https://github.com/AlexToster/SlangUA)
-
-При форках, розгортанні власної версії або використанні коду у своїх проєктах, будь ласка, залишайте посилання на оригінальний репозиторій у файлі `README.md` або в описі вашого проєкту.
+Понад це — прохання, а не умова ліцензії: якщо розгортаєте власну версію або
+берете код у свій проєкт, залиште десь посилання на
+[github.com/AlexToster/SlangUA](https://github.com/AlexToster/SlangUA) — у
+`README.md` чи в описі проєкту. Так простіше знайти оригінал і повернутися з
+правками.
 
 <div align="center">
 Якщо ідея зайшла — ⭐ репозиторію допомагає її знайти іншим.
