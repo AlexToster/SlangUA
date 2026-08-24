@@ -69,19 +69,43 @@ describe('useVoiceInput', () => {
     expect(view.result.current).toBeUndefined();
   });
 
-  it('reports the recording state and counts the remaining seconds down', async () => {
+  it('reports the recording state and counts the elapsed seconds up', async () => {
     const view = setup();
 
     await act(async () => {
       view.result.current?.onToggle();
     });
     expect(view.result.current?.state).toBe('recording');
-    expect(view.result.current?.remainingSeconds).toBe(30);
+    expect(view.result.current?.elapsedSeconds).toBe(0);
+    expect(view.result.current?.progress).toBe(0);
 
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
-    expect(view.result.current?.remainingSeconds).toBe(28);
+    expect(view.result.current?.elapsedSeconds).toBe(2);
+    expect(view.result.current?.progress).toBeCloseTo(2 / 30);
+  });
+
+  // Скасування — не «зупинити тихіше»: запис не їде на сервер узагалі, і
+  // користувач не отримує ні тексту, ні повідомлення про помилку.
+  it('drops the capture on cancel without sending it anywhere', async () => {
+    const view = setup();
+
+    await act(async () => {
+      view.result.current?.onToggle();
+    });
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+    await act(async () => {
+      view.result.current?.onCancel();
+    });
+
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(view.onTranscript).not.toHaveBeenCalled();
+    expect(view.onNotice).not.toHaveBeenCalled();
+    expect(view.result.current?.state).toBe('idle');
+    expect(media.streams[0].tracks[0].stopped).toBe(true);
   });
 
   it('sends the captured clip and hands back the trimmed transcript', async () => {
@@ -111,7 +135,7 @@ describe('useVoiceInput', () => {
 
     await capture(view);
     expect(view.result.current?.state).toBe('processing');
-    expect(view.result.current?.remainingSeconds).toBeNull();
+    expect(view.result.current?.elapsedSeconds).toBeNull();
 
     // A second tap here must not open the microphone again.
     await act(async () => {

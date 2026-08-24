@@ -148,7 +148,7 @@ export function useVoiceInput({ enabled, onTranscript, onNotice }: UseVoiceInput
     callbacksRef.current.onNotice(RECORDER_NOTICES[kind]);
   }, []);
 
-  const { status, isRecording, isSupported, elapsedMs, start, stop } = useAudioRecorder({
+  const { status, isRecording, isSupported, elapsedMs, sampleLevel, start, stop, cancel } = useAudioRecorder({
     onClip: handleClip,
     onError: handleRecorderError,
   });
@@ -171,6 +171,14 @@ export function useVoiceInput({ enabled, onTranscript, onNotice }: UseVoiceInput
     triggerHapticFeedback('selection');
   }, [isRecording, isTranscribing, status, start, stop]);
 
+  // Друга дія рядка запису, а не «ще один вихід із того самого стану»: пігулка
+  // зупиняє й розпізнає, хрестик кидає запис. Без неї єдиним способом не
+  // надіслати сказане було дочекатися тридцятої секунди.
+  const onCancel = useCallback(() => {
+    cancel();
+    triggerHapticFeedback('impact');
+  }, [cancel]);
+
   if (!enabled || !isSupported) return undefined;
 
   // 'stopping' is folded into 'processing': the clip is already being assembled,
@@ -185,11 +193,14 @@ export function useVoiceInput({ enabled, onTranscript, onNotice }: UseVoiceInput
 
   return {
     state,
-    // Rounded up so the badge shows the cap itself (30) for the first tick and
-    // never sits on 0 while the recorder is still open.
-    remainingSeconds: state === 'recording'
-      ? Math.max(0, Math.ceil((MAX_RECORDING_MS - elapsedMs) / 1000))
-      : null,
+    // Відлік іде вгору: скільки вже сказано, а не скільки лишилося. Ліміт
+    // показує лінійка вздовж низу пігулки, тому число не мусить бути дедлайном.
+    elapsedSeconds: state === 'recording' ? Math.floor(elapsedMs / 1000) : null,
+    // Частка витраченої півхвилини, 0…1. Рахується тут, бо стеля належить
+    // рекордеру, а не рядку дій.
+    progress: state === 'recording' ? Math.min(1, elapsedMs / MAX_RECORDING_MS) : 0,
     onToggle,
+    onCancel,
+    sampleLevel,
   };
 }

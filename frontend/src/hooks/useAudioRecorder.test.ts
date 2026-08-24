@@ -272,4 +272,80 @@ describe('useAudioRecorder', () => {
     });
     expect(view.result.current.elapsedMs).toBe(0);
   });
+
+  // jsdom has no Web Audio at all, which is exactly the shape of an older WebView
+  // that records but refuses an AudioContext: the clip must still arrive, and the
+  // meter simply has nothing to draw.
+  it('records with no Web Audio available and reports a flat level', async () => {
+    expect(window.AudioContext).toBeUndefined();
+    const view = setup();
+
+    expect(view.result.current.sampleLevel()).toBe(0);
+    await begin(view);
+    expect(view.result.current.sampleLevel()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    act(() => {
+      view.result.current.stop();
+    });
+
+    expect(view.onClip).toHaveBeenCalledTimes(1);
+    expect(view.onError).not.toHaveBeenCalled();
+  });
+
+  // The meter taps the same stream through Web Audio. It must be torn down with
+  // the microphone: an open AudioContext holding a source node keeps the
+  // platform's recording indicator lit in some shells.
+  it('opens a level meter over the capture and closes it with the microphone', async () => {
+    const close = vi.fn(() => Promise.resolve());
+    const sourceDisconnect = vi.fn();
+    const analyser = {
+      fftSize: 0,
+      disconnect: vi.fn(),
+      // A flat 200 is a loud, clipped waveform - anything above silence is enough
+      // to prove the analyser is the one being read.
+      getByteTimeDomainData: (data: Uint8Array) => data.fill(200),
+    };
+    const source = { connect: vi.fn(), disconnect: sourceDisconnect };
+    class FakeAudioContext {
+      createAnalyser() {
+        return analyser;
+      }
+      createMediaStreamSource() {
+        return source;
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return close();
+      }
+    }
+    (window as unknown as { AudioContext?: unknown }).AudioContext = FakeAudioContext;
+
+    try {
+      const view = setup();
+      await begin(view);
+
+      expect(analyser.fftSize).toBe(512);
+      expect(source.connect).toHaveBeenCalledWith(analyser);
+      expect(view.result.current.sampleLevel()).toBe(1);
+
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      act(() => {
+        view.result.current.stop();
+      });
+
+      expect(sourceDisconnect).toHaveBeenCalled();
+      expect(close).toHaveBeenCalled();
+      expect(view.result.current.sampleLevel()).toBe(0);
+      expect(view.onClip).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (window as unknown as { AudioContext?: unknown }).AudioContext;
+    }
+  });
 });

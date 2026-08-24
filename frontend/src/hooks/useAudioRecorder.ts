@@ -14,6 +14,21 @@ export const MIN_RECORDING_MS = 500;
 const TICK_MS = 200;
 
 /**
+ * Window for one loudness reading. 512 samples is ~11 ms at 48 kHz: long enough
+ * that a single glottal pulse does not dominate the average, short enough that
+ * the meter reacts inside one frame.
+ */
+const ANALYSER_FFT_SIZE = 512;
+
+/**
+ * Speech held at arm's length lands around 0.05-0.2 RMS, so a plain voice would
+ * only ever nudge the bottom of the scale. This puts it mid-scale and clips the
+ * top, which is what a meter is for: showing that something is being heard, not
+ * measuring it.
+ */
+const LEVEL_GAIN = 4;
+
+/**
  * Containers to ask the recorder for, best first, intersected with the
  * allowlist the server enforces. Android Chromium answers with the WebM/Opus
  * entries, iOS WKWebView only with `audio/mp4`; an empty preference (every
@@ -63,6 +78,15 @@ export interface UseAudioRecorderResult {
    */
   isSupported: boolean;
   elapsedMs: number;
+  /**
+   * How loud the microphone is right now, 0...1, read straight from the analyser
+   * on the caller's own frame. A function rather than state on purpose: a level
+   * in state would re-render the whole editor fifteen times a second.
+   *
+   * Answers 0 - never throws - where Web Audio is missing (jsdom, older
+   * WebViews) or the context was refused, so the meter simply sits at rest.
+   */
+  sampleLevel: () => number;
   start: () => void;
   /** Stop and hand the clip over. */
   stop: () => void;
@@ -146,6 +170,17 @@ export function useAudioRecorder(options: UseAudioRecorderOptions): UseAudioReco
   const attemptRef = useRef(0);
   const mountedRef = useRef(true);
 
+  // The loudness meter. Separate from the recorder on purpose: it taps the same
+  // stream but nothing here reaches the clip, so a shell without Web Audio still
+  // records - it just has no bars to draw.
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  // Pinned to a plain ArrayBuffer: `getByteTimeDomainData` refuses a view that
+  // might sit on a SharedArrayBuffer, and a bare `Uint8Array` is exactly that
+  // union to the DOM types.
+  const levelDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+
   const applyStatus = useCallback((next: AudioRecorderStatus) => {
     statusRef.current = next;
     if (mountedRef.current) setStatus(next);
@@ -159,13 +194,92 @@ export function useAudioRecorder(options: UseAudioRecorderOptions): UseAudioReco
   }, []);
 
   /**
+   * Tears the meter down. Must run with (or before) the track stop: an open
+   * `AudioContext` holding a source node keeps the platform's own recording
+   * indicator lit in some shells even after every track is stopped.
+   */
+  const closeMeter = useCallback(() => {
+    const context = audioContextRef.current;
+    try {
+      sourceRef.current?.disconnect();
+      analyserRef.current?.disconnect();
+    } catch {
+      // Already disconnected - nothing to do.
+    }
+    sourceRef.current = null;
+    analyserRef.current = null;
+    levelDataRef.current = null;
+    audioContextRef.current = null;
+    if (context) {
+      try {
+        void context.close();
+      } catch {
+        // Best effort: a context that refuses to close costs nothing here.
+      }
+    }
+  }, []);
+
+  /**
+   * Best-effort, exactly like the click sound in `services/telegram`: the meter
+   * is decoration over a working recorder, so every failure here is swallowed
+   * and capture continues without bars.
+   */
+  const openMeter = useCallback((stream: MediaStream) => {
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+
+    try {
+      const context = new AudioContextConstructor();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = ANALYSER_FFT_SIZE;
+      const source = context.createMediaStreamSource(stream);
+      source.connect(analyser);
+      // iOS hands back a suspended context; the tap that started the capture is
+      // the gesture that lets it resume.
+      void context.resume?.().catch(() => {});
+
+      audioContextRef.current = context;
+      sourceRef.current = source;
+      analyserRef.current = analyser;
+      levelDataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+    } catch {
+      closeMeter();
+    }
+  }, [closeMeter]);
+
+  const sampleLevel = useCallback(() => {
+    const analyser = analyserRef.current;
+    const data = levelDataRef.current;
+    if (!analyser || !data) return 0;
+
+    try {
+      analyser.getByteTimeDomainData(data);
+    } catch {
+      return 0;
+    }
+
+    // RMS of the waveform, which sits around 128 at silence. Peak would jump on
+    // every plosive; the average is what reads as "a voice is coming through".
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      const deviation = (data[i] - 128) / 128;
+      sum += deviation * deviation;
+    }
+    const rms = Math.sqrt(sum / data.length);
+    return Math.min(1, rms * LEVEL_GAIN);
+  }, []);
+
+  /**
    * Released as early as possible: while a track is live, the platform keeps its
    * own recording indicator up, which reads as "this app is still listening".
    */
   const releaseStream = useCallback(() => {
+    closeMeter();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-  }, []);
+  }, [closeMeter]);
 
   /** Everything that has to happen exactly once per capture, on any outcome. */
   const teardown = useCallback(() => {
@@ -238,6 +352,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions): UseAudioReco
         return;
       }
       streamRef.current = stream;
+      openMeter(stream);
 
       let recorder: MediaRecorder;
       try {
@@ -311,7 +426,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions): UseAudioReco
         setElapsedMs(Math.min(maxDurationMs, Date.now() - startedAtRef.current));
       }, TICK_MS);
     })();
-  }, [applyStatus, maxDurationMs, minDurationMs, stop, teardown]);
+  }, [applyStatus, maxDurationMs, minDurationMs, openMeter, stop, teardown]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -340,6 +455,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions): UseAudioReco
     isRecording: status === 'recording',
     isSupported: isRecordingSupported(),
     elapsedMs,
+    sampleLevel,
     start,
     stop,
     cancel,
