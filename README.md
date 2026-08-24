@@ -165,8 +165,11 @@ REDIS_URL="redis://localhost:6379"
 JWT_SECRET="щонайменше-32-символи"
 REFRESH_TOKEN_HMAC_SECRET="інший-секрет-щонайменше-32-символи"
 TELEGRAM_BOT_TOKEN="123456789:токен-від-BotFather"
-PREVIEW_ROOT_KEY="base64-рівно-32-байтів"   # openssl rand -base64 32
+PREVIEW_ROOT_KEY="base64-рівно-32-байтів"
 ```
+
+Три секрети з цього списку генеруються однією командою — [Секрети](#секрети)
+нижче.
 
 Плюс хоча б один AI-провайдер — наприклад `GEMINI_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY` чи `OPENROUTER_API_KEY` (кожен приймає список ключів через
@@ -211,13 +214,28 @@ npm run dev   # http://localhost:5173, запити на /api ідуть на lo
 (`STT_BASE_URL` + `STT_MODEL`), за замовчуванням Groq `whisper-large-v3-turbo`.
 Записане аудіо не зберігається ніде.
 
+Повний довідник змінних середовища — [docs/configuration.md](docs/configuration.md);
+синхронізований зі схемою перелік з коментарями — [`.env.example`](.env.example).
+
+#### Секрети
+
+Випадкові секрети — однією командою (формати різні: hex для рядкових, base64
+рівно з 32 байтів для `PREVIEW_ROOT_KEY`):
+
+```bash
+node -e "const c=require('crypto');const hex=()=>c.randomBytes(32).toString('hex');console.log('JWT_SECRET='+hex());console.log('REFRESH_TOKEN_HMAC_SECRET='+hex());console.log('PREVIEW_ROOT_KEY='+c.randomBytes(32).toString('base64'));console.log('TELEGRAM_WEBHOOK_SECRET='+c.randomBytes(24).toString('hex'));"
+```
+
+`TELEGRAM_WEBHOOK_SECRET` потрібен лише при `TELEGRAM_INLINE_ENABLED=true`, і те
+саме значення передається Telegram у `setWebhook`. Пароль адмінки — окремим
+скриптом: `node scripts/hash-admin-password.mjs`. Решта не генерується, а
+видається: `TELEGRAM_BOT_TOKEN` — у BotFather, ключі провайдерів і `STT_API_KEY`
+— у кабінетах сервісів. Кожен інстанс має свої секрети; `.env` не комітиться.
+
 Значення з `$` — зокрема `ADMIN_PASSWORD_HASH`, який містить його завжди —
 беріть в одинарні лапки: у production `.env` читає парсер Docker Compose, і без
 лапок він вирізає з рядка `$N`, а застосунок відмовляється стартувати на
 насправді коректному хеші.
-
-Повний довідник змінних середовища — [docs/configuration.md](docs/configuration.md);
-синхронізований зі схемою перелік з коментарями — [`.env.example`](.env.example).
 
 ### Тести
 
