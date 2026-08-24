@@ -4,9 +4,85 @@
 
 ## Перш ніж почати
 
-- Підніміть проєкт локально за інструкцією [Швидкий старт](README.md#швидкий-старт).
+- Підніміть проєкт локально за інструкцією [Локальний запуск](#локальний-запуск) нижче.
 - Ознайомтеся з архітектурою: [plans/docs/README.md](plans/docs/README.md) → [architecture.md](plans/architecture.md).
 - Один раз на початку роботи перевіряйте `git status`; наявні незв'язані зміни вважаються чужими й не чіпаються.
+
+## Локальний запуск
+
+~5 хвилин, якщо PostgreSQL і Redis уже запущені. Без жодного AI-провайдера сервер підніметься, але переклад повертатиме помилку.
+
+### Передумови
+
+- **Node.js ≥ 20** та npm.
+- **PostgreSQL** і **Redis** — локально або у Docker.
+- **Docker Desktop** — лише для інтеграційних тестів (Testcontainers).
+- **Telegram Bot Token** — для реальної автентифікації Mini App.
+- Щонайменше один AI-провайдер: ключ до OpenAI / Anthropic / Gemini / OpenRouter **або** локальний Ollama, якому ключ не потрібен.
+
+### Крок за кроком
+
+```bash
+git clone https://github.com/AlexToster/SlangUA.git
+cd SlangUA
+npm install
+cp .env.example .env
+```
+
+`.env.example` — синхронізована зі схемою копія всіх змінних із коментарями. Мінімум, який треба заповнити своїми значеннями:
+
+```dotenv
+DATABASE_URL="postgresql://user:password@localhost:5432/slangua?schema=public"
+REDIS_URL="redis://localhost:6379"
+JWT_SECRET="щонайменше-32-символи"
+REFRESH_TOKEN_HMAC_SECRET="інший-секрет-щонайменше-32-символи"
+TELEGRAM_BOT_TOKEN="123456789:токен-від-BotFather"
+PREVIEW_ROOT_KEY="base64-рівно-32-байтів"
+```
+
+Плюс хоча б один AI-ключ — `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` чи `OPENROUTER_API_KEY` (кожен приймає список ключів через кому) — або локальний Ollama.
+
+```bash
+npm run prisma:generate   # Prisma Client
+npm run prisma:migrate    # міграції до локальної бази
+npm run dev               # http://localhost:3000
+```
+
+Production-збірка: `npm run build`, запуск — `npm start`; на сервері міграції застосовуються через `npx prisma migrate deploy`.
+
+Frontend — окремий процес:
+
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:5173, запити на /api ідуть на localhost:3000
+```
+
+### Секрети
+
+Випадкові секрети — однією командою (формати різні: hex для рядкових, base64 рівно з 32 байтів для `PREVIEW_ROOT_KEY`, що схема перевіряє строго):
+
+```bash
+node -e "const c=require('crypto');const hex=()=>c.randomBytes(32).toString('hex');console.log('JWT_SECRET='+hex());console.log('REFRESH_TOKEN_HMAC_SECRET='+hex());console.log('PREVIEW_ROOT_KEY='+c.randomBytes(32).toString('base64'));console.log('TELEGRAM_WEBHOOK_SECRET='+c.randomBytes(24).toString('hex'));"
+```
+
+`JWT_SECRET` і `REFRESH_TOKEN_HMAC_SECRET` мусять бути різні: перший підписує access-токени, другий хешує refresh-токени, які в базі лежать тільки як HMAC. `TELEGRAM_WEBHOOK_SECRET` потрібен лише при `TELEGRAM_INLINE_ENABLED=true`, і те саме значення передається Telegram у `setWebhook`.
+
+Пароль адмінки — окремим скриптом: `node scripts/hash-admin-password.mjs` (пароль читається зі stdin, ніколи з argv, і друкується готовий рядок `ADMIN_PASSWORD_HASH=`). Значення з `$` — а цей хеш містить його завжди — беріть у `.env` в **одинарні лапки**: у production файл читає парсер Docker Compose, який без лапок вирізає `$N`, і застосунок відмовляється стартувати на насправді коректному хеші. Повне пояснення — на початку [docs/configuration.md](docs/configuration.md).
+
+Решта не генерується, а видається: `TELEGRAM_BOT_TOKEN` — у BotFather, ключі провайдерів і `STT_API_KEY` — у кабінетах сервісів. Кожен інстанс має власні секрети.
+
+### Що вимкнено за замовчуванням
+
+- **Адмін-панель** — поки `ADMIN_TELEGRAM_IDS` порожній, усі маршрути `/api/v1/admin/*` віддають 404.
+- **Голосовий ввід** — поки `STT_API_KEY` порожній, клієнт не показує мікрофон, а `POST /api/v1/transcribe` віддає `503 STT_UNAVAILABLE`.
+
+### Не запускається?
+
+- `Config validation failed` — не заповнений обов'язковий ключ у `.env`; повний перелік з описами: [docs/configuration.md](docs/configuration.md).
+- Порт `3000` зайнятий — змінити `PORT`.
+- Переклад повертає помилку, хоча сервер піднявся — не задано жодного AI-ключа або провайдер відключений кіл-світчем (`ai:provider:disabled` у Redis).
+- 🖼 ⟨додати 1–2 реальні граблі, на які власник наступив під час деплою⟩
 
 ## Робочий процес
 

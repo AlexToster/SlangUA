@@ -124,144 +124,24 @@ SlangUA — **AI style translator**, а не словник, чат-бот, ге
 **Найшвидший шлях —** [@SlangUA_bot](https://t.me/SlangUA_bot) у Telegram.
 Реєстрація не потрібна: вхід через Telegram-акаунт.
 
-Хочеш свій інстанс — далі про локальний запуск.
-
-### 🚀 Швидкий запуск (Quick Start)
-
-> ~5 хвилин, якщо PostgreSQL і Redis уже запущені. Потрібен хоча б один AI-ключ
-> або локальний Ollama: без жодного провайдера сервер підніметься, але переклад
-> повертатиме помилку.
-
-#### Передумови
-
-- **Node.js ≥ 20** та npm.
-- **PostgreSQL** і **Redis** — локально або у Docker.
-- **Docker Desktop** — лише для інтеграційних тестів (Testcontainers).
-- **Telegram Bot Token** — для реальної автентифікації Mini App.
-- Щонайменше один AI-провайдер: ключ до OpenAI / Anthropic / Gemini /
-  OpenRouter **або** локальний Ollama.
-
-#### 1. Клонування репозиторію та встановлення залежностей
+Свій інстанс — потрібні Node ≥ 20, PostgreSQL, Redis, токен бота від BotFather
+і хоча б один AI-ключ (або локальний Ollama):
 
 ```bash
-git clone https://github.com/AlexToster/SlangUA.git
-cd SlangUA
+git clone https://github.com/AlexToster/SlangUA.git && cd SlangUA
 npm install
-```
-
-#### 2. Налаштування змінних оточення
-
-Створіть `.env` копією шаблона — він містить усі змінні схеми з коментарями:
-
-```bash
-cp .env.example .env
-```
-
-Мінімум, який треба заповнити своїми значеннями:
-
-```dotenv
-DATABASE_URL="postgresql://user:password@localhost:5432/slangua?schema=public"
-REDIS_URL="redis://localhost:6379"
-JWT_SECRET="щонайменше-32-символи"
-REFRESH_TOKEN_HMAC_SECRET="інший-секрет-щонайменше-32-символи"
-TELEGRAM_BOT_TOKEN="123456789:токен-від-BotFather"
-PREVIEW_ROOT_KEY="base64-рівно-32-байтів"
-```
-
-Три секрети з цього списку генеруються однією командою — [Секрети](#секрети)
-нижче.
-
-Плюс хоча б один AI-провайдер — наприклад `GEMINI_API_KEY`, `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY` чи `OPENROUTER_API_KEY` (кожен приймає список ключів через
-кому), або локальний Ollama, якому ключ не потрібен.
-
-#### 3. Міграції та запуск
-
-```bash
-npm run prisma:generate   # Prisma Client
-npm run prisma:migrate    # міграції до локальної бази
+cp .env.example .env      # заповнити DATABASE_URL, REDIS_URL, секрети, TELEGRAM_BOT_TOKEN, AI-ключ
+npm run prisma:generate
+npm run prisma:migrate
 npm run dev               # http://localhost:3000
 ```
 
-Production-збірка: `npm run build`, запуск — `npm start`
-(на сервері міграції застосовуються через `npx prisma migrate deploy`).
+Frontend окремо: `cd frontend && npm install && npm run dev` — Vite на
+`:5173` проксує `/api` на `:3000`.
 
-#### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev   # http://localhost:5173, запити на /api ідуть на localhost:3000
-```
-
-### Конфігурація
-
-Джерело правди — Zod-схема у [`src/config/index.ts`](src/config/index.ts):
-невалідна конфігурація зупиняє запуск процесу, а значення-заглушки з
-`.env.example` відхиляються при `NODE_ENV=production` — копію прикладу
-неможливо задеплоїти як є.
-
-**Мінімум для старту:** `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
-`REFRESH_TOKEN_HMAC_SECRET`, `TELEGRAM_BOT_TOKEN`, `PREVIEW_ROOT_KEY`
-і хоча б один AI-ключ.
-
-Адмін-панель вимкнена за замовчуванням: поки `ADMIN_TELEGRAM_IDS` порожній,
-усі маршрути `/api/v1/admin/*` віддають 404.
-
-Голосовий ввід теж вимкнений за замовчуванням: поки `STT_API_KEY` порожній,
-клієнт не показує мікрофон, а `POST /api/v1/transcribe` віддає
-`503 STT_UNAVAILABLE`. Провайдер транскрипції — будь-який OpenAI-сумісний
-(`STT_BASE_URL` + `STT_MODEL`), за замовчуванням Groq `whisper-large-v3-turbo`.
-Записане аудіо не зберігається ніде.
-
-Повний довідник змінних середовища — [docs/configuration.md](docs/configuration.md);
-синхронізований зі схемою перелік з коментарями — [`.env.example`](.env.example).
-
-#### Секрети
-
-Випадкові секрети — однією командою (формати різні: hex для рядкових, base64
-рівно з 32 байтів для `PREVIEW_ROOT_KEY`):
-
-```bash
-node -e "const c=require('crypto');const hex=()=>c.randomBytes(32).toString('hex');console.log('JWT_SECRET='+hex());console.log('REFRESH_TOKEN_HMAC_SECRET='+hex());console.log('PREVIEW_ROOT_KEY='+c.randomBytes(32).toString('base64'));console.log('TELEGRAM_WEBHOOK_SECRET='+c.randomBytes(24).toString('hex'));"
-```
-
-`TELEGRAM_WEBHOOK_SECRET` потрібен лише при `TELEGRAM_INLINE_ENABLED=true`, і те
-саме значення передається Telegram у `setWebhook`. Пароль адмінки — окремим
-скриптом: `node scripts/hash-admin-password.mjs`. Решта не генерується, а
-видається: `TELEGRAM_BOT_TOKEN` — у BotFather, ключі провайдерів і `STT_API_KEY`
-— у кабінетах сервісів. Кожен інстанс має свої секрети; `.env` не комітиться.
-
-Значення з `$` — зокрема `ADMIN_PASSWORD_HASH`, який містить його завжди —
-беріть в одинарні лапки: у production `.env` читає парсер Docker Compose, і без
-лапок він вирізає з рядка `$N`, а застосунок відмовляється стартувати на
-насправді коректному хеші.
-
-### Тести
-
-```bash
-npm test          # усе: typecheck + smoke + unit + integration
-npm run test:unit # без Docker
-```
-
-Інтеграційні тести піднімають тимчасові PostgreSQL і Redis через Testcontainers
-(потрібен Docker) і не роблять жодного зовнішнього запиту — LLM підміняється
-локальним OpenAI-сумісним моком. Те саме виконує
-[CI](.github/workflows/ci.yml) на кожен push і PR у `main`.
-Деталі, структура тестів і що саме покриває кожен набір —
-[CONTRIBUTING.md](CONTRIBUTING.md#тестування).
-
-<details>
-<summary>Не запускається?</summary>
-
-- `Config validation failed` — не заповнений обов'язковий ключ у `.env`;
-  повний перелік з описами: [docs/configuration.md](docs/configuration.md).
-- Порт `3000` зайнятий — змінити `PORT`.
-- Переклад повертає помилку, хоча сервер піднявся — не задано жодного AI-ключа
-  або вибраний провайдер відключений кіл-світчем (`ai:provider:disabled` у Redis).
-- 🖼 ⟨додати 1–2 реальні граблі, на які ти сам наступив під час деплою⟩
-
-</details>
+Повна інструкція — передумови, генерація секретів, тести й типові граблі —
+у [CONTRIBUTING.md](CONTRIBUTING.md#локальний-запуск). Усі змінні середовища з
+описами — у [docs/configuration.md](docs/configuration.md).
 
 ## Технології
 
@@ -299,6 +179,16 @@ Telegram Mini App → Fastify → Translation Service → AI Service → AI Prov
 - **Rate limiting** — за внутрішнім id користувача, а до автентифікації за IP;
   окремі бюджети на рукостискання, збереження і транскрипцію. Лімітер fails
   closed: недоступний Redis дає `503`, а не безкоштовний прохід до платної LLM.
+- **Конфігурація як контракт** — Zod-схема у `src/config/index.ts`: невалідний
+  `.env` зупиняє процес на старті, а значення-заглушки з `.env.example`
+  відхиляються при `NODE_ENV=production`, тому копію прикладу неможливо
+  задеплоїти як є.
+
+Інтеграційні тести піднімають тимчасові PostgreSQL і Redis через Testcontainers
+і не роблять жодного зовнішнього запиту — LLM підміняється локальним
+OpenAI-сумісним моком. Той самий набір проганяє
+[CI](.github/workflows/ci.yml) на кожен PR; що покриває кожен файл —
+[CONTRIBUTING.md](CONTRIBUTING.md#тестування).
 
 ## Статус
 
@@ -331,6 +221,7 @@ Telegram Mini App → Fastify → Translation Service → AI Service → AI Prov
 - [Конфігурація](docs/configuration.md) — усі змінні середовища
 - [ROADMAP](plans/ROADMAP.md) — етапи і статуси
 - [AGENTS.md](AGENTS.md) — робочі правила та інваріанти проєкту
+- [CONTRIBUTING.md](CONTRIBUTING.md) — локальний запуск, секрети, перевірки перед PR
 - [SLANGUA-BRIEFING.md](plans/SLANGUA-BRIEFING.md) — самодостатній технічний
   дамп, який можна віддати будь-якій моделі
 
