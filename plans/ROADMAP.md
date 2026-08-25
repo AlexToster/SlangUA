@@ -124,7 +124,7 @@ Approved [frontend design specification](docs/08-frontend-design.md).
 
 ---
 
-## Stage 7 — Frontend Implementation + Telegram Mini App Integration `[in progress]`
+## Stage 7 — Frontend Implementation + Telegram Mini App Integration `[done]`
 
 **Purpose:**
 Implement the Telegram Mini App.
@@ -144,12 +144,14 @@ Implement the Telegram Mini App.
 
 Two items were dropped from this stage rather than left as open promises: `MainButton` (the app drives its own in-flow buttons, and a floating native button duplicated them) and deep-link support (nothing in the product needs an inbound link, and a link that resolves to a result would contradict the sharing rule in [09](docs/09-telegram-sharing.md)).
 
+The stage is closed on the strength of the shipped app: all three screens, the admin route, Telegram bootstrap/theme/safe-area/haptics, sharing and voice input are implemented and covered by the automated suites. What is *not* claimed here is the on-device pass on real Android and iOS clients — microphone permission, the share sheet and theme switching behave differently per host — so that verification is tracked as its own Stage 8 item instead of holding this stage open indefinitely.
+
 **Deliverable:**
 Working Telegram Mini App.
 
 ---
 
-## Stage 8 — Integration & Testing `[next]`
+## Stage 8 — Integration & Testing `[in progress]`
 
 **Purpose:**
 Validate the complete system.
@@ -158,13 +160,17 @@ Validate the complete system.
 - End-to-end testing (Happy path: Auth -> Translate -> History)
 - Integration testing (Backend-DB, Backend-AI)
 - Unit testing (Business logic, Adapters)
+- Frontend testing (bootstrap and router, the `services/api.ts` 401→refresh interceptor, Translate screen states)
 - Manual testing (UX/UI edge cases)
+- **On-device Telegram verification** carried over from Stage 7: the real Android and iOS clients, where microphone permission, the share sheet and light/dark theme switching are host-specific and cannot be asserted from CI
 - Performance testing (Response times)
 - Security testing (JWT validity, API protection)
 - AI provider validation (Quality of slang)
 
 **Deliverable:**
 Production-ready application.
+
+The automated half of this stage is in place: the happy path runs as one HTTP journey where every id travels from the previous response (`test/integration/flow.integration.test.ts`), token forgery, cross-user history reads and the rate limiter's fail-closed branch have their own suite with a control case per assertion (`test/integration/security.integration.test.ts`), the whole `PROMPT_INJECTION_PATTERNS` array is covered sample-by-sample plus benign Ukrainian text (`test/unit/prompt-injection.test.ts`), and the frontend gaps are closed by tests for the bootstrap/router, the `401 → refresh → one retry` interceptor and the Translate screen's debounce and 403 recovery. What remains is what a machine cannot answer here: the on-device Telegram pass, UX edge cases by hand, performance numbers under load, and the slang-quality matrix per provider.
 
 ---
 
