@@ -125,7 +125,7 @@ npm run test:unit         # без Docker
 npm run test:integration  # потрібен Docker
 ```
 
-`test:unit` покриває AI-шар (пул ключів, ротація, fallback, кіл-світч провайдерів), Zod-схему конфігурації, хешування пароля адмінки (бібліотека + скрипт-генератор), метрики та стрічку помилок на фейковому Redis.
+`test:unit` покриває AI-шар (пул ключів, ротація, fallback, кіл-світч провайдерів), Zod-схему конфігурації, хешування пароля адмінки (бібліотека + скрипт-генератор), метрики та стрічку помилок на фейковому Redis, а також корпус prompt injection: кожен регекс із `PROMPT_INJECTION_PATTERNS` мусить мати свій зразок (кількість зразків і кількість патернів звіряються), плюс звичайний український текст, який фільтр не має чіпати.
 
 Frontend має власний набір у теці `frontend/`: `npm test` (одноразовий прогін vitest + Testing Library), `npm run test:watch`, `npm run lint`, `npm run typecheck`, `npm run build`.
 
@@ -149,6 +149,8 @@ test/
 │   ├── history.integration.test.ts     # Історія (пагінація, фільтри, favorite, власність записів)
 │   ├── share.integration.test.ts       # Telegram inline share (токени, 18+ заборона)
 │   ├── rate-limit.integration.test.ts  # Rate limiting (Redis-backed, headers, 429, webhook secret)
+│   ├── flow.integration.test.ts        # Один шлях наскрізь: auth → preview → save → history → favorite → share → delete
+│   ├── security.integration.test.ts    # Підробка JWT, ізоляція читання історії, fail-closed лімітера
 │   ├── health.integration.test.ts      # /health (liveness) і /health/ready (DB + Redis)
 │   ├── admin-auth.integration.test.ts  # Доступ до адмінки (404 для не-адмінів, пароль, крок-ап сесія)
 │   ├── admin-providers.integration.test.ts # Кіл-світч провайдерів (Redis без TTL, 503 при вимкненні всього)
@@ -157,10 +159,15 @@ test/
 │   ├── global-setup.ts                 # Глобальний setup/teardown (контейнери, Prisma, mock server)
 │   ├── setup-test-context.ts           # Per-file setup: контекст, очищення БД і Redis
 │   └── test-context.ts                 # Спільний контекст (app, Prisma, Redis)
+├── unit/                               # Без Docker: AI-шар, конфіг, пароль адмінки, метрики, prompt injection
 └── helpers/
     ├── mock-ollama-server.ts           # Детермінований OpenAI-сумісний мок (/v1/chat/completions)
     └── telegram-initdata.ts            # Генератор підписаних initData
 ```
+
+Два файли навмисно тримаються окремо від решти. [`flow.integration.test.ts`](test/integration/flow.integration.test.ts) нічого не сіє в базу: користувача створює рукостискання, рядок з'являється лише після `save`, і кожен `id` мандрує з попередньої відповіді — це єдиний тест про **контракти між маршрутами**, які кожен окремий файл проходить нарізно. [`security.integration.test.ts`](test/integration/security.integration.test.ts) перевіряє протилежну половину автентифікації: не «валідний токен працює», а «токен, якого сервер не видавав, відхиляється» — плюс те, що список історії не бачить чужих рядків і що лімітер віддає `503`, а не безкоштовний прохід до платної LLM. Кожен випадок підробки має контрольний токен, що відрізняється рівно однією властивістю, тому `401` неможливо зарахувати як успіх з хибної причини.
+
+Frontend-набір лежить поруч із кодом (`frontend/src/**/*.test.ts[x]`). Три файли варто знати окремо: [`services/api.test.ts`](frontend/src/services/api.test.ts) підміняє axios-адаптер (а не модуль), тому реальні інтерсептори роблять справжній цикл `401 → refresh → один retry` і single-flight на паралельних запитах; [`App.test.tsx`](frontend/src/App.test.tsx) проганяє всі чотири стани старту й тримає чанк `/admin` нерозв'язаним, щоб довести, що фолбек `Suspense` не редиректить; [`pages/TranslatePage.test.tsx`](frontend/src/pages/TranslatePage.test.tsx) — debounce (одна платна відповідь на серію натискань), мінімум у 3 символи і шлях `403 AGE_RESTRICTED_STYLE → діалог 18+ → підтвердження → успішний переклад`.
 
 ## Мова документації
 
