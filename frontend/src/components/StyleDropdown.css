@@ -185,7 +185,7 @@
      фарба зсуву на однаковій відстані. */
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
-  /* Three rows of 4:3 tiles plus their two-line captions come to ~515px at a
+  /* Three rows of square tiles plus the panel's own padding come to ~530px at a
      390px viewport, so the rem cap must clear that or tall screens would scroll
      for no reason. --style-dropdown-max-h is measured on open (StyleDropdown.tsx)
      and holds the room actually left below the trigger: it is clamped both to the
@@ -221,11 +221,18 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  /* 2px above the caption and below it: the tile should be as short as the
-     artwork plus two lines of text allow. */
-  gap: 2px;
+  /* Плитка квадратна (прохання власника). Ілюстрація лишається 4:3, тож під
+     підпис припадає рівно чверть внутрішньої ширини — тому зазор між картинкою
+     й назвою прибрано (був 2px), а паддінг став однаковий з усіх боків (був
+     5/5/7). Квадрат тут не жорсткий: `min-height: min-content` лишає плитці
+     право підрости на кілька пікселів, якщо назва в два рядки не влазить у цю
+     чверть (найвужчі екрани) — інакше довгий підпис вилазив би за паддінг.
+     Рядок сітки при цьому і далі однакової висоти в обох плитках. */
+  aspect-ratio: 1 / 1;
+  min-height: min-content;
+  gap: 0;
   width: 100%;
-  padding: 5px 5px 7px;
+  padding: 5px;
   position: relative;
   /* Плитка — це надрукований об'єкт: плашка, контур 2px і зсув фарби. */
   background: var(--color-tile-bg);
@@ -314,8 +321,10 @@
   /* Matches the intrinsic 4:3 of every asset, so nothing is actually cropped;
      `cover` only guards a future off-ratio file against letterboxing. */
   object-fit: cover;
-  /* Ілюстрація теж обведена: у різографі контур має все, що надруковане. */
-  border: var(--stroke-w) solid var(--stroke);
+  /* Без контуру: обведення навколо ілюстрації прибрано на прохання власника —
+     всередині плитки, яка сама вже обведена й зі зсувом фарби, друга лінія
+     робила подвійну рамку. Радіус лишається: 10px = радіус плитки (15px) мінус
+     її 5px паддінга, тож кути картинки паралельні кутам плитки. */
   border-radius: 10px;
   display: block;
 }
@@ -330,17 +339,20 @@
 }
 
 .style-dropdown-item-title {
-  /* Дві строфи місця (2 × 1,2em) резервуються, щоб дві плитки в рядку були
-     однакової висоти незалежно від того, чи назва згорнулась у два рядки. Через
-     це однорядкові назви стояли притиснуті до верху — flex ставить їх по центру
-     цієї висоти. */
+  /* Підпис займає всю смугу, що лишилась під ілюстрацією (`flex: 1`), і текст у
+     ній по центру: на широких екранах вільного місця більше за сам напис, і без
+     цього назва притискалась би до картинки. Міжрядковий інтервал стиснуто з
+     1,2 до 1,15, а резерв — з 2,4em до 2,3em: саме ці ~2px по вертикалі й
+     робили плитку вищою за свою ширину. Резерв лишається як фолбек для рушіїв
+     без aspect-ratio — там висоту плитки досі визначає вміст. */
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 1;
   text-align: center;
   font-size: var(--font-size-base);
-  line-height: 1.2;
-  min-height: 2.4em;
+  line-height: 1.15;
+  min-height: 2.3em;
 }
 
 /* Позначка вибору: круглий жетон на лівому куті ілюстрації. Тримається всередині
