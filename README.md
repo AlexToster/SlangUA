@@ -149,10 +149,33 @@ Frontend окремо: `cd frontend && npm install && npm run dev` — Vite на
 ## Архітектура
 
 ```text
-Telegram Mini App → Fastify → Translation Service → AI Service → AI Provider → LLM
-                                                         ↑
-                                              Style Engine (бібліотека)
-                                    registry · prompt · examples · lexicon
+                        ┌──────────────────────────────┐
+                        │       Telegram Mini App      │
+                        │         React + Vite         │
+                        └───────────────┬──────────────┘
+                                        │ initData → JWT
+                                        ▼
+                        ┌──────────────────────────────┐
+                        │          Fastify API         │
+                        │   rate limiting · валідація  │
+                        └───────────────┬──────────────┘
+                                        │
+                                        ▼
+                        ┌──────────────────────────────┐  ┌─────────────────┐
+                        │      Translation Service     │─►│    PostgreSQL   │
+                        │   прев'ю · історія · шеринг  │  │ історія · юзери │
+                        └───────────────┬──────────────┘  ├─────────────────┤
+                                        │                 │      Redis      │
+                                        ▼                 │ прев'ю · ліміти │
+┌────────────────────┐  ┌──────────────────────────────┐  └─────────────────┘
+│    Style Engine    │  │       AI Provider Layer      │
+│  registry · prompt │─►│  OpenAI · Anthropic · Gemini │
+│ lexicon · examples │  │    OpenRouter · Ollama · …   │
+└────────────────────┘  │   fallback · ротація ключів  │
+                        └───────────────┬──────────────┘
+                                        │
+                                        ▼
+                                       LLM
 ```
 
 - **Прагматичний layered-дизайн** — `Route → Service → Prisma` без проміжних
@@ -241,11 +264,11 @@ PR і issue вітаються. Перед початком — [CONTRIBUTING.md
 [MIT](LICENSE) © 2026 Oleksandr Shkutia
 ([@AlexToster](https://github.com/AlexToster))
 
-Код можна вільно використовувати, змінювати й форкати, зокрема в комерційних
-проєктах: MIT вимагає лише зберігати текст ліцензії разом зі згадкою автора.
+### 👤Обов'язкова згадка автора (Attribution Rules)
+Ви можете вільно форкати, модифікувати та використовувати код SlangUA у власних чи комерційних цілях, **за умови збереження посилання на оригінального автора**
 
 Крім цього — прохання, а не умова ліцензії: якщо розгортаєте власну версію або
-берете код у свій проєкт, залиште посилання на
+берете код у свій проєкт, залиште посилання на репо
 [github.com/AlexToster/SlangUA](https://github.com/AlexToster/SlangUA) — у
 `README.md` чи в описі проєкту. Так простіше знайти оригінал і повернутися з
 правками.
