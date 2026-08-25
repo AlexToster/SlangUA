@@ -102,7 +102,7 @@ function App() {
               <Route
                 path="/admin"
                 element={
-                  <Suspense fallback={<LoadingScreen />}>
+                  <Suspense fallback={<LoadingScreen text="Завантаження панелі…" />}>
                     <AdminPage />
                   </Suspense>
                 }

@@ -47,7 +47,7 @@
 
 /settings
 ├── вигляд і взаємодія
-├── переклад і 18+ доступ
+├── стиль за замовчуванням
 └── підтримка й інформація
 ```
 
@@ -74,14 +74,14 @@
 - кожна плитка — ілюстрація стилю з підписом-назвою під нею; список стилів приходить із `GET /styles`; ілюстрації — 240×180 WebP (4:3, ~10–13 КБ кожна, ~68 КБ на всі шість), тобто рівно розмір плитки: більший файл лише додавав ваги до першого відкриття;
 - **плитка квадратна**, і квадрат зроблено «з боку картинки», а не заданою висотою плитки: висоту плитки й далі визначає вміст, а `.style-dropdown-item-art` отримує `height: calc(100cqw - var(--tile-caption-h))`, де `100cqw` — ширина контент-боксу плитки (`container-type: inline-size` на самій плитці), а `--tile-caption-h` — висота двох рядків назви. Разом з паддінгом 5px і рамкою це дає висоту, рівну ширині, при цьому зайвий рядок у назві просто зробить плитку вищою, а не обріже текст. `aspect-ratio: 1 / 1` **на плитці робити не можна** — заданої висоти підпис у два рядки не витримує і вилазить на наступний рядок сітки. Ілюстрація при цьому підрізається `object-fit: cover` на 0–10% (рівно 4:3 на 390px, найбільший зріз — на 320px). Зазору між картинкою й назвою немає, паддінг однаковий з усіх боків, міжрядковий інтервал підпису — 1,15. Ілюстрація **без власного контуру** — обведена лише плитка, інакше на її краю читалася б подвійна рамка;
 - активний стиль позначений **кільцем усередині плитки та круглим значком-галочкою**, доступно для screen reader через `aria-selected`;
-- `GET /styles` **відфільтровує restricted styles на сервері** залежно від `ageConfirmedAdult`; Mini App додає лише статичний locked пункт «Пофені 18+» без доступу до prompt або перекладу;
+- `GET /styles` віддає **усі enabled-стилі разом із прапорцем `ageRestricted`** і нічого не фільтрує за `ageConfirmedAdult` (`src/routes/styles.ts`): замок будує клієнт, а справжнє обмеження тримає сервер на `POST /translate/preview`. Раніше цей пункт описував серверну фільтрацію списку — реалізація пішла іншим шляхом, бо знебарвлена плитка «Пофені 18+» мусить бути видимою, щоб її можна було розблокувати;
 - locked-плитка «Пофені 18+» показана знебарвленою (grayscale) з червоним значком «18+», лишається повністю клікабельною і відкриває self-attestation 18+ прямо в selector. Лише після успішного `PATCH /user/me` із `ageConfirmedAdult: true` клієнт refetch-ить styles і вибирає POFENI; серверна перевірка лишається обов'язковою;
-- **403 AGE_RESTRICTED_STYLE на Translate — лише recoverable fallback для застарілого локального вибору**: якщо користувач мав вибраний обмежений стиль у локальному стані (наприклад, після зміни `ageConfirmedAdult` на false), показуємо повідомлення і пропонуємо перехід у Settings;
+- **403 AGE_RESTRICTED_STYLE на Translate — лише recoverable fallback для застарілого локального вибору**: якщо користувач мав вибраний обмежений стиль у локальному стані (наприклад, після зміни `ageConfirmedAdult` на false), відкриваємо **той самий діалог self-attestation 18+**, і після підтвердження автопереклад повторюється сам. У Налаштування за цим не ведемо: підтвердження віку там ніколи не існувало;
 - якщо користувач обирає стиль, вибір одразу стає поточним і асинхронно зберігається як `defaultSlangStyle` через `PATCH /user/me`;
 - якщо збереження дефолту не вдалося, переклад продовжується з новим стилем у поточній сесії, а UI показує ненав'язливе повідомлення, що вибір не вдалося запам'ятати;
 - навігація сіткою з клавіатури двовимірна: стрілки ліворуч/праворуч рухають на одну плитку, вгору/вниз — на кількість колонок (обидві з циклічним переходом); після закриття фокус повертається на тригер.
 
-Перший стиль після bootstrap — `defaultSlangStyle` з профілю, якщо він дозволений (сервер вже відфільтрував); інакше перший елемент відповіді `GET /styles`.
+Перший стиль після bootstrap — `defaultSlangStyle` з профілю, якщо він дозволений (клієнт перевіряє `ageRestricted` проти `ageConfirmedAdult`); інакше перший елемент відповіді `GET /styles`.
 
 ### 3.2. Поле вводу
 
@@ -146,7 +146,7 @@
 
 ### 4.3. Історія й API gap
 
-Поточний `POST /translate` одночасно генерує текст і створює `Translation` у базі. Його не можна викликати для автоматичного preview: кожна пауза у вводі засмітить History.
+Раніше тут був `POST /translate`, який одночасно генерував текст і створював `Translation` у базі. Для автоматичного preview він не годився: кожна пауза у вводі засмічувала History — саме тому й з'явився поділ preview/save. У Stage 8 той маршрут прибрано з сервера зовсім (див. `04-api.md`), тож gap закритий не обхідним шляхом, а видаленням альтернативи.
 
 Stage 7 uses the implemented authenticated `POST /translate/preview` with these properties:
 
@@ -170,9 +170,8 @@ Stage 7 uses the implemented authenticated `POST /translate/preview` with these 
 Окремі rate limits:
 - preview: 12 запитів/хвилину на користувача (configurable via `PREVIEW_RATE_LIMIT_MAX_REQUESTS`, `PREVIEW_RATE_LIMIT_WINDOW_MS`, prefix `ratelimit:preview`)
 - save: 10 запитів/хвилину на користувача (configurable via `SAVE_RATE_LIMIT_MAX_REQUESTS`, `SAVE_RATE_LIMIT_WINDOW_MS`, prefix `ratelimit:save`)
-- persistent translate: залишається незалежним лімітом
 
-The server enforces 1,000 Unicode grapheme clusters with `Intl.Segmenter` for both preview and direct translation. The UI mirrors this limit; it is not the security boundary.
+The server enforces 1,000 Unicode grapheme clusters with `Intl.Segmenter` on preview, the only path that accepts text. The UI mirrors this limit; it is not the security boundary.
 
 ## 5. History
 
@@ -204,11 +203,10 @@ History відображає лише явно збережені перекла
 - **Звуки подій:** toggle, вимкнений за замовчуванням. Якщо середовище не дозволяє безпечне відтворення звуку або користувач обрав тихий режим, звуки не програються; haptic не є їхньою обов'язковою заміною.
 - **Сповіщень немає.** Функціонал прибрано з Налаштувань, клієнта й API: не було каналу доставки, тож toggle обіцяв те, чого продукт не робить. У базі лишилася лише колонка `notificationsEnabled` (позначена DEPRECATED у `schema.prisma`, бо видалення означало б деструктивну міграцію) — не читати, не писати, у UI не показувати.
 
-### 6.3. Translation and age gate
+### 6.3. Translation
 
-- стиль за замовчуванням повторює selector стилів і зберігається як `defaultSlangStyle`;
-- self-attestation 18+ показується перед отриманням/використанням обмеженого стилю, пояснює мету й не удає собою перевірку особи;
-- у діалозі є чіткі дії «Підтверджую, що мені 18+» та «Скасувати»;
+- стиль за замовчуванням повторює selector стилів і зберігається як `defaultSlangStyle`; обмежені стилі у цьому списку показуються лише тому, хто вже підтвердив вік;
+- **підтвердження віку в Налаштуваннях немає.** Єдине місце self-attestation 18+ — діалог у selector стилів на Translate (і той самий діалог як fallback на 403), бо вік підтверджують у момент, коли він потрібен, а не заздалегідь у списку налаштувань. Скасування підтвердження з UI не передбачене;
 - після зміни `ageConfirmedAdult` список стилів refetch-иться.
 
 ### 6.4. Support and about
@@ -221,7 +219,7 @@ History відображає лише явно збережені перекла
 
 | Налаштування | Джерело правди | Синхронізація |
 | --- | --- | --- |
-| `defaultSlangStyle`, `ageConfirmedAdult` | `GET/PATCH /user/me` | React Query mutation з rollback при помилці |
+| `defaultSlangStyle`, `ageConfirmedAdult` | `GET/PATCH /user/me` | React Query mutation з rollback при помилці; `ageConfirmedAdult` пишеться лише з діалогу 18+ на Translate |
 | **theme override, sound, haptic feedback** | **localStorage цього Mini App** (не Telegram CloudStorage) | **застосовується до першого paint, коли можливо** |
 | Support/Privacy/Terms URLs, версія | build-time environment/config | read-only для користувача |
 
@@ -247,7 +245,7 @@ Offline стан не очищає чернетку, результат чи в�
 | Preview loading | Skeleton або «Перекладаємо…» | Нове редагування скасовує/застарює запит |
 | 400 | Пояснення невалідного тексту чи стилю | Виправити текст/перевідкрити selector |
 | 401 | Спроба одного refresh, потім re-auth | Відкрити Mini App у Telegram повторно |
-| **403 `AGE_RESTRICTED_STYLE` (на Translate)** | **Toast: «Цей стиль доступний лише 18+. Підтвердь вік у Settings.» + кнопка «Відкрити Settings»** | **Перехід у Settings → ввімкнути 18+ → refetch стилів** |
+| **403 `AGE_RESTRICTED_STYLE` (на Translate)** | **Діалог self-attestation 18+ — той самий, що й у selector стилів** | **Підтвердити 18+ → `PATCH /user/me` → refetch стилів → автопереклад повторюється сам** |
 | 422 | «Не вдалося обробити цей текст» без деталей захисту | Відредагувати текст |
 | 429 | Зберегти текст і показати час/пораду зачекати | Ручний retry після cooldown |
 | 503 | «Сервіс перекладу тимчасово недоступний» | Ручний retry |
@@ -324,8 +322,8 @@ Telegram Main Button не є кнопкою перекладу й не дубл�
 - `Надіслати в Telegram` з'являється лише в клієнтах із `Telegram.WebApp.switchInlineQuery` для shareable preview або History result. Share є explicit, не створює публічний URL чи History-запис, зберігає Copy fallback і застосовує server-side age/content/ownership checks за [09-telegram-sharing.md](09-telegram-sharing.md).
 - UI і сервер однаково відхиляють текст понад 1 000 символів.
 - Автоматичний preview не створює записів у History. Збереження є явною дією й не довіряє згенерованому тексту з клієнта.
-- Settings містить тему, haptic, звуки, стиль, 18+ self-attestation, feedback, about і очищення історії (сповіщень немає — функціонал прибрано); self-attestation також доступна при виборі locked Pofeni у Translate.
-- **`GET /styles` відфільтровує restricted styles серверно залежно від `ageConfirmedAdult`; Translate selector показує locked «Пофені 18+» тільки як точку входу до self-attestation. 403 `AGE_RESTRICTED_STYLE` лишається recoverable fallback для застарілого локального вибору.**
+- Settings містить тему, haptic, звуки, стиль за замовчуванням, feedback, about і очищення історії (сповіщень немає — функціонал прибрано; підтвердження віку теж немає — воно живе лише в діалозі 18+ на Translate).
+- **`GET /styles` віддає всі enabled-стилі з прапорцем `ageRestricted` і не фільтрує їх за `ageConfirmedAdult`; замок і знебарвлена плитка «Пофені 18+» — робота клієнта, а обов'язкове обмеження тримає сервер на перекладі. 403 `AGE_RESTRICTED_STYLE` лишається recoverable fallback для застарілого локального вибору й відкриває той самий діалог 18+.**
 - **theme override, sound, haptic feedback зберігаються у localStorage цього Mini App (не Telegram CloudStorage). Server-side лишаються лише `defaultSlangStyle`, `ageConfirmedAdult`.**
 - Для 400, 401, 403, 422, 429, 503, offline та clipboard-denied є окремі стани й зрозумілі шляхи відновлення.
 - Інтерфейс проходить ручну перевірку у світлій і темній Telegram темі, з відкритою клавіатурою та на ширині 320 px.

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import clsx from 'clsx';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import {
   canUseTelegramSharing,
@@ -27,11 +26,9 @@ const MIN_CHARS_FOR_PREVIEW = 3;
 const MAX_GRAPHEMES = 1000;
 
 export function TranslatePage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedStyle, setSelectedStyle] = useState<SlangStyle | null>(null);
   const [draftText, setDraftText] = useState('');
-  const [showAgeGateToast, setShowAgeGateToast] = useState(false);
   const [showPofeniAgeConfirm, setShowPofeniAgeConfirm] = useState(false);
   const [pendingRandomPhrase, setPendingRandomPhrase] = useState<SamplePhrase | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -109,7 +106,12 @@ export function TranslatePage() {
       case 401:
         break;
       case 403:
-        if (code === 'AGE_RESTRICTED_STYLE') setShowAgeGateToast(true);
+        // Обмежений стиль — це не тупик: показуємо ту саму self-attestation 18+,
+        // що й замок у виборі стилю. Раніше тут був тост із переходом у
+        // Налаштування, де підтвердження віку не існує (єдиний шлях завжди був
+        // цей діалог), тож користувач із застарілим локальним вибором стилю
+        // ходив у налаштування ні за чим.
+        if (code === 'AGE_RESTRICTED_STYLE') setShowPofeniAgeConfirm(true);
         else setErrorBanner({ message: 'Доступ заборонено', code: 'FORBIDDEN' });
         break;
       case 422:
@@ -143,6 +145,12 @@ export function TranslatePage() {
         setErrorBanner(null);
         updateDefaultStyleMutation.mutate(pendingStyle);
         triggerHapticFeedback('selection');
+      } else {
+        // Підтвердження прийшло з фолбеку на 403: стиль уже вибраний, тому
+        // setSelectedStyle нічого не змінить і ефект автоперекладу не
+        // перезапуститься сам. Штовхаємо його тим самим nonce, що й «Повторити».
+        setErrorBanner(null);
+        setRetryNonce(v => v + 1);
       }
     },
     onError: handleApiError,
@@ -425,12 +433,6 @@ export function TranslatePage() {
     }
   }, [selectedStyle, draftText]);
 
-  // Handle age gate toast action
-  const handleOpenSettings = useCallback(() => {
-    setShowAgeGateToast(false);
-    navigate('/settings');
-  }, [navigate]);
-
   // Clear toast
   const clearToast = useCallback(() => setToast(null), []);
 
@@ -518,15 +520,6 @@ export function TranslatePage() {
 
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={clearToast} />
-      )}
-
-      {showAgeGateToast && (
-        <Toast
-          message="Цей стиль доступний лише для повнолітніх. Підтвердь вік у налаштуваннях."
-          type="info"
-          action={{ label: 'Відкрити налаштування', onClick: handleOpenSettings }}
-          onClose={() => setShowAgeGateToast(false)}
-        />
       )}
 
       {showPofeniAgeConfirm && (
