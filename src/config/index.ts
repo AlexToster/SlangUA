@@ -186,18 +186,20 @@ export const envSchema = z.object({
   // Auth Rate Limiting (separate from the generic per-user limit)
   // Both endpoints are keyed by IP, because neither has an authenticated user
   // yet, and both mint tokens - so they get their own, much tighter budget
-  // instead of sharing the 100/min that history and translate live on.
+  // instead of sharing the 100/min that history and the other routes live on.
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   AUTH_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(20),
   REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   REFRESH_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(20),
   
-  // Preview Rate Limiting (separate from persistent translate)
+  // Preview Rate Limiting (its own budget: a preview is cheap to ask for and
+  // expensive to serve, since it calls the LLM)
   PREVIEW_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   PREVIEW_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(12),
   PREVIEW_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:preview'),
   
-  // Save Rate Limiting (separate from preview and persistent translate)
+  // Save Rate Limiting (separate from preview: a save costs a database write,
+  // never an LLM call)
   SAVE_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   SAVE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(10),
   SAVE_RATE_LIMIT_KEY_PREFIX: z.string().default('ratelimit:save'),

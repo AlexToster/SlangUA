@@ -31,6 +31,8 @@ describe('Rate Limit Integration Tests', () => {
    */
   const authLimit = Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS ?? '20');
   const refreshLimit = Number(process.env.REFRESH_RATE_LIMIT_MAX_REQUESTS ?? '20');
+  /** Same reasoning for the preview budget; the fallback mirrors the Zod default. */
+  const previewLimit = Number(process.env.PREVIEW_RATE_LIMIT_MAX_REQUESTS ?? '12');
 
   beforeAll(async () => {
     // Initialize test context (singleton - runs once)
@@ -156,13 +158,13 @@ describe('Rate Limit Integration Tests', () => {
     });
   });
 
-  describe('Rate limiting on /translate', () => {
+  describe('Rate limiting on /translate/preview', () => {
     it('should return 429 after exceeding rate limit', async () => {
-      // Make requests up to the limit
-      for (let i = 0; i < 10; i++) {
+      // Make requests up to the preview endpoint's own limit
+      for (let i = 0; i < previewLimit; i++) {
         const response = await app.inject({
           method: 'POST',
-          url: '/api/v1/translate',
+          url: '/api/v1/translate/preview',
           headers: { authorization: `Bearer ${accessToken}` },
           payload: { text: `Test ${i}`, style: 'GEN_Z' },
         });
@@ -172,7 +174,7 @@ describe('Rate Limit Integration Tests', () => {
       // Next request should be rate limited
       const response = await app.inject({
         method: 'POST',
-        url: '/api/v1/translate',
+        url: '/api/v1/translate/preview',
         headers: { authorization: `Bearer ${accessToken}` },
         payload: { text: 'Test rate limit', style: 'GEN_Z' },
       });

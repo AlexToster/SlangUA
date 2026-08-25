@@ -64,11 +64,10 @@ This document defines the backend API contracts, routes, request/response DTOs, 
 |--------|------|------|-------------|
 | `POST` | `/translate/preview` | Yes (JWT) | Translate text for preview (no persistence), returns `previewId` |
 | `POST` | `/translate/save` | Yes (JWT) | Save translation from preview (idempotent, no LLM call) |
-| `POST` | `/translate` | Yes (JWT) | Translate text to selected slang style and persist (direct path) |
 | `POST` | `/share/inline` | Yes (JWT) | Create a short-lived opaque token for a user-initiated Telegram inline share; requires production inline-bot configuration, see `09-telegram-sharing.md` |
 | `POST` | `/telegram/webhook` | No (Telegram secret-token header) | Telegram update callback that answers inline queries; enabled only when `TELEGRAM_INLINE_ENABLED=true` |
 
-All three `/translate*` endpoints share one error-response schema (`400`, `401`, `403`, `404`, `409`, `410`, `422`, `429`, `503`) and one status→reason-phrase table, so a `404`/`409`/`410` is serialized with its own reason phrase (`Not Found`, `Conflict`, `Gone`) instead of `Internal Server Error`. The per-endpoint lists below name the statuses each endpoint actually emits.
+Both `/translate*` endpoints share one error-response schema (`400`, `401`, `403`, `404`, `409`, `410`, `422`, `429`, `503`) and one status→reason-phrase table, so a `404`/`409`/`410` is serialized with its own reason phrase (`Not Found`, `Conflict`, `Gone`) instead of `Internal Server Error`. The per-endpoint lists below name the statuses each endpoint actually emits.
 
 ### `POST /translate/preview`
 - **Request DTO**:
@@ -153,35 +152,8 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
   - Does NOT accept `originalText` or `translatedText` from client.
   - Deletes preview data after successful save (keeps short-lived idempotency marker).
 
-### `POST /translate`
-- **Request DTO**:
-  | Field | Type | Required | Constraints |
-  |-------|------|----------|-------------|
-  | `text` | `string` | Yes | 1–1000 Unicode grapheme clusters after trim (Intl.Segmenter); whitespace-only rejected; sanitized for prompt injection |
-  | `style` | `SlangStyle` | Yes | Enum: `GEN_Z`, `STREET`, `IT_SLANG`, `POFENI`, `KANCLER`, `GALICIAN` (see [Database Design](03-database.md#enum-slangstyle)) |
-
-- **Success response (200)** — `Translation` record:
-  | Field | Type | Description |
-  |-------|------|-------------|
-  | `id` | `integer` | Primary key |
-  | `originalText` | `string` | Source Ukrainian text |
-  | `translatedText` | `string` | Generated slang text |
-  | `slangStyle` | `SlangStyle` | Style used |
-  | `providerId` | `string` | Id of the AI instance that succeeded, lowercase (see [Database Design](03-database.md#provider-ids)) |
-  | `favorite` | `boolean` | Always `false` on creation |
-  | `createdAt` | `datetime` | ISO 8601 timestamp |
-
-- **Error codes**:
-  - `400` — validation error (`VALIDATION_ERROR` for a malformed body, `EMPTY_TEXT`, `INVALID_TEXT_LENGTH`, `STYLE_UNAVAILABLE`)
-  - `401` — missing/invalid JWT
-  - `403` — `AGE_RESTRICTED_STYLE` (attempted to use an age-restricted style without confirmed adult status)
-  - `422` — `PROMPT_INJECTION_DETECTED` (content rejected as potential prompt injection)
-  - `429` — rate limit exceeded (persistent translate limit, separate from preview/save)
-  - `503` — `AI_PROVIDER_UNAVAILABLE` (fallback exhausted) or `RATE_LIMITER_UNAVAILABLE`
-
-- **Note**: The server performs the translation and persists the result. The client must not send `translatedText` for persistence; the server generates and stores its own translation result. This endpoint is independent of the preview/save flow.
-
-- **Client usage**: none. The Mini App translates exclusively through preview/save, so it can show a result before deciding to keep it. `translateDirect` was removed from `frontend/src/services/api.ts` in 2026-08 because it was never called and duplicated the flow with different semantics. The endpoint itself stays: it is the one-shot contract for non-Mini-App callers, is covered by its own tests and its own rate limit, and removing it would be a breaking API change made for no reason. A future client that adds a caller must not reintroduce it as a silent alternative to preview/save on the same screen.
+### `POST /translate` — removed
+The one-shot translate-and-persist endpoint existed until Stage 8 and is gone from the server. It had no client (`translateDirect` was deleted from `frontend/src/services/api.ts` in 2026-08), it duplicated the validation, age gate and prompt-injection path of the preview route, and it was the only way to write a History row the user had never been shown. Callers translate with `POST /translate/preview` and keep the result with `POST /translate/save`. Do not reintroduce it as a shortcut past preview/save.
 
 ### `POST /share/inline`
 - **Auth**: JWT required.
@@ -209,7 +181,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/styles` | Yes (JWT) | List available slang styles filtered by user age confirmation |
+| `GET` | `/styles` | Yes (JWT) | List every enabled slang style with its `ageRestricted` flag (no server-side filtering by age) |
 
 ### `GET /styles`
 - **Auth**: JWT required
@@ -221,7 +193,7 @@ All three `/translate*` endpoints share one error-response schema (`400`, `401`,
     ...
   ]
   ```
-  - `id` — identifier matching `SlangStyle` enum value (uppercase, e.g., `GEN_Z`); it can be sent unchanged as `style` to `POST /translate`
+  - `id` — identifier matching `SlangStyle` enum value (uppercase, e.g., `GEN_Z`); it can be sent unchanged as `style` to `POST /translate/preview`
   - `title` — human-readable display name
   - `ageRestricted` — whether the style requires `ageConfirmedAdult`
 - **Error codes**: `401` — missing/invalid JWT; `404 USER_NOT_FOUND` — the authenticated user no longer exists; `429` — styles rate limit (30 req/min per user); `503 RATE_LIMITER_UNAVAILABLE`
@@ -463,7 +435,7 @@ Two consequences are load-bearing for anyone changing these routes:
 - **Success response (200)**: the whole chain, in the same shape as the `providers` array of `GET /admin/overview`, plus `generatedAt`. The whole list rather than the row that changed, because switching one provider off changes what the rest of the chain means — and the panel should not have to infer that.
 - **Error codes**: `400 VALIDATION_ERROR` — malformed id or body; `400 ADMIN_PROVIDER_UNKNOWN` — the id is well-formed but this deployment has never heard of it; `401 ADMIN_SESSION_REQUIRED`; `401 ADMIN_SESSION_INVALID`; `404` — not an allowlisted admin; `429`; `503`
 - **Why an unknown id is `400` and not `404`**: on `/admin/*` a `404` means "there is no panel for you", and the client answers one by refreshing the access token and, failing that, asking for the password again. Reusing it for a typo would send the operator through a pointless step-up and hide the real mistake. A currently switched-off id counts as known even if its instance is no longer configured, so a stale switch can always be cleared.
-- **Effect on the rest of the API**: immediate and deployment-wide. The switch lives in Redis with no TTL, so it survives a restart and every replica sees it; `AIService` reads it once per request *before* the circuit breakers and never sends traffic to a switched-off provider, including as the recovery probe when every breaker is open. Switching off the last usable provider is allowed and makes `POST /translate/preview`, `POST /translate` and inline sharing answer `503 AI_PROVIDER_UNAVAILABLE` — the same code an outage produces, since an operator decision needs no new error code and the client already handles this one. The server logs it at `error` level; the panel says so out loud before asking for confirmation.
+- **Effect on the rest of the API**: immediate and deployment-wide. The switch lives in Redis with no TTL, so it survives a restart and every replica sees it; `AIService` reads it once per request *before* the circuit breakers and never sends traffic to a switched-off provider, including as the recovery probe when every breaker is open. Switching off the last usable provider is allowed and makes `POST /translate/preview` and inline sharing answer `503 AI_PROVIDER_UNAVAILABLE` — the same code an outage produces, since an operator decision needs no new error code and the client already handles this one. The server logs it at `error` level; the panel says so out loud before asking for confirmation.
 - **What it deliberately does not touch**: `GET /health` and `GET /ready`. Neither consults the provider chain, so a deliberately quiet instance never looks like an outage to a load balancer and does not get restarted out from under the operator.
 
 ### `GET /admin/metrics`
@@ -550,7 +522,7 @@ This section describes the Service-layer responsibilities for each module, consi
   - Input validation (content policy) and prompt injection sanitization
   - Slang style resolution and system prompt construction per style
   - Orchestration of AI translation via the AI Adapter (provider selection, fallback, retry, timeout)
-  - Core translation logic shared by preview and persistent translation (age gate, sanitization, AI call)
+  - Core translation logic shared by preview and save (age gate, sanitization, AI call)
   - Persistence of translation result: create `Translation` record linking `userId`, `originalText`, `translatedText`, `slangStyle`, `providerId`, `favorite: false`
 - **Prisma models read/written**:
   - `Translation` — write (create)
@@ -560,7 +532,6 @@ This section describes the Service-layer responsibilities for each module, consi
 - **Returns to Route layer**:
   - `POST /translate/preview` → Preview result (originalText, translatedText, slangStyle, providerId) — no persistence
   - `POST /translate/save` → `{ translation, fromPreview }`; on a duplicate save it throws a `409 PREVIEW_ALREADY_SAVED` error carrying the already-saved row, which the Route layer serializes as the optional `translation` field
-  - `POST /translate` → Full `Translation` record (id, originalText, translatedText, slangStyle, providerId, favorite, createdAt)
 
 ### HistoryService
 - **Business logic owned**:

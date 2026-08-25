@@ -73,6 +73,29 @@ describe('History Integration Tests', () => {
     // Don't close the shared app instance - handled by global teardown
   });
 
+  /**
+   * Pruning only runs on a real save, and preview → save is now the only way to
+   * create a row through the API (the one-shot POST /translate is gone), so the
+   * prune tests drive it through both calls instead of one.
+   */
+  async function saveTranslationViaApi(token: string, text: string): Promise<void> {
+    const preview = await app.inject({
+      method: 'POST',
+      url: '/api/v1/translate/preview',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { text, style: 'GEN_Z' },
+    });
+    expect(preview.statusCode).toBe(200);
+
+    const save = await app.inject({
+      method: 'POST',
+      url: '/api/v1/translate/save',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { previewId: JSON.parse(preview.body).previewId },
+    });
+    expect(save.statusCode).toBe(200);
+  }
+
   beforeEach(async () => {
     // Flush Redis between tests using shared function
     await flushRedis();
@@ -232,13 +255,7 @@ describe('History Integration Tests', () => {
         })),
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/translate',
-        headers: { authorization: `Bearer ${accessToken1}` },
-        payload: { text: 'Prune trigger unique text', style: 'GEN_Z' },
-      });
-      expect(response.statusCode).toBe(200);
+      await saveTranslationViaApi(accessToken1, 'Prune trigger unique text');
 
       expect(await prisma.translation.count({ where: { userId: userId1 } })).toBe(historyMaxEntries);
       expect(await prisma.translation.findFirst({ where: { userId: userId1, originalText: 'Seeded 0' } })).not.toBeNull();
@@ -261,13 +278,7 @@ describe('History Integration Tests', () => {
         })),
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/v1/translate',
-        headers: { authorization: `Bearer ${accessToken1}` },
-        payload: { text: 'Favorites stay put unique text', style: 'GEN_Z' },
-      });
-      expect(response.statusCode).toBe(200);
+      await saveTranslationViaApi(accessToken1, 'Favorites stay put unique text');
 
       // Deliberately over the cap: deleting something the user starred is worse
       // than storing one row too many.

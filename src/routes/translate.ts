@@ -33,8 +33,8 @@ function httpErrorName(statusCode: number): string {
 
 /**
  * The serializer only needs the fields the API exposes, so it is typed
- * structurally: `TranslationService.translate()` returns a projection
- * (no userId/previewId/styleVersion), while `saveFromPreview()` returns a full row.
+ * structurally: `saveFromPreview()` returns a full row, while the 409 path
+ * returns the row the first save produced.
  */
 type SerializableTranslation = Pick<
   Translation,
@@ -68,7 +68,8 @@ const translationSchema = z.object({
 });
 
 export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) => {
-  // Create separate rate limiters for preview, save, and persistent translate
+  // Two endpoints, two budgets: a preview is cheap to ask for and expensive to
+  // serve (it calls the LLM), a save is the opposite.
   const previewRateLimiter = createRateLimiter({
     windowMs: config.PREVIEW_RATE_LIMIT_WINDOW_MS,
     maxRequests: config.PREVIEW_RATE_LIMIT_MAX_REQUESTS,
@@ -81,14 +82,8 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
     keyPrefix: config.SAVE_RATE_LIMIT_KEY_PREFIX,
   });
 
-  const translateRateLimiter = createRateLimiter({
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    maxRequests: config.RATE_LIMIT_MAX_REQUESTS,
-    keyPrefix: 'ratelimit:translate',
-  });
-
   // JWT authentication middleware
-  // Request body schema for preview and translate
+  // Request body schema for preview
   // Note: Text validation (1-1000 grapheme clusters, no whitespace-only) is done in service layer
   // using Intl.Segmenter for proper Unicode grapheme cluster counting
   const translateBodySchema = z.object({
@@ -238,40 +233,6 @@ export const translateRoutes: FastifyPluginAsyncZod = async (app: FastifyInstanc
           translation: serializeTranslation(existing),
         });
       }
-
-      return reply.status(statusCode).send({
-        error: httpErrorName(statusCode),
-        code,
-        message,
-      });
-    }
-  });
-
-  // POST /api/v1/translate - Translate text to selected slang style and persist (direct path)
-  app.post('/translate', {
-    schema: {
-      body: translateBodySchema,
-      response: {
-        200: translationSchema,
-        ...errorResponses,
-      },
-    },
-    // Apply JWT authentication first, then rate limiting (so rate limiter can key by userId)
-    preHandler: [authenticate, translateRateLimiter],
-  }, async (request, reply) => {
-    const { text, style } = request.body as { text: string; style: SlangStyle };
-    const userId = request.user!.id;
-
-    try {
-      const result = await translationService.translate(userId, { text, style });
-      return reply.send(serializeTranslation(result));
-    } catch (error) {
-      const err = error as any;
-      const statusCode = err.statusCode || 500;
-      const code = err.code || 'INTERNAL_ERROR';
-      const message = err.message || 'Translation failed';
-
-      if (statusCode >= 500) captureErrorSnapshot(request, code, message);
 
       return reply.status(statusCode).send({
         error: httpErrorName(statusCode),

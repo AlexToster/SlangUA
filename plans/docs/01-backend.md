@@ -58,7 +58,7 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
 - **`Translation Module`**:
     - Validates input text (length, content) and performs basic prompt injection protection.
     - Manages "Slang Styles" (e.g., "Gen-Z", "Street", "IT-Slang").
-    - Serves the Mini App through the preview/save split: `POST /translate/preview` calls the AI and returns an unsaved result held in encrypted Redis, `POST /translate/save` persists it by `previewId` alone. `POST /translate` remains as the one-shot translate-and-persist contract for non-Mini-App callers.
+    - Serves the Mini App through the preview/save split, which is the only translation contract: `POST /translate/preview` calls the AI and returns an unsaved result held in encrypted Redis, `POST /translate/save` persists it by `previewId` alone.
     - Orchestrates AI calls and database logging.
 - **`AI Service & Adapters`**:
     - **`IAIProvider`**: Interface defining `translate(request)` plus the instance's `id` — a lowercase string matching `PROVIDER_ID_PATTERN`, persisted as `Translation.providerId`.
@@ -98,7 +98,7 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
     - If the user keeps the result, the frontend sends POST `/api/v1/translate/save` with that `previewId` and no text; the backend writes the History record from the payload it stored itself.
 6. **Rate Limiting**: Redis tracks request frequency per user ID to prevent abuse.
 
-`POST /api/v1/translate` collapses steps 3–5 into one call that translates and persists at once. It stays available for callers outside the Mini App; see [API](04-api.md).
+There is no one-shot translate-and-persist endpoint. A `POST /api/v1/translate` that collapsed steps 3–5 into a single call existed until Stage 8 and was removed: it had no client, it duplicated the validation, age gate and prompt-injection path of the preview route, and it was the one way to write a History row the user had never seen. Every caller goes through preview then save; see [API](04-api.md).
 
 ```mermaid
 sequenceDiagram

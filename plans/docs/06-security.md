@@ -106,7 +106,7 @@ For a full description of Redis responsibilities, see [Database Design](03-datab
     - Deleted after successful save via `POST /translate/save` (except for a short-lived idempotency marker)
     - Keyed by HMAC of `userId:normalizedText:style:styleVersion` — **no plaintext text in Redis keys**
     - Carries `PREVIEW_KEY_VERSION`; records from another key version are discarded and naturally expire during key rotation
-    - Rate-limited separately from persistent translate endpoints
+    - Rate-limited on its own budget, separate from `POST /translate/save`
 
 ## Replay Attack Mitigation
 

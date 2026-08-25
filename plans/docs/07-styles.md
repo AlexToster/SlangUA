@@ -82,7 +82,7 @@ Style Engine **не** відповідає за: виклик LLM, кеш пер
 
 2. **TranslationService** (у `translatePreview()` і `translate()`, **до** звернення до кешу і до виклику AI) — незалежно перевіряє `ageRestricted` обраного стилю проти `user.ageConfirmedAdult`. Якщо стиль обмежений, а повноліття не підтверджене — `403 AGE_RESTRICTED_STYLE`.
 
-Перевірка №2 обов'язкова і достатня; UI-блокування — це UX, а не безпека, бо клієнт може викликати `POST /translate` напряму з `id` обмеженого стилю. Порядок у пункті 2 теж важливий: age gate і фільтр prompt injection стоять **перед** пошуком у кеші превʼю, інакше теплий кеш віддавав би 18+ результат користувачу без підтвердженого повноліття.
+Перевірка №2 обов'язкова і достатня; UI-блокування — це UX, а не безпека, бо клієнт може викликати `POST /translate/preview` напряму з `id` обмеженого стилю. Порядок у пункті 2 теж важливий: age gate і фільтр prompt injection стоять **перед** пошуком у кеші превʼю, інакше теплий кеш віддавав би 18+ результат користувачу без підтвердженого повноліття.
 
 3. **POST /share/inline** — окрема серверна перевірка того самого правила для іншої дії: поділитися 18+ результатом може лише користувач із `ageConfirmedAdult: true`, інакше `403 AGE_RESTRICTED_SHARE`. Це не дублювання пункту 2, а власний gate шарингу: результат може бути отриманий легально, а повноліття згодом знято.
 
@@ -220,14 +220,14 @@ function loadStyle(styleId: string): Promise<LoadedStyle>;
 
 ## 6. Гарантії сумісності
 - Стилі й далі живуть у файловій системі; `SlangStyle` enum у БД не змінюється.
-- Контракт `POST /translate` (`style` як enum-string) незмінний.
+- Контракт `POST /translate/preview` (`style` як enum-string) незмінний.
 - Сам refactor Style Engine не змінює наведені нижче файли:
   - `src/services/translation.service.ts`
   - `src/services/ai/ai.service.ts`
   - `src/services/ai/provider.factory.ts`
   - `src/routes/*.ts`
   - `prisma/schema.prisma`
-- **Документований виняток — age-restricted styles:** для `POFENI` додано продуктову self-attestation `User.ageConfirmedAdult`, міграцію та server-side enforcement у `TranslationService` і маршрутах User/Styles. Це не змінює enum або формат `POST /translate`, але є необхідною інтеграцією age gate, а не частиною file-based loader refactor.
+- **Документований виняток — age-restricted styles:** для `POFENI` додано продуктову self-attestation `User.ageConfirmedAdult`, міграцію та server-side enforcement у `TranslationService` і маршрутах User/Styles. Це не змінює enum або формат `POST /translate/preview`, але є необхідною інтеграцією age gate, а не частиною file-based loader refactor.
 - **Fallback (рішення зафіксовано, не переглядати в межах цього рефакторингу):** `loadStyle()` **НІКОЛИ** не робить мовчазного fallback на `GEN_Z`; невідомий або вимкнений стиль **завжди кидає помилку**, яку викликач у `BaseAdapter` ловить і перетворює на відповідь `400` зі списком доступних стилів. Це **свідома зміна поведінки** порівняно з поточним кодом (`stylePrompts[style] || stylePrompts.GEN_Z`), а не перенесення як є.
 ---
 
@@ -269,7 +269,7 @@ function loadStyle(styleId: string): Promise<LoadedStyle>;
 
 Крок 6. Замінити виклик у BaseAdapter.buildSystemPrompt() на loadStyle(style), видалити хардкод-об'єкт stylePrompts. Перевірка: grep -c "GEN_Z:" src/services/ai/base.adapter.ts → 0.
 
-Крок 7. Спочатку запустити `npm test`: він перевіряє production build, packaging Style Engine assets, усі 5 стилів, регістронезалежність і disabled-гілку. Після цього вручну запустити backend (`npm run dev`) і для кожного з 5 стилів виконати POST /api/v1/translate (curl або файли з test/translate-request.json як шаблон запиту, підставляючи кожен style). Перевірка: усі 5 запитів повертають 200 з непорожнім translatedText.
+Крок 7. Спочатку запустити `npm test`: він перевіряє production build, packaging Style Engine assets, усі 5 стилів, регістронезалежність і disabled-гілку. Після цього вручну запустити backend (`npm run dev`) і для кожного з 5 стилів виконати POST /api/v1/translate/preview (curl або файли з test/translate-request.json як шаблон запиту, підставляючи кожен style). Перевірка: усі 5 запитів повертають 200 з непорожнім translatedText.
 ---
 
 ## 8. Definition of Done
