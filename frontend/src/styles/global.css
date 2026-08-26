@@ -172,6 +172,13 @@
      result is never rendered smaller than what the user typed. */
   --font-size-editor: var(--font-size-xl);
 
+  /* Один крок нижче за редактор — розмір двох порожніх станів: фонового напису
+     в полі введення (.text-input::placeholder) і рядка «Переклад з'явиться
+     автоматично» (.preview-empty p). Ці двоє тримаються разом, тому розмір
+     живе тут, а не окремо в кожному файлі: набраний текст мусить важити більше
+     за підказку, яку він заміняє, але обидва порожні стани — однаково. */
+  --font-size-placeholder: var(--font-size-lg);
+
   /* Z-index */
   --z-dropdown: 100;
   --z-modal: 200;
@@ -182,6 +189,7 @@
 @media (max-width: 480px) {
   :root {
     --font-size-editor: var(--font-size-lg);
+    --font-size-placeholder: var(--font-size-base);
   }
 }
 

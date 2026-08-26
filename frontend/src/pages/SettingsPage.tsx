@@ -17,7 +17,7 @@ import './SettingsPage.css';
 // the project's own channel, so the row is always available.
 const FEEDBACK_URL = import.meta.env.VITE_FEEDBACK_URL?.trim() || 'https://t.me/+1lYdnphwsLBlZWMy';
 
-// Профіль автора — останній рядок попапа «Про додаток». Відкриваємо через
+// Профіль автора — власна кнопка в розділі «Додаток». Відкриваємо через
 // openExternalLink, а не <a href>: у Mini App звичайне посилання лишилось би
 // всередині вебвʼю Telegram.
 const GITHUB_URL = 'https://github.com/AlexToster';
@@ -35,12 +35,12 @@ const AUTO_STYLE_VALUE = '';
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  // Toast уже вміє показувати дію — саме нею тут виступає посилання на GitHub,
-  // тож воно лишається справжньою кнопкою 44px, а не текстом у повідомленні.
+  // Тост тут лише повідомляє: жодне з повідомлень цієї сторінки не має власної
+  // дії відтоді, як GitHub переїхав у кнопку розділу «Додаток». Сам Toast дію
+  // приймати вміє — просто звідси її ніхто не передає.
   const [toast, setToast] = useState<{
     message: string;
     type: 'success' | 'error' | 'info';
-    action?: { label: string; onClick: () => void };
   } | null>(null);
   const [errorBanner, setErrorBanner] = useState<{ message: string; code?: string } | null>(null);
   const [localSettings, setLocalSettingsState] = useState(() => getLocalSettings());
@@ -235,12 +235,18 @@ export function SettingsPage() {
     openExternalLink(FEEDBACK_URL);
   }, []);
 
+  // Тост тут показує рівно одну річ — назву, версію і рік. Кнопки в ньому
+  // більше немає: посилання на GitHub стало окремою кнопкою розділу «Додаток»,
+  // тож дія доступна завжди, а не лише поки повідомлення на екрані.
   const handleAbout = useCallback(() => {
     setToast({
-      message: `SlangUA v${__APP_VERSION__}\nПереклад української сленговою мовою\ngithub.com/AlexToster`,
+      message: `SlangUA v${__APP_VERSION__} перекладач українських стилів 2026`,
       type: 'info',
-      action: { label: 'GitHub', onClick: () => openExternalLink(GITHUB_URL) },
     });
+  }, []);
+
+  const handleGithub = useCallback(() => {
+    openExternalLink(GITHUB_URL);
   }, []);
 
   const handleAdminOpen = useCallback(() => {
@@ -391,19 +397,26 @@ export function SettingsPage() {
         <section className="settings-section">
           <h2 className="settings-section-title">Додаток</h2>
 
-          <div className="settings-item">
-            <div className="settings-item-info">
-              <span className="settings-item-label">Про додаток</span>
-            </div>
-            <div className="settings-item-control">
-              <button
-                className="settings-btn settings-btn-secondary"
-                onClick={handleAbout}
-                aria-label="Інформація про додаток"
-              >
-                Детальніше
-              </button>
-            </div>
+          {/* Дві однакові пігулки замість «назва ліворуч, кнопка праворуч»:
+              підпис «Про додаток» нічого не додавав до кнопки «Детальніше»
+              поруч, тому сам став кнопкою, а на її місце стало посилання на
+              GitHub — раніше воно жило дією в тості й зникало разом з ним.
+              Обидві другорядні, тож і колір той самий. */}
+          <div className="settings-item settings-item-buttons">
+            <button
+              className="settings-btn settings-btn-secondary"
+              onClick={handleAbout}
+              aria-label="Інформація про додаток"
+            >
+              Про додаток
+            </button>
+            <button
+              className="settings-btn settings-btn-secondary"
+              onClick={handleGithub}
+              aria-label="Відкрити GitHub автора"
+            >
+              Github
+            </button>
           </div>
 
           <div className="settings-item">
@@ -472,7 +485,7 @@ export function SettingsPage() {
       )}
 
       {toast && (
-        <Toast message={toast.message} type={toast.type} action={toast.action} onClose={clearToast} />
+        <Toast message={toast.message} type={toast.type} onClose={clearToast} />
       )}
     </div>
   );

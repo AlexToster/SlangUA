@@ -58,7 +58,11 @@
   box-sizing: border-box;
 }
 
+/* Фоновий напис на крок менший за набраний текст (--font-size-placeholder, див.
+   styles/global.css): підказка не мусить важити стільки ж, скільки те, що вона
+   заміняє. Розмір лишається спільним із порожнім результатом. */
 .text-input::placeholder {
+  font-size: var(--font-size-placeholder);
   color: var(--tg-hint-color, var(--color-text-muted));
 }
 
