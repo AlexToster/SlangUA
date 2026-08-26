@@ -72,13 +72,14 @@
   padding: 0;
 }
 
-/* A provider row is now a stack: name + badge, an optional switch-off note, and
-   the action. It was a single flex line while the panel was read-only. */
+/* Один провайдер — один рядок: назва, стан і вимикач в одну лінію, а нижче лише
+   те, чого може не бути (примітка про ручне вимкнення). Раніше кожен провайдер
+   був стосом із трьох поверхів, і ланцюг із п'яти займав цілий екран. */
 .admin-provider {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) 0;
+  gap: 2px;
+  padding: var(--spacing-xs) 0;
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -86,14 +87,17 @@
   border-bottom: none;
 }
 
-.admin-provider-head {
+.admin-provider-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
 .admin-provider-name {
+  /* Займає весь вільний простір, тож бейдж і кнопка стоять у правого краю
+     однаково для всіх рядків. */
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--font-size-base);
   font-weight: 500;
   /* Provider ids are latin identifiers; a monospace face keeps the column even. */
@@ -109,15 +113,11 @@
   overflow-wrap: anywhere;
 }
 
-.admin-provider-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
 /* A row-level action is secondary to the page actions at the bottom, so it reads
    one step quieter — але не нижче 44px: це мінімум для дотику, а не орієнтир
    (раніше тут стояло 36px). Форма й зсув фарби приходять з .btn у global.css. */
-.admin-provider-actions .btn {
+.admin-provider-btn {
+  flex-shrink: 0;
   min-height: 44px;
   padding: 0 var(--spacing-md);
   font-size: var(--font-size-sm);
@@ -261,6 +261,14 @@
   background: var(--tg-destructive-color, var(--color-error));
 }
 
+/* Двадцять чотири стовпчики замість шістдесяти, тож кожен ширший і проміжок між
+   ними видно; висота та сама, щоб хвилини й години читалися як одна сімʼя
+   графіків, а не як два різні виміри. */
+.admin-chart-hours {
+  gap: 2px;
+  margin-top: var(--spacing-xs);
+}
+
 .admin-chart-axis {
   display: flex;
   justify-content: space-between;
@@ -328,6 +336,71 @@
 
 .admin-top-user-id {
   color: var(--tg-hint-color, var(--color-text-secondary));
+}
+
+/* Рядок під найактивнішими: підсумок з бази, а не з лічильників вище, тому
+   стоїть окремо від списку й над лінійкою розділу. */
+.admin-metrics-total {
+  margin: var(--spacing-sm) 0 0;
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--color-divider);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Згортаємий розділ. Нативний <details>: заголовок лишається заголовком, а
+   клавіатура й читач екрана отримують поведінку розкриття без жодного JS. */
+.admin-collapsible > .admin-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 44px;
+  cursor: pointer;
+  /* Обидва рядки потрібні: Safari малює трикутник через ::-webkit-details-marker,
+     решта — через list-style маркер самого summary. */
+  list-style: none;
+}
+
+.admin-collapsible > .admin-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-summary .admin-section-title {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+/* Своя галочка замість знятого маркера, і вона ж показує стан розділу. */
+.admin-collapsible > .admin-summary::after {
+  content: '▾';
+  display: inline-block;
+  flex-shrink: 0;
+  color: var(--tg-hint-color, var(--color-text-secondary));
+  transition: transform var(--transition-fast);
+}
+
+.admin-collapsible[open] > .admin-summary::after {
+  transform: rotate(180deg);
+}
+
+/* Скільки помилок у стрічці — видно, не розкриваючи розділ. Та сама пігулка, що
+   бейдж провайдера, тому фарба помилки тут значить те саме, що там. */
+.admin-summary-count {
+  flex-shrink: 0;
+  padding: 2px var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--face);
+  color: var(--tg-text-color, var(--color-text));
+  border: var(--stroke-w) solid var(--tg-border-color, var(--color-border));
+  border-radius: var(--radius-full);
+}
+
+.admin-summary-count-warn {
+  background: var(--tg-destructive-color, var(--color-error));
+  color: var(--on-blue);
+  border-color: var(--tg-destructive-color, var(--color-error));
 }
 
 .admin-error-list {

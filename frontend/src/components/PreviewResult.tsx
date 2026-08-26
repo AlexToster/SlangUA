@@ -54,7 +54,6 @@ export function PreviewResult({
       <div className="preview-result empty" role="status" aria-live="polite">
         <div className="preview-empty">
           <p>Переклад з'явиться автоматично</p>
-          <span className="preview-hint">Почніть вводити текст (мін. 3 символи)</span>
         </div>
       </div>
     );

@@ -40,6 +40,12 @@ interface MinuteBucket {
   errors: number;
 }
 
+interface HourBucket {
+  startedAt: string;
+  requests: number;
+  errors: number;
+}
+
 interface DayBucket {
   date: string;
   requests: number;
@@ -51,7 +57,9 @@ interface DayBucket {
 interface Metrics {
   generatedAt: string;
   retentionDays: number;
+  totalUsers: number;
   perMinute: { minutes: number; series: MinuteBucket[] };
+  last24h: { hours: number; requests: number; errors: number; users: number; series: HourBucket[] };
   daily: DayBucket[];
   topUsers: { userId: string; requests: number }[];
 }
@@ -172,6 +180,56 @@ describe('Admin usage metrics integration tests', () => {
       expect(snapshot.perMinute.series).toHaveLength(SERIES_LENGTH);
       expect(snapshot.daily).toHaveLength(RETENTION_DAYS);
       expect(snapshot.daily[0].date).toBe(today());
+      // The rolling window is fixed at 24 hours, not configurable: the heading
+      // the panel prints would otherwise be a lie in some deployment.
+      expect(snapshot.last24h.hours).toBe(24);
+      expect(snapshot.last24h.series).toHaveLength(24);
+    });
+
+    it('labels every hour bucket on the hour, oldest first, ending with now', async () => {
+      const { series } = (await metrics()).last24h;
+
+      for (const bucket of series) {
+        expect(bucket.startedAt).toMatch(/:00:00\.000Z$/);
+      }
+      const timestamps = series.map((bucket) => Date.parse(bucket.startedAt));
+      for (let i = 1; i < timestamps.length; i += 1) {
+        expect(timestamps[i] - timestamps[i - 1]).toBe(3_600_000);
+      }
+      // The current hour is the last bucket, which is what makes the window
+      // roll instead of ending at midnight.
+      const currentHour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+      expect(timestamps[23]).toBe(currentHour);
+    });
+
+    it('counts a real request in the rolling window as well as the day', async () => {
+      const before = await metrics();
+      expect((await preview()).statusCode).toBe(200);
+
+      const after = await waitForMetrics(
+        (snapshot) => snapshot.last24h.requests === before.last24h.requests + 1
+      );
+
+      // The same request, in the newest hour bucket and in the window total.
+      expect(after.last24h.series[23].requests).toBe(before.last24h.series[23].requests + 1);
+      expect(after.last24h.users).toBeGreaterThanOrEqual(1);
+      expect(after.daily[0].requests).toBe(before.daily[0].requests + 1);
+    });
+
+    it('counts every account ever created, from the database and not from Redis', async () => {
+      // Redis buckets expire; accounts do not. The two logins in beforeEach are
+      // the floor here, and the figure must not move when traffic does.
+      const before = await metrics();
+      expect(before.totalUsers).toBe(await getPrismaClient().user.count());
+      expect(before.totalUsers).toBeGreaterThanOrEqual(2);
+
+      expect((await preview()).statusCode).toBe(200);
+      const after = await waitForMetrics(
+        (snapshot) => snapshot.daily[0].requests > before.daily[0].requests
+      );
+
+      // More traffic from the same people is not more people.
+      expect(after.totalUsers).toBe(before.totalUsers);
     });
 
     it('labels every minute bucket on the minute, oldest first', async () => {

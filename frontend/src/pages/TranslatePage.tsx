@@ -80,19 +80,12 @@ export function TranslatePage() {
     }
   }, [styles, profile, selectedStyle, profileLoading]);
 
-  // Save default style when changed
-  const updateDefaultStyleMutation = useMutation({
-    mutationFn: (style: SlangStyle) => apiService.updateProfile({ defaultSlangStyle: style }),
-    // Кеш ['profile'] — те, з чого «Стиль за замовчуванням» малюється в
-    // Налаштуваннях і з чого цей екран стартує наступного разу. Без цього рядка
-    // там лишався попередній стиль, поки запит не став stale.
-    onSuccess: (updatedProfile) => {
-      queryClient.setQueryData(['profile'], updatedProfile);
-    },
-    onError: () => {
-      setToast({ message: 'Не вдалося запам\'ятати вибір стилю', type: 'error' });
-    },
-  });
+  // Стиль за замовчуванням цей екран лише читає — записує його одне місце,
+  // «Налаштування». Раніше кожне перемикання стилю тут відправляло PATCH
+  // /user/me, тобто вибір «на один переклад» тихо ставав новим значенням за
+  // замовчуванням: користувач зберігав STREET у налаштуваннях, пробував IT на
+  // головній — і наступного разу застосунок відкривався в IT, хоч у
+  // налаштуваннях досі стояв STREET. Перемикач тут тепер живе рівно один сеанс.
 
   const handleApiError = useCallback((error: any) => {
     const status = error?.response?.status;
@@ -143,7 +136,6 @@ export function TranslatePage() {
         setSelectedStyle(pendingStyle);
         setSavedTranslationId(null);
         setErrorBanner(null);
-        updateDefaultStyleMutation.mutate(pendingStyle);
         triggerHapticFeedback('selection');
       } else {
         // Підтвердження прийшло з фолбеку на 403: стиль уже вибраний, тому
@@ -319,9 +311,8 @@ export function TranslatePage() {
     setSelectedStyle(style);
     setSavedTranslationId(null);
     setErrorBanner(null);
-    updateDefaultStyleMutation.mutate(style);
     triggerHapticFeedback('selection');
-  }, [updateDefaultStyleMutation]);
+  }, []);
 
   const handleLockedStyleSelect = useCallback((style: SlangStyle) => {
     pendingRestrictedStyleRef.current = style;
@@ -483,7 +474,7 @@ export function TranslatePage() {
           maxGraphemes={MAX_GRAPHEMES}
           isWarningZone={isWarningZone}
           isOverLimit={isOverLimit}
-          placeholder="Напиши щось українською…"
+          placeholder="Напиши або скажи щось українською…"
         />
 
         {/* Пігулка стилю і відповідь — два окремі надруковані об'єкти з невеликим

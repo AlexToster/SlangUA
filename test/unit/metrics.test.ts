@@ -1,14 +1,16 @@
 /**
  * Usage metrics without Redis.
  *
- * Three properties are worth pinning here, and none of them is "the counter goes
+ * Four properties are worth pinning here, and none of them is "the counter goes
  * up". First, a bucket's expiry is derived from the bucket, not from the moment
  * of the write: two requests in the same minute must not extend that minute's
  * life, or a busy hour would outlive a quiet one and "the last hour" would mean
  * something different for every key. Second, an idle minute is data - the series
  * is zero-filled and always the configured length, because a graph that skips
  * quiet minutes lies about time. Third, only the internal user id is ever
- * stored: no Telegram id, no text.
+ * stored: no Telegram id, no text. Fourth, the rolling 24h window counts a
+ * person once however many hours they were active in - the whole reason the
+ * hourly user sets are unioned instead of summed.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -22,6 +24,7 @@ import { MetricsService } from '../../src/services/admin/metrics.service';
 const redis = vi.hoisted(() => {
   const strings = new Map<string, number>();
   const zsets = new Map<string, Map<string, number>>();
+  const sets = new Map<string, Set<string>>();
   const expiries = new Map<string, number>();
   const state: { failCommand: string | null } = { failCommand: null };
 
@@ -30,6 +33,14 @@ const redis = vi.hoisted(() => {
     if (existing) return existing;
     const created = new Map<string, number>();
     zsets.set(key, created);
+    return created;
+  };
+
+  const setOf = (key: string) => {
+    const existing = sets.get(key);
+    if (existing) return existing;
+    const created = new Set<string>();
+    sets.set(key, created);
     return created;
   };
 
@@ -43,6 +54,10 @@ const redis = vi.hoisted(() => {
       },
       expireat(key: string, at: number) {
         ops.push(() => expiries.set(key, at));
+        return builder;
+      },
+      sadd(key: string, member: string) {
+        ops.push(() => setOf(key).add(member));
         return builder;
       },
       zincrby(key: string, by: number, member: string) {
@@ -71,6 +86,7 @@ const redis = vi.hoisted(() => {
   return {
     strings,
     zsets,
+    sets,
     expiries,
     state,
     client: {
@@ -78,6 +94,13 @@ const redis = vi.hoisted(() => {
       pipeline: queue,
       async mget(keys: string[]) {
         return keys.map((key) => (strings.has(key) ? String(strings.get(key)) : null));
+      },
+      async sunion(...keys: string[]) {
+        const union = new Set<string>();
+        for (const key of keys) {
+          for (const member of sets.get(key) ?? []) union.add(member);
+        }
+        return [...union];
       },
       async zrevrange(key: string, start: number, stop: number, withScores?: string) {
         const zset: Map<string, number> = zsets.get(key) ?? new Map<string, number>();
@@ -99,24 +122,28 @@ const service = new MetricsService();
 /** 2026-08-18T10:07:00.000Z - a fixed clock keeps every bucket name explicit. */
 const NOON = Date.parse('2026-08-18T10:07:30.000Z');
 const MINUTE = Math.floor(NOON / 60_000);
+const HOUR = Math.floor(NOON / 3_600_000);
 const DAY = '2026-08-18';
 
 beforeEach(() => {
   redis.strings.clear();
   redis.zsets.clear();
+  redis.sets.clear();
   redis.expiries.clear();
   redis.state.failCommand = null;
 });
 
 describe('MetricsService.record', () => {
-  it('counts a successful request in the minute and the UTC day', async () => {
+  it('counts a successful request in the minute, the hour and the UTC day', async () => {
     await service.record({ userId: 7, isError: false, at: NOON });
 
     expect(redis.strings.get(`metrics:req:m:${MINUTE}`)).toBe(1);
+    expect(redis.strings.get(`metrics:req:h:${HOUR}`)).toBe(1);
     expect(redis.strings.get(`metrics:req:d:${DAY}`)).toBe(1);
     // No error counters at all, rather than counters holding zero: a key that
     // does not exist costs nothing and reads back as 0 anyway.
     expect(redis.strings.has(`metrics:err:m:${MINUTE}`)).toBe(false);
+    expect(redis.strings.has(`metrics:err:h:${HOUR}`)).toBe(false);
     expect(redis.strings.has(`metrics:err:d:${DAY}`)).toBe(false);
   });
 
@@ -125,6 +152,7 @@ describe('MetricsService.record', () => {
 
     expect(redis.strings.get(`metrics:req:m:${MINUTE}`)).toBe(1);
     expect(redis.strings.get(`metrics:err:m:${MINUTE}`)).toBe(1);
+    expect(redis.strings.get(`metrics:err:h:${HOUR}`)).toBe(1);
     expect(redis.strings.get(`metrics:err:d:${DAY}`)).toBe(1);
   });
 
@@ -134,6 +162,8 @@ describe('MetricsService.record', () => {
     const users: Map<string, number> =
       redis.zsets.get(`metrics:users:d:${DAY}`) ?? new Map<string, number>();
     expect([...users.keys()]).toEqual(['42']);
+    // The hourly set exists for the rolling window and holds the same opaque id.
+    expect([...(redis.sets.get(`metrics:users:h:${HOUR}`) ?? [])]).toEqual(['42']);
   });
 
   it('records an unauthenticated request without touching the user set', async () => {
@@ -141,22 +171,31 @@ describe('MetricsService.record', () => {
 
     expect(redis.strings.get(`metrics:req:d:${DAY}`)).toBe(1);
     expect(redis.zsets.has(`metrics:users:d:${DAY}`)).toBe(false);
+    expect(redis.sets.has(`metrics:users:h:${HOUR}`)).toBe(false);
   });
 
   it('expires a bucket at a deadline fixed by the bucket, not by the write', async () => {
     await service.record({ userId: 1, isError: false, at: NOON });
     const minuteDeadline = redis.expiries.get(`metrics:req:m:${MINUTE}`);
+    const hourDeadline = redis.expiries.get(`metrics:req:h:${HOUR}`);
     const dayDeadline = redis.expiries.get(`metrics:req:d:${DAY}`);
 
     // A second request 20 seconds later, still inside the same minute.
     await service.record({ userId: 1, isError: false, at: NOON + 20_000 });
 
     expect(redis.expiries.get(`metrics:req:m:${MINUTE}`)).toBe(minuteDeadline);
+    expect(redis.expiries.get(`metrics:req:h:${HOUR}`)).toBe(hourDeadline);
     expect(redis.expiries.get(`metrics:req:d:${DAY}`)).toBe(dayDeadline);
 
     // METRICS_MINUTE_SERIES_LENGTH is 5 in the unit env, plus two minutes of
     // slack, so the bucket outlives the last snapshot that can ask for it.
     expect(minuteDeadline).toBe(MINUTE * 60 + 7 * 60);
+    // The rolling window is a fixed 24 hours, plus two hours of slack - and
+    // measured from the start of the hour, so the union of 24 keys is the same
+    // set for every snapshot inside it.
+    expect(hourDeadline).toBe(HOUR * 3600 + 26 * 3600);
+    // The hourly user set dies with the counters of its own hour.
+    expect(redis.expiries.get(`metrics:users:h:${HOUR}`)).toBe(hourDeadline);
     // METRICS_RETENTION_DAYS is 3: the day ends, then three more days.
     expect(dayDeadline).toBe(Date.parse(`${DAY}T00:00:00.000Z`) / 1000 + 4 * 86400);
   });
@@ -178,6 +217,45 @@ describe('MetricsService.snapshot', () => {
       new Date((MINUTE - 4) * 60_000).toISOString()
     );
     expect(snapshot.perMinute.series[0].startedAt.endsWith(':00.000Z')).toBe(true);
+  });
+
+  it('spans 24 hour buckets ending with the current one, oldest first', async () => {
+    await service.record({ userId: 1, isError: false, at: NOON });
+    await service.record({ userId: 1, isError: true, at: NOON - 3_600_000 });
+    // 23 hours back is still inside the window; 24 hours back has fallen out of
+    // it, which is what makes the window rolling rather than "since midnight".
+    await service.record({ userId: 1, isError: false, at: NOON - 23 * 3_600_000 });
+    await service.record({ userId: 1, isError: false, at: NOON - 24 * 3_600_000 });
+
+    const snapshot = await service.snapshot(NOON);
+
+    expect(snapshot.last24h.hours).toBe(24);
+    expect(snapshot.last24h.series).toHaveLength(24);
+    expect(snapshot.last24h.series[0].startedAt).toBe(
+      new Date((HOUR - 23) * 3_600_000).toISOString()
+    );
+    expect(snapshot.last24h.series[23].startedAt).toBe(new Date(HOUR * 3_600_000).toISOString());
+    expect(snapshot.last24h.series[0].requests).toBe(1);
+    expect(snapshot.last24h.series[22].requests).toBe(1);
+    expect(snapshot.last24h.series[23].requests).toBe(1);
+    // The hour that just fell out is not counted anywhere in the window.
+    expect(snapshot.last24h.requests).toBe(3);
+    expect(snapshot.last24h.errors).toBe(1);
+  });
+
+  it('counts a person in the window once, however many hours they were active in', async () => {
+    // The reason the hourly sets are unioned: summing 24 SCARDs would report
+    // this single user three times and invent traffic that never happened.
+    await service.record({ userId: 9, isError: false, at: NOON });
+    await service.record({ userId: 9, isError: false, at: NOON - 3_600_000 });
+    await service.record({ userId: 9, isError: false, at: NOON - 2 * 3_600_000 });
+    await service.record({ userId: 4, isError: false, at: NOON - 5 * 3_600_000 });
+    // Outside the window, so this one must not be counted at all.
+    await service.record({ userId: 77, isError: false, at: NOON - 30 * 3_600_000 });
+
+    const snapshot = await service.snapshot(NOON);
+
+    expect(snapshot.last24h.users).toBe(2);
   });
 
   it('puts today first and averages requests over the users seen', async () => {
@@ -227,6 +305,8 @@ describe('MetricsService.snapshot', () => {
     const snapshot = await service.snapshot(NOON);
 
     expect(snapshot.perMinute.series.every((bucket) => bucket.requests === 0)).toBe(true);
+    expect(snapshot.last24h.series).toHaveLength(24);
+    expect(snapshot.last24h).toMatchObject({ requests: 0, errors: 0, users: 0 });
     expect(snapshot.daily.every((day) => day.requests === 0 && day.averagePerUser === 0)).toBe(true);
     expect(snapshot.topUsers).toEqual([]);
     expect(snapshot.retentionDays).toBe(3);

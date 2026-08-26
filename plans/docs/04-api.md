@@ -362,7 +362,7 @@ Admin access is deployment configuration, not a user role: membership comes from
 | `DELETE` | `/admin/session` | JWT + allowlist + `X-Admin-Token` | Close the admin session ("lock the panel") |
 | `GET` | `/admin/overview` | JWT + allowlist + `X-Admin-Token` | Read-only status of the AI provider chain |
 | `PATCH` | `/admin/providers/:providerId` | JWT + allowlist + `X-Admin-Token` | Switch an AI provider out of the fallback chain, or back into it |
-| `GET` | `/admin/metrics` | JWT + allowlist + `X-Admin-Token` | Request volume per minute and per UTC day, plus today's heaviest users |
+| `GET` | `/admin/metrics` | JWT + allowlist + `X-Admin-Token` | Request volume per minute, over the rolling 24 hours and per UTC day, plus today's heaviest users and the all-time account count |
 | `GET` | `/admin/errors` | JWT + allowlist + `X-Admin-Token` | The last few `5xx` responses, newest first |
 
 ### Two independent factors
@@ -445,8 +445,16 @@ Two consequences are load-bearing for anyone changing these routes:
   {
     "generatedAt": "ISO-8601",
     "retentionDays": 7,
+    "totalUsers": 0,
     "perMinute": {
       "minutes": 60,
+      "series": [{ "startedAt": "ISO-8601", "requests": 0, "errors": 0 }]
+    },
+    "last24h": {
+      "hours": 24,
+      "requests": 0,
+      "errors": 0,
+      "users": 0,
       "series": [{ "startedAt": "ISO-8601", "requests": 0, "errors": 0 }]
     },
     "daily": [{ "date": "YYYY-MM-DD", "requests": 0, "errors": 0, "users": 0, "averagePerUser": 0 }],
@@ -454,12 +462,14 @@ Two consequences are load-bearing for anyone changing these routes:
   }
   ```
   `perMinute.series` is oldest first and always exactly `METRICS_MINUTE_SERIES_LENGTH` long, gaps included as zeros — a graph must not silently compress idle minutes. `daily` is newest first, so the client reads today as `daily[0]` instead of computing a date, and is at most `METRICS_RETENTION_DAYS` long. `topUsers` is today's list, descending, capped at `METRICS_TOP_USERS_LIMIT`.
+- **`last24h` is a rolling window, not a day.** Its `series` is exactly 24 hourly buckets, oldest first, the last being the hour in progress; the window length is fixed in code rather than configurable, because the panel draws it as a fixed row of bars. It exists because `daily[0]` is useless at 01:00 UTC, when "today" is one hour old: at that moment the rolling window still describes a full day of traffic. `users` is an exact distinct count over the whole window, not the sum of the hours — a person active in three hours counts once.
+- **`totalUsers` is the number of accounts that have ever existed**, read from Postgres (`User` count) rather than derived from the metrics buckets. Bucket-derived figures expire, so a quiet week would make the total shrink; an account total that goes down is a bug report waiting to happen. It is the one number on this endpoint that does not come from Redis.
 - **Error codes**: `401 ADMIN_SESSION_REQUIRED`; `401 ADMIN_SESSION_INVALID`; `404` — not an allowlisted admin; `429`; `503`
 - **`userId` is the internal numeric id, as a string.** Never a Telegram id, never a username: the panel needs to tell heavy users apart, not to identify them, and metrics are the last place that should accumulate identity. The id is a string in the response because it is an opaque handle to the client, not a number to do arithmetic on.
 - **Day boundaries are UTC**, labelled as such in the panel. A local-time boundary would move with the server's timezone and make yesterday's row change value after a deploy.
 - **What is not counted**: `OPTIONS` preflights (browser bookkeeping that would double every Mini App request), `/health*` (a fixed probe interval would put a constant floor under the graph) and `/api/v1/admin/*` itself — the panel polls, and an operator watching this page must not be able to inflate it. A failure on an admin route is therefore absent from both the counters and the error feed; it lives in the logs.
 - **`errors` means `statusCode >= 500`** — the same definition the error feed uses. A `400`, a `401` or a `429` is the API working as designed, and folding those in would make the error line track client behaviour rather than service health.
-- **Where the numbers come from**: an `onResponse` hook, i.e. after the reply has been sent. Counters are Redis keys with an absolute expiry derived from their own bucket (`metrics:req:m:<epoch minute>`, `metrics:req:d:<YYYY-MM-DD>`, plus `err:` counterparts and a sorted set per day for users). Nothing is written to Postgres and nothing is pruned by a job: retention is the expiry. A Redis failure while *writing* loses a data point and is logged at `debug`, because the reply is already out and the outage is being announced by the rate limiter anyway; a Redis failure while *reading* surfaces as an error rather than a page of zeros, which would read as "no traffic" instead of "no data".
+- **Where the numbers come from**: an `onResponse` hook, i.e. after the reply has been sent. Counters are Redis keys with an absolute expiry derived from their own bucket (`metrics:req:m:<epoch minute>`, `metrics:req:h:<epoch hour>`, `metrics:req:d:<YYYY-MM-DD>`, plus `err:` counterparts, a set per hour for the rolling window's users and a sorted set per day for the top list). The expiry is computed from the bucket, never as a TTL refreshed on each write, so a busy minute does not outlive a quiet one. Nothing is written to Postgres and nothing is pruned by a job: retention is the expiry — except `totalUsers`, which is a Postgres count taken beside the Redis snapshot so the metrics service stays a pure Redis reader. A Redis failure while *writing* loses a data point and is logged at `debug`, because the reply is already out and the outage is being announced by the rate limiter anyway; a Redis failure while *reading* surfaces as an error rather than a page of zeros, which would read as "no traffic" instead of "no data".
 
 ### `GET /admin/errors`
 - **Headers**: `Authorization: Bearer <JWT>` and `X-Admin-Token: <session token>`
@@ -555,12 +565,14 @@ This section describes the Service-layer responsibilities for each module, consi
   - Retrieval of current user's profile (Telegram-sourced identity fields + preferences)
   - Update of application-level preferences only (default slang style, adult self-attestation)
   - Enforcement of immutable fields: `telegramId`, `username`, `firstName`, `lastName`, `languageCode` cannot be modified via API
+  - Counting accounts (`countAll()`), used by `GET /admin/metrics` for the all-time total
 - **Prisma models read/written**:
-  - `User` — read (find by id), write (update preference fields only)
+  - `User` — read (find by id, count), write (update preference fields only)
 - **Other components called**: None (direct Prisma access)
 - **Returns to Route layer**:
   - `GET /user/me` → `User` profile (telegramId, username, firstName, lastName, languageCode, createdAt, preferences)
   - `PATCH /user/me` → Updated `User` profile (same shape)
+  - `countAll()` → `number`. A `COUNT` over `User`, deliberately not a Redis figure: metrics buckets expire, so a bucket-derived total would fall during a quiet week.
 
 ### SttService
 - **Business logic owned**:
@@ -602,14 +614,14 @@ This section describes the Service-layer responsibilities for each module, consi
 
 ### MetricsService
 - **Business logic owned**:
-  - Counting one finished request: minute and UTC-day counters for requests and for `5xx`, plus a `ZINCRBY` on that day's user sorted set when the request was authenticated
+  - Counting one finished request: minute, hour and UTC-day counters for requests and for `5xx`, plus that hour's user set and a `ZINCRBY` on that day's user sorted set when the request was authenticated
   - Bucket expiry: every write sets an absolute `EXPIREAT` computed from the bucket itself, never a TTL refreshed per write — otherwise a busy minute would outlive a quiet one and "the last hour" would mean something different for every key
-  - Assembling the panel snapshot: the minute series (zero-filled), the daily rows with `averagePerUser`, and today's top users
-- **Prisma models read/written**: None. These numbers are a load picture with a one-week life, and a per-request insert into Postgres would buy durability nobody asked for at the price of a write on the hot path.
-- **Other components called**: Redis only (`metrics:req:m:*`, `metrics:err:m:*`, `metrics:req:d:*`, `metrics:err:d:*`, `metrics:users:d:*`).
+  - Assembling the panel snapshot: the minute series (zero-filled), the rolling 24-hour window, the daily rows with `averagePerUser`, and today's top users
+- **Prisma models read/written**: None. These numbers are a load picture with a one-week life, and a per-request insert into Postgres would buy durability nobody asked for at the price of a write on the hot path. The account total on the same endpoint is a Postgres count, but the route fetches it beside the snapshot so this service stays a Redis reader.
+- **Other components called**: Redis only (`metrics:req:m:*`, `metrics:err:m:*`, `metrics:req:h:*`, `metrics:err:h:*`, `metrics:users:h:*`, `metrics:req:d:*`, `metrics:err:d:*`, `metrics:users:d:*`).
 - **Returns to Route layer**:
   - `record({ userId, isError })` → `void`. Called from the `onResponse` hook, which swallows failures: the reply is already sent, so a lost data point is cheaper than anything else that could happen here.
-  - `snapshot()` → the `GET /admin/metrics` body. Four Redis round trips: two `MGET`s for the series, one pipeline for the daily rows, one `ZREVRANGE` for the top users. A failed pipeline command is rethrown rather than read as a zero.
+  - `snapshot()` → the `GET /admin/metrics` body minus `totalUsers`. Five reads issued in parallel — two `MGET`s for the minute series, two for the hour series, one `SUNION` over the 24 hourly user sets — plus one pipeline for the daily rows and one `ZREVRANGE` for the top users. `SUNION` rather than 24 `SCARD`s: summing the hours would count a person once per hour they were active. A failed pipeline command is rethrown rather than read as a zero.
 
 ### ErrorFeedService
 - **Business logic owned**:

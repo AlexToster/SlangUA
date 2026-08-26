@@ -35,7 +35,9 @@ describe('PreviewResult', () => {
   it('shows empty state when no draft text', () => {
     render(<PreviewResult {...defaultProps} draftText="" preview={null} />);
     expect(screen.getByText('Переклад з\'явиться автоматично')).toBeInTheDocument();
-    expect(screen.getByText('Почніть вводити текст (мін. 3 символи)')).toBeInTheDocument();
+    // Порожнє поле показує тільки цей рядок: підказка про мінімум символів
+    // з'являється лише тоді, коли текст уже набирають (fallback-стан нижче).
+    expect(screen.queryByText(/Мінімум 3 символи/)).not.toBeInTheDocument();
   });
   
   it('shows loading skeleton when loading and no preview', () => {

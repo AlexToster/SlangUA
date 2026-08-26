@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreviewResult, Style, UserProfile } from '../types/api';
 
 /**
- * The three behaviours of the translate screen that cost something when they
- * break: the debounce, the minimum length, and the 403 recovery.
+ * The four behaviours of the translate screen that cost something when they
+ * break: the debounce, the minimum length, the 403 recovery, and the line
+ * between «стиль на цей переклад» and «стиль за замовчуванням».
  *
  * The first two are money. Every automatic preview is a paid LLM call, so a
  * debounce that stopped coalescing keystrokes would turn one translation into
@@ -19,6 +20,9 @@ import type { PreviewResult, Style, UserProfile } from '../types/api';
  * Settings, where age confirmation does not exist; the only place it has ever
  * existed is the dialog below. The test therefore drives the whole path: stale
  * default -> 403 -> dialog -> confirm -> a preview that succeeds.
+ *
+ * The fourth is invisible while it is broken: switching style here used to write
+ * the profile, so Settings said one thing and the app opened with another.
  */
 
 const api = vi.hoisted(() => ({
@@ -141,6 +145,30 @@ describe('TranslatePage', () => {
 
     expect(api.translatePreview).not.toHaveBeenCalled();
     expect(screen.getByText('Мінімум 3 символи для перекладу')).toBeInTheDocument();
+  });
+
+  it('switches style for this session without rewriting the saved default', async () => {
+    // Кожне перемикання тут раніше відправляло `PATCH /user/me`, тож вибір «на
+    // один переклад» ставав новим значенням за замовчуванням: збережений у
+    // Налаштуваннях стиль тихо змінювався, і наступний запуск відкривався не в
+    // тому стилі. Записує `defaultSlangStyle` лише екран Налаштувань.
+    api.getStyles.mockResolvedValue([
+      STYLES[0],
+      { id: 'IT_SLANG', title: 'АйТішний спіч', ageRestricted: false },
+    ]);
+
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /^Вибраний стиль:/ }));
+    await userEvent.click(await screen.findByRole('option', { name: /АйТішний спіч/ }));
+
+    // Вибір таки застосувався до цього сеансу - інакше тест доводив би лише те,
+    // що клік нічого не зробив.
+    expect(
+      await screen.findByRole('button', { name: 'Вибраний стиль: АйТішний спіч' })
+    ).toBeInTheDocument();
+    // Запис профілю не мав би відбутися, а «не мав би» треба чекати явно.
+    await sleep(300);
+    expect(api.updateProfile).not.toHaveBeenCalled();
   });
 });
 

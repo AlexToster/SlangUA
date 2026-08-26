@@ -19,6 +19,7 @@ import { requireAdmin, requireAdminSession } from '../plugins/require-admin.js';
 import { adminAuthService } from '../services/admin/admin-auth.service.js';
 import { metricsService } from '../services/admin/metrics.service.js';
 import { errorFeedService } from '../services/admin/error-feed.service.js';
+import { userService } from '../services/user.service.js';
 import { aiService } from '../services/ai/ai.service.js';
 import {
   providerSwitchService,
@@ -59,6 +60,13 @@ const notFoundBody = z.object({
 
 /** One minute of traffic. Zero-filled: an idle minute is data, not a gap. */
 const metricsMinuteBucket = z.object({
+  startedAt: z.string(),
+  requests: z.number(),
+  errors: z.number(),
+});
+
+/** One hour of traffic inside the rolling window. Zero-filled like the minutes. */
+const metricsHourBucket = z.object({
   startedAt: z.string(),
   requests: z.number(),
   errors: z.number(),
@@ -292,16 +300,26 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =
     });
   });
 
-  // GET /api/v1/admin/metrics - request volume and today's heaviest users
+  // GET /api/v1/admin/metrics - request volume, the rolling day, and today's
+  // heaviest users
   app.get('/admin/metrics', {
     schema: {
       response: {
         200: z.object({
           generatedAt: z.string(),
           retentionDays: z.number(),
+          /** Accounts that have ever existed - from Postgres, not from Redis. */
+          totalUsers: z.number(),
           perMinute: z.object({
             minutes: z.number(),
             series: z.array(metricsMinuteBucket),
+          }),
+          last24h: z.object({
+            hours: z.number(),
+            requests: z.number(),
+            errors: z.number(),
+            users: z.number(),
+            series: z.array(metricsHourBucket),
           }),
           daily: z.array(metricsDayBucket),
           topUsers: z.array(metricsTopUser),
@@ -319,7 +337,16 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app: FastifyInstance) =
     // would read as "no traffic" rather than "no data". In practice a Redis
     // outage is answered by the admin rate limiter with 503 before this handler
     // is ever reached.
-    return reply.send(await metricsService.snapshot());
+    //
+    // The account total is the one figure here that does not come from Redis, so
+    // it is fetched beside the snapshot rather than inside it - the metrics
+    // service stays a Redis reader.
+    const [snapshot, totalUsers] = await Promise.all([
+      metricsService.snapshot(),
+      userService.countAll(),
+    ]);
+
+    return reply.send({ ...snapshot, totalUsers });
   });
 
   // GET /api/v1/admin/errors - the last few 5xx responses, newest first

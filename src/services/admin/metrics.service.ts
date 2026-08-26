@@ -8,11 +8,17 @@
  * after the last write - a per-write TTL reset would keep a busy minute alive
  * forever and make "the last hour" mean something different for every key.
  *
+ * Three granularities, because they answer different questions: minutes for "is
+ * it happening right now", hours for a rolling 24h window that does not jump at
+ * midnight, and UTC days for the history.
+ *
  * Two deliberate limits on what is measured:
  *
  * - **Day buckets are UTC.** A local-time boundary would move with the server's
  *   timezone and make yesterday's row change value on a deploy. The panel labels
- *   the dates as UTC instead of pretending otherwise.
+ *   the dates as UTC instead of pretending otherwise. The 24h window exists
+ *   precisely because that boundary is useless at 01:00 UTC, when "today" is one
+ *   hour old.
  * - **Only the internal numeric user id is stored.** Never a Telegram id, never
  *   text, never a translation. The metrics are a load picture, not an audit
  *   trail, and Redis is the wrong place to accumulate identity.
@@ -25,6 +31,17 @@ import { config } from '../../config/index.js';
 const MINUTE_REQUESTS_PREFIX = 'metrics:req:m:';
 /** Failed requests (5xx) per minute bucket. */
 const MINUTE_ERRORS_PREFIX = 'metrics:err:m:';
+/** Requests per hour bucket: `metrics:req:h:<epoch hour>`. */
+const HOUR_REQUESTS_PREFIX = 'metrics:req:h:';
+/** Failed requests (5xx) per hour bucket. */
+const HOUR_ERRORS_PREFIX = 'metrics:err:h:';
+/**
+ * Plain set per hour, member = internal user id. A set and not a sorted set:
+ * the hour granularity exists only so that 24 of them can be unioned into an
+ * exact "unique people in the last 24 hours", and per-hour ranking is a question
+ * nobody asks.
+ */
+const HOUR_USERS_PREFIX = 'metrics:users:h:';
 /** Requests per UTC day: `metrics:req:d:<YYYY-MM-DD>`. */
 const DAY_REQUESTS_PREFIX = 'metrics:req:d:';
 /** Failed requests (5xx) per UTC day. */
@@ -33,8 +50,16 @@ const DAY_ERRORS_PREFIX = 'metrics:err:d:';
 const DAY_USERS_PREFIX = 'metrics:users:d:';
 
 const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_DAY = 86400;
 const MS_PER_MINUTE = 60_000;
+const MS_PER_HOUR = 3_600_000;
+/**
+ * Length of the rolling window, in hours. Fixed rather than configurable: "the
+ * last 24 hours" is the thing the panel promises, and a deployment that could
+ * set it to 6 would make that heading a lie.
+ */
+const ROLLING_HOURS = 24;
 
 /** What the request lifecycle reports once a reply has been sent. */
 export interface MetricsSample {
@@ -51,6 +76,24 @@ export interface MetricsMinuteBucket {
   startedAt: string;
   requests: number;
   errors: number;
+}
+
+export interface MetricsHourBucket {
+  /** ISO-8601 start of the hour, always `:00:00` minutes and seconds. */
+  startedAt: string;
+  requests: number;
+  errors: number;
+}
+
+export interface MetricsRollingWindow {
+  /** Length of the window in hours, and of the series below. */
+  hours: number;
+  requests: number;
+  errors: number;
+  /** Distinct authenticated users over the whole window, counted exactly. */
+  users: number;
+  /** Oldest hour first, zero-filled. */
+  series: MetricsHourBucket[];
 }
 
 export interface MetricsDayBucket {
@@ -79,6 +122,8 @@ export interface MetricsSnapshot {
     minutes: number;
     series: MetricsMinuteBucket[];
   };
+  /** The rolling window, independent of the UTC day boundary. */
+  last24h: MetricsRollingWindow;
   /** Newest first, so the client reads "today" as `daily[0]`. */
   daily: MetricsDayBucket[];
   /** Today's heaviest users, descending. */
@@ -93,6 +138,21 @@ function dayOf(ms: number): string {
 /** Start of an epoch minute as ISO-8601. */
 function minuteStartedAt(minute: number): string {
   return new Date(minute * MS_PER_MINUTE).toISOString();
+}
+
+/** Start of an epoch hour as ISO-8601. */
+function hourStartedAt(hour: number): string {
+  return new Date(hour * MS_PER_HOUR).toISOString();
+}
+
+/**
+ * When an hour bucket dies: the window plus two hours of slack, measured from
+ * the start of the hour itself. Same rule as the minute buckets, and for the same
+ * reason - a per-write reset would keep a busy hour alive past the window and
+ * make the union of 24 keys mean something different every time.
+ */
+function hourExpiryAt(hour: number): number {
+  return hour * SECONDS_PER_HOUR + (ROLLING_HOURS + 2) * SECONDS_PER_HOUR;
 }
 
 /**
@@ -131,11 +191,13 @@ export class MetricsService {
   async record(sample: MetricsSample): Promise<void> {
     const now = sample.at ?? Date.now();
     const minute = Math.floor(now / MS_PER_MINUTE);
+    const hour = Math.floor(now / MS_PER_HOUR);
     const date = dayOf(now);
     const seriesLength = config.METRICS_MINUTE_SERIES_LENGTH;
     const retentionDays = config.METRICS_RETENTION_DAYS;
 
     const minuteDeadline = minuteExpiryAt(minute, seriesLength);
+    const hourDeadline = hourExpiryAt(hour);
     const dayDeadline = dayExpiryAt(date, retentionDays);
 
     const multi = getRedisClient().multi();
@@ -143,6 +205,10 @@ export class MetricsService {
     const minuteRequests = `${MINUTE_REQUESTS_PREFIX}${minute}`;
     multi.incr(minuteRequests);
     multi.expireat(minuteRequests, minuteDeadline);
+
+    const hourRequests = `${HOUR_REQUESTS_PREFIX}${hour}`;
+    multi.incr(hourRequests);
+    multi.expireat(hourRequests, hourDeadline);
 
     const dayRequests = `${DAY_REQUESTS_PREFIX}${date}`;
     multi.incr(dayRequests);
@@ -153,12 +219,20 @@ export class MetricsService {
       multi.incr(minuteErrors);
       multi.expireat(minuteErrors, minuteDeadline);
 
+      const hourErrors = `${HOUR_ERRORS_PREFIX}${hour}`;
+      multi.incr(hourErrors);
+      multi.expireat(hourErrors, hourDeadline);
+
       const dayErrors = `${DAY_ERRORS_PREFIX}${date}`;
       multi.incr(dayErrors);
       multi.expireat(dayErrors, dayDeadline);
     }
 
     if (sample.userId != null) {
+      const hourUsers = `${HOUR_USERS_PREFIX}${hour}`;
+      multi.sadd(hourUsers, String(sample.userId));
+      multi.expireat(hourUsers, hourDeadline);
+
       const dayUsers = `${DAY_USERS_PREFIX}${date}`;
       multi.zincrby(dayUsers, 1, String(sample.userId));
       multi.expireat(dayUsers, dayDeadline);
@@ -168,10 +242,11 @@ export class MetricsService {
   }
 
   /**
-   * The whole panel view in four Redis round trips: two MGETs for the minute
-   * series, one pipeline for the daily rows, one ZREVRANGE for today's top
-   * users. A Redis failure propagates rather than resolving to a page of zeros,
-   * which would read as "no traffic" instead of "no data".
+   * The whole panel view in a handful of Redis round trips: MGETs for the minute
+   * and hour series, one SUNION for the people behind the rolling window, one
+   * pipeline for the daily rows, one ZREVRANGE for today's top users. A Redis
+   * failure propagates rather than resolving to a page of zeros, which would read
+   * as "no traffic" instead of "no data".
    */
   async snapshot(at: number = Date.now()): Promise<MetricsSnapshot> {
     const redis = getRedisClient();
@@ -185,15 +260,28 @@ export class MetricsService {
       minutes.push(currentMinute - offset);
     }
 
+    // The current hour counts as one of the 24, so the window is "the last 24
+    // hour buckets" - between 23h and 24h of wall clock, and never more.
+    const currentHour = Math.floor(at / MS_PER_HOUR);
+    const hours: number[] = [];
+    for (let offset = ROLLING_HOURS - 1; offset >= 0; offset -= 1) {
+      hours.push(currentHour - offset);
+    }
+
     const today = dayOf(at);
     const dates: string[] = [];
     for (let offset = 0; offset < retentionDays; offset += 1) {
       dates.push(dayOf(at - offset * SECONDS_PER_DAY * 1000));
     }
 
-    const [minuteRequests, minuteErrors] = await Promise.all([
+    const [minuteRequests, minuteErrors, hourRequests, hourErrors, windowUsers] = await Promise.all([
       redis.mget(minutes.map((minute) => `${MINUTE_REQUESTS_PREFIX}${minute}`)),
       redis.mget(minutes.map((minute) => `${MINUTE_ERRORS_PREFIX}${minute}`)),
+      redis.mget(hours.map((hour) => `${HOUR_REQUESTS_PREFIX}${hour}`)),
+      redis.mget(hours.map((hour) => `${HOUR_ERRORS_PREFIX}${hour}`)),
+      // SUNION and not 24 SCARDs summed: a user active in three of those hours is
+      // one person, and summing per-hour counts would report three.
+      redis.sunion(...hours.map((hour) => `${HOUR_USERS_PREFIX}${hour}`)),
     ]);
 
     const dayPipeline = redis.pipeline();
@@ -216,6 +304,20 @@ export class MetricsService {
       requests: toCount(minuteRequests[index]),
       errors: toCount(minuteErrors[index]),
     }));
+
+    const hourSeries: MetricsHourBucket[] = hours.map((hour, index) => ({
+      startedAt: hourStartedAt(hour),
+      requests: toCount(hourRequests[index]),
+      errors: toCount(hourErrors[index]),
+    }));
+
+    const last24h: MetricsRollingWindow = {
+      hours: ROLLING_HOURS,
+      requests: hourSeries.reduce((total, bucket) => total + bucket.requests, 0),
+      errors: hourSeries.reduce((total, bucket) => total + bucket.errors, 0),
+      users: windowUsers.length,
+      series: hourSeries,
+    };
 
     const daily: MetricsDayBucket[] = dates.map((date, index) => {
       const base = index * 3;
@@ -244,6 +346,7 @@ export class MetricsService {
       generatedAt: new Date(at).toISOString(),
       retentionDays,
       perMinute: { minutes: seriesLength, series },
+      last24h,
       daily,
       topUsers,
     };

@@ -38,13 +38,19 @@
   color: var(--tg-hint-color, var(--color-text-muted));
 }
 
+/* Той самий формат, що в placeholder редактора (.text-input та
+   .text-input::placeholder): розмір --font-size-editor, вага 500 і підказковий
+   колір, успадкований від .preview-empty. Порожній результат читається як пара
+   до порожнього поля введення, а не як окреме повідомлення над ним. */
 .preview-empty p {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-editor);
   font-weight: 500;
-  color: var(--tg-text-color, var(--color-text));
+  line-height: var(--line-height-relaxed);
+  color: inherit;
   margin: 0;
 }
 
+/* Лишився один стан, який ним користується: набрано менше трьох символів. */
 .preview-hint {
   font-size: var(--font-size-sm);
 }

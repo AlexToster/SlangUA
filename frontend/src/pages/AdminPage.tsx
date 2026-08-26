@@ -19,6 +19,17 @@ function timeLabel(iso: string): string {
 }
 
 /**
+ * Badge text and colour for one provider row. Operator intent wins over health:
+ * a switched-off provider reads as switched off even while its instance answers.
+ */
+function badgeOf(provider: AdminProviderStatus): { label: string; modifier: string } {
+  if (provider.disabled) return { label: 'вимкнено вручну', modifier: 'admin-badge-off' };
+  if (provider.available) return { label: 'працює', modifier: 'admin-badge-up' };
+  if (provider.configured) return { label: 'недоступний', modifier: 'admin-badge-warn' };
+  return { label: 'без ключа', modifier: 'admin-badge-off' };
+}
+
+/**
  * Admin panel, stages A-D: the door, the provider chain and its switch, the
  * usage figures, and the error feed.
  *
@@ -26,6 +37,11 @@ function timeLabel(iso: string): string {
  * put it back - an operator action, so switching one off asks for confirmation
  * and switching the last usable one off says out loud what it costs. Everything
  * else here is read-only.
+ *
+ * The page is ordered by how often it is needed: the provider chain is one row
+ * per provider, the load figures are minutes and then the rolling 24 hours, and
+ * the error feed - the longest section and the least often read - is collapsed
+ * until someone asks for it.
  *
  * The route is reachable only with a step-up token in memory. Landing here
  * without one - a reload, or a deep link - sends the operator back to Settings
@@ -112,7 +128,7 @@ export function AdminPage() {
   const series = useMemo(() => metrics.data?.perMinute.series ?? [], [metrics.data]);
 
   /** Totals over the whole minute series - the header figure of that section. */
-  const hourTotals = useMemo(
+  const minuteTotals = useMemo(
     () =>
       series.reduce(
         (acc, minute) => ({
@@ -128,6 +144,18 @@ export function AdminPage() {
   const peakMinute = useMemo(
     () => Math.max(1, ...series.map((minute) => minute.requests)),
     [series]
+  );
+
+  /**
+   * The rolling window. Its totals arrive computed by the server - the unique
+   * count in particular cannot be derived here, because a person active in three
+   * of those hours is one person and the series does not say who was who.
+   */
+  const hourSeries = useMemo(() => metrics.data?.last24h.series ?? [], [metrics.data]);
+
+  const peakHour = useMemo(
+    () => Math.max(1, ...hourSeries.map((hour) => hour.requests)),
+    [hourSeries]
   );
 
   if (!hasSession) {
@@ -187,62 +215,51 @@ export function AdminPage() {
                 </p>
               )}
               <ul className="admin-provider-list">
-                {data.providers.map((provider) => (
-                  <li className="admin-provider" key={provider.id}>
-                    <div className="admin-provider-head">
-                      <span className="admin-provider-name">
-                        {provider.priority}. {provider.id}
-                      </span>
-                      <span
-                        className={
-                          provider.disabled
-                            ? 'admin-badge admin-badge-off'
-                            : provider.available
-                              ? 'admin-badge admin-badge-up'
-                              : provider.configured
-                                ? 'admin-badge admin-badge-warn'
-                                : 'admin-badge admin-badge-off'
-                        }
-                      >
-                        {provider.disabled
-                          ? 'вимкнено вручну'
-                          : provider.available
-                            ? 'працює'
-                            : provider.configured
-                              ? 'недоступний'
-                              : 'без ключа'}
-                      </span>
-                    </div>
-                    {provider.disabled && (provider.disabledAt || provider.disabledBy) && (
-                      <p className="admin-provider-note">
-                        {provider.disabledBy ? `Вимкнув ${provider.disabledBy}` : 'Вимкнено'}
-                        {provider.disabledAt
-                          ? `, ${new Date(provider.disabledAt).toLocaleString('uk-UA')}`
-                          : ''}
-                        {provider.disabledReason ? `. ${provider.disabledReason}` : ''}
-                      </p>
-                    )}
-                    <div className="admin-provider-actions">
-                      <button
-                        type="button"
-                        className={provider.disabled ? 'btn btn-secondary' : 'btn btn-danger'}
-                        disabled={toggle.isPending}
-                        onClick={() => {
-                          triggerHapticFeedback('selection');
-                          if (provider.disabled) {
-                            // Turning traffic back on needs no confirmation: the
-                            // reversible direction is the safe one.
-                            toggle.mutate({ id: provider.id, disabled: false });
-                          } else {
-                            setPending(provider);
+                {data.providers.map((provider) => {
+                  const badge = badgeOf(provider);
+                  return (
+                    <li className="admin-provider" key={provider.id}>
+                      {/* One row per provider: name, state and the switch on the
+                          same line. A chain of five used to be a screenful. */}
+                      <div className="admin-provider-row">
+                        <span className="admin-provider-name">
+                          {provider.priority}. {provider.id}
+                        </span>
+                        <span className={`admin-badge ${badge.modifier}`}>{badge.label}</span>
+                        <button
+                          type="button"
+                          className={
+                            provider.disabled
+                              ? 'btn btn-secondary admin-provider-btn'
+                              : 'btn btn-danger admin-provider-btn'
                           }
-                        }}
-                      >
-                        {provider.disabled ? 'Увімкнути' : 'Вимкнути'}
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                          disabled={toggle.isPending}
+                          onClick={() => {
+                            triggerHapticFeedback('selection');
+                            if (provider.disabled) {
+                              // Turning traffic back on needs no confirmation: the
+                              // reversible direction is the safe one.
+                              toggle.mutate({ id: provider.id, disabled: false });
+                            } else {
+                              setPending(provider);
+                            }
+                          }}
+                        >
+                          {provider.disabled ? 'Увімкнути' : 'Вимкнути'}
+                        </button>
+                      </div>
+                      {provider.disabled && (provider.disabledAt || provider.disabledBy) && (
+                        <p className="admin-provider-note">
+                          {provider.disabledBy ? `Вимкнув ${provider.disabledBy}` : 'Вимкнено'}
+                          {provider.disabledAt
+                            ? `, ${new Date(provider.disabledAt).toLocaleString('uk-UA')}`
+                            : ''}
+                          {provider.disabledReason ? `. ${provider.disabledReason}` : ''}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
               <p className="admin-note">
                 Вимкнення діє одразу і зберігається після перезапуску. Автоматичний брейкер не
@@ -269,8 +286,8 @@ export function AdminPage() {
                 <>
                   <p className="admin-metrics-lead">
                     За останні {metrics.data.perMinute.minutes} хв:{' '}
-                    <strong>{hourTotals.requests}</strong> запитів, з них помилок{' '}
-                    {hourTotals.errors}.
+                    <strong>{minuteTotals.requests}</strong> запитів, з них помилок{' '}
+                    {minuteTotals.errors}.
                   </p>
                   <div
                     className="admin-chart"
@@ -292,6 +309,35 @@ export function AdminPage() {
                       <span>{timeLabel(series[series.length - 1].startedAt)}</span>
                     </div>
                   )}
+
+                  {/* The rolling window, not "since midnight": at 01:00 UTC the
+                      daily row is an hour old and says nothing about the night. */}
+                  <h3 className="admin-subtitle">За останні {metrics.data.last24h.hours} години</h3>
+                  <p className="admin-metrics-lead">
+                    <strong>{metrics.data.last24h.requests}</strong> запитів, помилок{' '}
+                    {metrics.data.last24h.errors}, людей {metrics.data.last24h.users}.
+                  </p>
+                  <div
+                    className="admin-chart admin-chart-hours"
+                    role="img"
+                    aria-label={`Запити за годину, найбільше за годину — ${peakHour}`}
+                  >
+                    {hourSeries.map((hour) => (
+                      <span
+                        key={hour.startedAt}
+                        className={hour.errors > 0 ? 'admin-bar admin-bar-error' : 'admin-bar'}
+                        style={{ height: `${Math.round((hour.requests / peakHour) * 100)}%` }}
+                        title={`${timeLabel(hour.startedAt)} — ${hour.requests} запитів, помилок ${hour.errors}`}
+                      />
+                    ))}
+                  </div>
+                  {hourSeries.length > 0 && (
+                    <div className="admin-chart-axis">
+                      <span>{timeLabel(hourSeries[0].startedAt)}</span>
+                      <span>{timeLabel(hourSeries[hourSeries.length - 1].startedAt)}</span>
+                    </div>
+                  )}
+
                   <table className="admin-table">
                     <caption>Дні за UTC, до {metrics.data.retentionDays} останніх</caption>
                     <thead>
@@ -328,6 +374,12 @@ export function AdminPage() {
                       ))}
                     </ol>
                   )}
+                  {/* From the database, not from the counters above: Redis buckets
+                      expire, so a Redis-derived total would shrink over a quiet
+                      week and read as people leaving. */}
+                  <p className="admin-metrics-total">
+                    Усього людей за весь час: <strong>{metrics.data.totalUsers}</strong>
+                  </p>
                   <p className="admin-note">
                     Помилка — це відповідь 5xx. Перевірки стану, preflight-запити браузера і сама
                     адмінка не враховуються, тож графік показує лише живий трафік.
@@ -336,8 +388,28 @@ export function AdminPage() {
               )}
             </section>
 
-            <section className="admin-section">
-              <h2 className="admin-section-title">Останні помилки</h2>
+            {/*
+              Collapsed by default, and a native `details` rather than a state
+              flag: the feed is the longest thing on the page and the least often
+              needed - on a healthy day it is a list of nothing worth scrolling
+              past. The count in the summary is there so it can be checked
+              without opening anything.
+            */}
+            <details className="admin-section admin-collapsible">
+              <summary className="admin-summary">
+                <h2 className="admin-section-title">Останні помилки</h2>
+                {errorFeed.data && (
+                  <span
+                    className={
+                      errorFeed.data.entries.length > 0
+                        ? 'admin-summary-count admin-summary-count-warn'
+                        : 'admin-summary-count'
+                    }
+                  >
+                    {errorFeed.data.entries.length}
+                  </span>
+                )}
+              </summary>
               {errorFeed.isLoading && <p className="admin-note">Завантаження стрічки…</p>}
               {errorFeed.isError && statusOf(errorFeed.error) !== 401 && (
                 <p className="admin-alert" role="status">
@@ -382,7 +454,7 @@ export function AdminPage() {
                   повний запис із стеком лишається в логах, за номером запиту.
                 </p>
               )}
-            </section>
+            </details>
 
             <section className="admin-section">
               <h2 className="admin-section-title">Сесія</h2>

@@ -140,6 +140,18 @@ export class UserService {
       createdAt: updatedUser.createdAt,
     };
   }
+
+  /**
+   * How many accounts exist, ever. The admin panel's "unique people" figure.
+   *
+   * Deliberately from Postgres and not from the Redis metrics: those buckets
+   * expire, so a Redis-derived total would quietly shrink over a quiet week and
+   * read as people leaving. A row here is created once, on the first successful
+   * Telegram login, and is never removed by us.
+   */
+  async countAll(): Promise<number> {
+    return this.prisma.user.count();
+  }
 }
 
 // Export singleton instance

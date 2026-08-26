@@ -178,6 +178,28 @@ export interface AdminMetricsDay {
   averagePerUser: number;
 }
 
+/** One hour of the rolling window. Zero-filled exactly like the minutes. */
+export interface AdminMetricsHour {
+  /** ISO start of the hour. */
+  startedAt: string;
+  requests: number;
+  errors: number;
+}
+
+/**
+ * The rolling 24 hours: independent of the UTC day boundary, which is useless at
+ * 01:00 UTC when "today" is one hour old. `users` is an exact distinct count over
+ * the whole window, not a sum of the hours.
+ */
+export interface AdminMetricsWindow {
+  hours: number;
+  requests: number;
+  errors: number;
+  users: number;
+  /** Oldest hour first; the last bucket is the hour in progress. */
+  series: AdminMetricsHour[];
+}
+
 /** Internal user id only - the server never sends a Telegram id here. */
 export interface AdminMetricsTopUser {
   userId: string;
@@ -188,10 +210,13 @@ export interface AdminMetricsTopUser {
 export interface AdminMetrics {
   generatedAt: string;
   retentionDays: number;
+  /** Accounts that have ever existed. From the database, so it never shrinks. */
+  totalUsers: number;
   perMinute: {
     minutes: number;
     series: AdminMetricsMinute[];
   };
+  last24h: AdminMetricsWindow;
   daily: AdminMetricsDay[];
   topUsers: AdminMetricsTopUser[];
 }
