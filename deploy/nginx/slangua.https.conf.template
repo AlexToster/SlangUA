@@ -31,6 +31,25 @@ server {
 
     location /api/ {
         limit_req zone=api burst=20 nodelay;
+
+        # nginx's 1m default is below what POST /api/v1/transcribe accepts. The
+        # audio arrives base64-encoded, so the route's own bodyLimit is
+        # ceil(STT_MAX_AUDIO_BYTES / 3) * 4 + 1024 - about 1.34 MiB at the default
+        # 1 MiB of audio. With the default in place nginx would answer its own HTML
+        # 413 before Fastify saw the request, and the client would show a generic
+        # failure instead of the named STT_AUDIO_TOO_LARGE. Raise this together
+        # with STT_MAX_AUDIO_BYTES, never below it.
+        client_max_body_size 2m;
+
+        # A translation can legitimately outlive nginx's 60s default: each provider
+        # gets AI_TIMEOUT_<ID> (30s, 60s for Ollama) and is retried AI_MAX_RETRIES
+        # times with exponential backoff before the chain moves to the next one.
+        # 120s covers a first provider that fails slowly plus a second that
+        # succeeds. It does not cover every pathological chain - the application has
+        # no global per-request deadline - so bound the chain with
+        # AI_MAX_FALLBACK_ATTEMPTS rather than by raising this further.
+        proxy_read_timeout 120s;
+
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
