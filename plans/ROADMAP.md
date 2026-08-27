@@ -151,7 +151,7 @@ Working Telegram Mini App.
 
 ---
 
-## Stage 8 — Integration & Testing `[in progress]`
+## Stage 8 — Integration & Testing `[done]`
 
 **Purpose:**
 Validate the complete system.
@@ -170,11 +170,15 @@ Validate the complete system.
 **Deliverable:**
 Production-ready application.
 
-The automated half of this stage is in place: the happy path runs as one HTTP journey where every id travels from the previous response (`test/integration/flow.integration.test.ts`), token forgery, cross-user history reads and the rate limiter's fail-closed branch have their own suite with a control case per assertion (`test/integration/security.integration.test.ts`), the whole `PROMPT_INJECTION_PATTERNS` array is covered sample-by-sample plus benign Ukrainian text (`test/unit/prompt-injection.test.ts`), and the frontend gaps are closed by tests for the bootstrap/router, the `401 → refresh → one retry` interceptor and the Translate screen's debounce and 403 recovery. What remains is what a machine cannot answer here: the on-device Telegram pass, UX edge cases by hand, performance numbers under load, and the slang-quality matrix per provider.
+The automated half of this stage is in place: the happy path runs as one HTTP journey where every id travels from the previous response (`test/integration/flow.integration.test.ts`), token forgery, cross-user history reads and the rate limiter's fail-closed branch have their own suite with a control case per assertion (`test/integration/security.integration.test.ts`), the whole `PROMPT_INJECTION_PATTERNS` array is covered sample-by-sample plus benign Ukrainian text (`test/unit/prompt-injection.test.ts`), and the frontend gaps are closed by tests for the bootstrap/router, the `401 → refresh → one retry` interceptor and the Translate screen's debounce and 403 recovery.
+
+**Closed on 2026-08-27.** Every automated suite ran green on the owner's machine — typecheck, the Style Engine smoke check, 176 unit tests across 10 files, the integration suites against throwaway Postgres and Redis containers, and the frontend's lint, typecheck, tests and build — and the rebuilt `frontend/dist` was pushed, which also retired the stale bundle that used to bounce an authenticated admin back to the root screen. The gate for closing the stage is that no machine-checkable claim is left unverified; that is now true.
+
+Four items from the list above are **not** claimed as done and move into Stage 9 as [9.8](#stage-9--deployment-in-progress): the on-device Telegram pass on real Android and iOS, UX edge cases by hand, response times under load, and the slang-quality matrix per provider. They are not deferred out of convenience — each of them needs the deployed instance to mean anything. A latency number measured against `localhost` with no TLS, no reverse proxy and no shared CPU says nothing about production, and the Telegram host behaviour that Stage 7 could not assert (microphone permission, the share sheet, theme switching) is exactly what changes when the Mini App is loaded from a public HTTPS origin instead of a dev tunnel. Measuring them twice would be honest but wasteful; measuring them on the real deployment is the point.
 
 ---
 
-## Stage 9 — Deployment `[planned]`
+## Stage 9 — Deployment `[in progress]`
 
 **Purpose:**
 Deploy the application.
@@ -190,6 +194,33 @@ Deploy the application.
 
 **Deliverable:**
 Production deployment.
+
+### What was already in place when the stage opened
+
+Parts of this stage were built while earlier stages were running, because a feature that cannot be deployed is not finished: the four-service `docker-compose.production.yml` (Postgres and Redis with healthchecks, the API with `prisma migrate deploy` and a readiness probe, the built frontend behind its own nginx, application ports bound to loopback), the multi-stage `Dockerfile` pinned through one `ARG NODE_IMAGE`, the three versioned nginx templates under `deploy/nginx/`, the configuration contract (Zod schema, `.env.example`, placeholders rejected under `NODE_ENV=production`), `GET /health` and `GET /health/ready`, and the operator panel that already answers "how loaded is it" and "what failed" (Stage 10, steps C and D). The stage is therefore not a blank slate — it is the gap between "there is a compose file" and "there is a service somebody else can rely on".
+
+### Order
+
+The order is not the order of the bullet list. It runs from the failures that cannot be undone, through the failures a user would find before we did, to the ones that only matter once the thing is public.
+
+- **9.1 — Postgres backups with a written restore** `[done]`
+  A `db-backup` service in `docker-compose.production.yml` runs `scripts/backup-postgres.sh`: one `pg_dump` per day at `BACKUP_AT` (UTC), written to a temporary file and moved into place only once complete, gzipped, with seven daily copies and four Sunday copies kept in the bind-mounted `BACKUP_DIR`. First in the order because it is the only item on this list whose absence is irreversible: every other gap costs an outage, this one costs the data. The restore procedure is written down in [docs/operations.md](../docs/operations.md), together with an explicit list of what has been verified (the script's own branches, against stubbed `pg_dump`) and what has not: **performing** a restore needs the deployed instance and is part of [9.9](#stage-9--deployment-in-progress). Until then this covers taking copies, not proving they restore — an untested dump is a belief, not a backup.
+- **9.2 — Reverse-proxy correctness** `[done]`
+  Two defaults in the nginx templates were wrong for this application, and both would have surfaced as a user-visible failure with a healthy application behind it: `client_max_body_size` (nginx's 1 MiB against the base64 audio body that `/transcribe` accepts up to ≈1.34 MiB — the user would get nginx's HTML 413 instead of the named error the client knows how to show) and `proxy_read_timeout` (60 s against a provider fallback chain that can legitimately run longer — nginx's own 504 while the request is still being served). The static side came with the same edit: `deploy/nginx/frontend.conf` now serves the hashed `/assets/` filenames `immutable` for a year and `index.html` with `no-store`, which is the whole release mechanism — a changed file has a changed URL, and the document naming those URLs is never cached. Second because these are cheap to fix now and expensive to diagnose from a bug report. Both are documented in [docs/operations.md](../docs/operations.md), including what to change when `STT_MAX_AUDIO_BYTES` moves.
+- **9.3 — Log retention** `[next]`
+  `logging:` caps on every compose service. pino writes JSON to stdout and Docker's default `json-file` driver has no ceiling, so today the only thing bounding log growth is the disk. A full disk stops Postgres, which makes this a data-availability item rather than a tidiness one.
+- **9.4 — Monitoring that reaches a human** `[planned]`
+  An external probe of `GET /health/ready` and an alert channel (Telegram to the admin ids that already exist in `ADMIN_TELEGRAM_IDS`). The operator panel is a *pull* view: it answers only while somebody is looking at it. The backup job, the readiness probe and the `5xx` feed all become useful when something announces them.
+- **9.5 — Deployment runbook** `[planned]`
+  Extend [docs/operations.md](../docs/operations.md) with the full sequence: certificate issuance and renewal with certbot, `__SERVER_NAME__` substitution, the first `.env` on the server (including the deployment-only variables), the first admin, upgrades, and rollback. Server-specific scripts stay outside the repository as before ([10-repository-hygiene.md](docs/10-repository-hygiene.md)); the procedure does not have to.
+- **9.6 — CI builds the production image** `[planned]`
+  CI currently proves the source is good and never touches `Dockerfile` or `docker-compose.production.yml`, so both can rot silently between deployments. A `docker build` of the `api` and `frontend` targets in the existing workflow is enough to catch it on the pull request instead of on the server.
+- **9.7 — Public deployment** `[planned]`
+  Domain, TLS via certbot, the HTTPS template in place of the bootstrap one, `.env` with real secrets, `CORS_ALLOWED_ORIGINS` and `TRUST_PROXY` set for the real origin, and the Mini App URL registered in BotFather.
+- **9.8 — Pre-flight on the real deployment** `[planned]`
+  The four items carried over from Stage 8: the on-device pass on real Android and iOS clients, UX edge cases by hand, response times under load, and the slang-quality matrix per provider. Plus one case the deployment adds by itself: on Telegram Web the Mini App runs in a cross-site iframe, where a `SameSite=Lax` refresh cookie is not sent, so the session recovers through a full reload instead of a silent refresh. Verify it on Telegram Web and decide deliberately whether that is acceptable or whether the cookie needs `SameSite=None`.
+- **9.9 — Sign-off** `[planned]`
+  The deliverable is not "it is running" but "it can be operated": a restore that has been performed, an alert that has fired, logs that stop growing, and a runbook somebody else could follow.
 
 ---
 

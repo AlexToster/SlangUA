@@ -16,6 +16,9 @@
 
 - **Line endings are enforced by `.gitattributes` (2026-08-17).** `* text=auto eol=lf` plus explicit `binary` for image and archive extensions. Every text blob was already LF, so the file changes nothing in history — it stops a Windows editor or generator from introducing a CRLF blob later, which is otherwise only caught by remembering to sweep. Verified with `git ls-files --eol`: 174 tracked text files at `i/lf w/lf`, the only `-text` entry being `frontend/src/assets/hero.png`.
 
+- **Database dumps are ignored (2026-08-27).** `backups/` and `*.sql.gz` in both `.gitignore` and `.dockerignore`. The `db-backup` service defaults to `./backups`, so a full copy of production data — every translation and every Telegram id — can appear inside the working copy; the `*.tar.gz` entry that was already there does not cover it. The ignore rule is the backstop, not the answer: `BACKUP_DIR` should point outside the repository on a real server, which is what [docs/operations.md](../../docs/operations.md) says to do.
+- **The backup script is versioned, the schedule is not baked into an image (2026-08-27).** `scripts/backup-postgres.sh` is bind-mounted read-only into the `db-backup` container, so a fix to the schedule is a `docker compose restart` rather than a rebuild — and, unlike the deployment scripts above, it carries no server details, which is why it belongs in the repository. The service deliberately reuses the `db` service's own image tag: an older `pg_dump` refuses a newer server, so the two tags must be upgraded together.
+
 ## Remaining
 
 1. Regenerate `package-lock.json` — it was not refreshed after the `@fastify/cookie` and `jsonwebtoken` removals. Run `npm install` on the development machine (a Linux run would resolve different optional native packages).

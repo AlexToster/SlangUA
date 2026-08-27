@@ -62,10 +62,12 @@ src/
                            openai-compatible/claude/gemini.adapter, types
   style-engine/            loader.ts, registry.json, base-rules.md, styles/<id>/
 prisma/                    schema.prisma + 11 migrations
-scripts/copy-style-assets.mjs
+scripts/                   copy-style-assets.mjs, hash-admin-password.mjs,
+                           backup-postgres.sh (the db-backup service's schedule)
 test/                      integration/ (vitest + Testcontainers), unit/ (plain vitest), helpers/, verify-style-engine.mjs
 frontend/src/              App.tsx, pages/, components/, services/, utils/, types/, data/
 deploy/nginx/              HTTP/HTTPS templates + frontend.conf
+docs/                      configuration.md (env reference), operations.md (backups, restore, proxy)
 plans/                     architecture.md, ROADMAP.md, docs/01–10, this briefing
 ```
 
@@ -85,7 +87,9 @@ Stages 1–6 are done: architecture, conceptual DB model, Prisma schema, API des
 
 **Stage 7 — Frontend implementation + Telegram Mini App integration — is done.** All three screens plus the admin route exist and talk to the backend; Telegram bootstrap, theme, safe area, haptics, sharing and voice input are implemented and covered by the automated suites. The stage was closed rather than kept open for one remaining kind of check: the on-device pass on real Android and iOS clients (microphone permission, the share sheet inside a production-configured bot, light/dark switching at 320 px with the keyboard open) is host-specific and cannot be asserted from CI, so it moved into Stage 8 as its own item.
 
-**Stage 8 — Integration & testing — is in progress.** Stage 9 is deployment (Docker Compose, nginx reverse proxy with TLS termination, monitoring, Postgres backups). Stage 10 collects post-MVP ideas: speech-to-text (being built out of order, see below), OCR, premium tier, analytics.
+**Stage 8 — Integration & testing — is done, closed on 2026-08-27** once every automated suite ran green on the owner's machine (typecheck, the Style Engine smoke check, 176 unit tests, the integration suites against throwaway Postgres and Redis containers, and the frontend's lint/typecheck/tests/build) and the rebuilt `frontend/dist` was pushed. Four items that need a real deployment to mean anything moved into Stage 9 rather than being dropped: the on-device Android and iOS pass, UX edge cases by hand, response times under load, and the slang-quality matrix per provider.
+
+**Stage 9 — deployment — is in progress**, ordered from the irreversible failures outward. Done: Postgres backups (a `db-backup` service running `scripts/backup-postgres.sh`, one dump a day, 7 daily + 4 Sunday copies, with the restore procedure in `docs/operations.md`) and reverse-proxy correctness (`client_max_body_size` and `proxy_read_timeout`, whose nginx defaults would each have broken a healthy application, plus immutable caching for the hashed assets and `no-store` for `index.html`). Next: log retention caps, monitoring that reaches a human, the deployment runbook, a `docker build` in CI, the public deployment itself, the pre-flight checks above, and sign-off — where "operable" means a restore that has been performed, an alert that has fired, logs that stop growing and a runbook somebody else could follow. Stage 10 collects post-MVP ideas: speech-to-text (built out of order, see below), OCR, premium tier, analytics.
 
 **Out of order, at the owner's request: the admin panel.** Four steps, A→D, **all four done**: A the access layer (Telegram allowlist + password step-up, `404` for everyone else, read-only provider overview); B the operator kill-switch for AI providers (`PATCH /admin/providers/:providerId`, a Redis switch with no TTL that outranks the circuit breaker and is cleared only by a human); C usage metrics (`GET /admin/metrics` — requests and `5xx` per minute, over a rolling 24 hours and per UTC day, users per day with the average per user, today's heaviest users by internal id, and the all-time account count from Postgres); D the error feed (`GET /admin/errors` — the last `ADMIN_ERROR_FEED_MAX` failures, newest first, carrying the code and technical message the client was never told, and no `DELETE`). State lives in Redis only — no migration, no admin column, no user role, which is what made building out of order possible. C and D are read-only views fed by one `onResponse` hook, so their writes cost a data point rather than a request. What remains post-MVP under Stage 10 is *user* administration, not this. See §7 (Admin) and §10.
 
@@ -486,7 +490,8 @@ A second remediation pass, split into six groups. Both passes are committed — 
 - `package-lock.json` was not regenerated after the dependency removals — run `npm install` once on the development machine; a Linux run would resolve different optional native packages.
 - POFENI's rewritten `prompt.md` still needs a native-speaker read for register and word choice. Nothing automated can judge it.
 - `slangua-deploy.tar.gz` is still in the working tree. It is untracked (so it was left alone) and `*.tar.gz` is now gitignored. The same goes for `deploy-build.log`, covered by `*.log`.
-- The Stage 8 suites and the frontend suites have never been run by a runner — see the paragraph above. Type-checking is not a substitute; a green `tsc` says nothing about a debounce or a Testcontainers fixture.
+- The Stage 8 suites and the frontend suites **have now been run by a runner** — the owner ran all of them green on 2026-08-27 (unit, integration against real containers, frontend lint/typecheck/tests/build) and pushed the rebuilt bundle. What no runner can answer stays open below: the on-device Android and iOS pass, UX edge cases by hand, latency under load, and the slang-quality matrix per provider. All four are Stage 9 §9.8, on the deployed instance, because measuring them against `localhost` would say nothing about production.
+- A restore from a `pg_dump` copy has been written down but never performed. The backup script's own branches are verified against stubbed binaries; the procedure in `docs/operations.md` is not rehearsed until Stage 9 §9.9.
 
 ---
 
@@ -518,6 +523,7 @@ A second remediation pass, split into six groups. Both passes are committed — 
 | Frontend API client and types | `frontend/src/services/api.ts`, `frontend/src/types/api.ts` |
 | Test fixtures and the LLM mock | `test/helpers/` |
 | Security posture, hygiene debt | `plans/docs/06-security.md`, `plans/docs/10-repository-hygiene.md` |
+| Backups, restore, proxy tuning | `docs/operations.md`, then `scripts/backup-postgres.sh` and `deploy/nginx/` |
 
 ---
 
