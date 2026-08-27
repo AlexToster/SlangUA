@@ -1,7 +1,6 @@
 <div align="center">
 
 # SlangUA
-### AI-powered Ukrainian Style Translator
 
 <img src="docs/assets/hero-styles.png" width="480" alt="Шість персонажів SlangUA за столиками кав'ярні" />
 
