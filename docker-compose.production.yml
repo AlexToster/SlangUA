@@ -75,14 +75,18 @@ services:
   # be upgraded together.
   #
   # The script is bind-mounted rather than baked into an image, so a fix to the
-  # schedule is a `docker compose restart db-backup` and not a rebuild. It never
-  # connects over the published port - `PGHOST: db` stays on the compose network,
-  # so backups keep working even if the loopback publications change.
+  # schedule needs no rebuild - but it does need `up -d --force-recreate
+  # db-backup` and not `restart`. A single-file bind mount follows the inode: an
+  # editor (or a deploy that copies the tree in) writes a new file, and the
+  # running container keeps executing the deleted one. It never connects over the
+  # published port - `PGHOST: db` stays on the compose network, so backups keep
+  # working even if the loopback publications change.
   #
   # Runs as root (the entrypoint override skips the image's step-down to the
-  # postgres user), which is why the dumps land root-owned in BACKUP_DIR. That is
-  # the intent: plain SQL dumps of the whole database should not be world-readable
-  # on the host. See docs/operations.md for the restore procedure.
+  # postgres user), so the dumps land root-owned in BACKUP_DIR. The script sets
+  # `umask 077` on top of that, because root-owned files are still 0644 by
+  # default and a plain SQL dump of the whole database must not be readable by
+  # every account on the host. See docs/operations.md for the restore procedure.
   db-backup:
     image: postgres:16-alpine
     restart: unless-stopped

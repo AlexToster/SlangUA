@@ -21,6 +21,14 @@
 # failed dump must be loud in the logs, not the end of the schedule.
 set -u
 
+# Dumps are plain SQL: every translation, every Telegram id, every refresh-token
+# row in one readable file. Default umask 022 would leave them 0644 inside a 0755
+# directory, i.e. readable by any account on the host - so the container running
+# as root would protect nothing. 077 makes the directories 0700 and the files
+# 0600. Files created before this line existed keep their old mode; fix them once
+# with `chmod -R go-rwx "$BACKUP_DIR"`.
+umask 077
+
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_AT="${BACKUP_AT:-03:30}"
 BACKUP_KEEP_DAILY="${BACKUP_KEEP_DAILY:-7}"
