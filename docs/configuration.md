@@ -63,7 +63,7 @@
 | `REFRESH_RATE_LIMIT_WINDOW_MS` / `REFRESH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Те саме для `POST /auth/refresh`. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Дозволені origin-и для CORS. |
 | `TRUST_PROXY` | `false` | Довіряти заголовкам проксі для визначення IP. |
-| `LOG_LEVEL` | `info` | Рівень логування. |
+| `LOG_LEVEL` | `info` | Рівень логування. Він же регулятор обсягу: логи контейнерів обмежені стелею, тому `debug` у продакшні не збільшує архів, а вкорочує вікно — див. [operations.md](operations.md#логи-стеля-і-ротація). |
 
 > Rate limiting, preview/save/share TTL та інші тонкі налаштування також конфігуруються через env — повний перелік дивіться у [`src/config/index.ts`](../src/config/index.ts).
 

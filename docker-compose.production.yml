@@ -1,7 +1,29 @@
+# Log ceiling, applied to every service below.
+#
+# Docker's default `json-file` driver has no size limit of its own, and this stack
+# is talkative: pino writes a JSON line per request to stdout, nginx writes an
+# access line per asset, Postgres logs every checkpoint. Unbounded, the only thing
+# that stops the growth is the disk running out - and this stack does not degrade
+# gracefully when it does: Postgres refuses writes, `pg_dump` produces a truncated
+# file, and the backup that would have saved the day is the thing that fails. That
+# makes this a data-availability setting rather than housekeeping.
+#
+# `max-size` is when the current file rotates, `max-file` is how many files are
+# kept including the current one, so the product is the ceiling per service. Only
+# what is actually written occupies disk; these are limits, not reservations.
+# Rotation is destructive by design - past the ceiling the oldest file is deleted,
+# not archived. Anything that must outlive it has to be shipped off the host.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_DB: slangua
       POSTGRES_USER: slangua
@@ -17,6 +39,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *logging
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -31,6 +54,16 @@ services:
       context: .
       target: api
     restart: unless-stopped
+    # A deeper window than the shared default, on purpose: pino's stdout is the
+    # only place that keeps the stack trace and the untruncated message. The admin
+    # error feed is a window, not an archive - ADMIN_ERROR_FEED_MAX entries with a
+    # whole-key TTL - so 50 MB of API history is what an incident actually gets
+    # reconstructed from.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     env_file:
       - .env
     environment:
@@ -67,6 +100,9 @@ services:
       args:
         VITE_API_BASE_URL: /api/v1
     restart: unless-stopped
+    # The nginx image symlinks its access and error logs to stdout/stderr, so the
+    # SPA's request log is bounded by the cap above like everything else.
+    logging: *logging
     ports:
       - "127.0.0.1:8080:80"
 
@@ -90,6 +126,9 @@ services:
   db-backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    # Two lines a day when healthy - and the whole record of whether the backups
+    # ran, since the script reports success and failure to stdout and nowhere else.
+    logging: *logging
     entrypoint: ["sh", "/usr/local/bin/backup-postgres.sh"]
     environment:
       PGHOST: db
