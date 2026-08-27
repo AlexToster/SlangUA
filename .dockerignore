@@ -10,6 +10,12 @@ SlangUA.zip
 *.tar.gz
 *.log
 
+# Database dumps must never enter an image layer. The db-backup service reads the
+# script through a bind mount, not from the build context, so nothing here needs
+# the backups directory.
+backups
+*.sql.gz
+
 # Local deploy scripts hold production server details and must never enter the
 # build context or an image layer. Only deploy/nginx/* is used (see Dockerfile).
 deploy/*.ps1

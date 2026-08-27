@@ -15,6 +15,12 @@ frontend/dist/
 deploy/*.ps1
 deploy/*.sh
 
+# Database dumps. The default BACKUP_DIR of the db-backup service is ./backups,
+# so a full copy of production data can appear here; *.sql.gz is listed as well
+# because a hand-taken dump usually lands wherever the operator happens to be.
+backups/
+*.sql.gz
+
 # Environment files (secrets)
 .env
 .env.*.local

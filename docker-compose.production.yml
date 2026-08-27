@@ -70,6 +70,39 @@ services:
     ports:
       - "127.0.0.1:8080:80"
 
+  # Daily `pg_dump` into a host directory. Deliberately the same image tag as
+  # `db`: an older pg_dump refuses a newer server outright, so the two tags must
+  # be upgraded together.
+  #
+  # The script is bind-mounted rather than baked into an image, so a fix to the
+  # schedule is a `docker compose restart db-backup` and not a rebuild. It never
+  # connects over the published port - `PGHOST: db` stays on the compose network,
+  # so backups keep working even if the loopback publications change.
+  #
+  # Runs as root (the entrypoint override skips the image's step-down to the
+  # postgres user), which is why the dumps land root-owned in BACKUP_DIR. That is
+  # the intent: plain SQL dumps of the whole database should not be world-readable
+  # on the host. See docs/operations.md for the restore procedure.
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/usr/local/bin/backup-postgres.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: slangua
+      PGDATABASE: slangua
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      BACKUP_DIR: /backups
+      BACKUP_AT: ${BACKUP_AT:-03:30}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+    volumes:
+      - ./scripts/backup-postgres.sh:/usr/local/bin/backup-postgres.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:
