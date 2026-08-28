@@ -160,7 +160,7 @@ All routes are under `/api/v1`. JSON only. Auth is a `Bearer` access token unles
 
 ### Auth
 
-- **`POST /auth/telegram`** — no auth. Body `{ initData }` (raw Telegram `WebAppData`). Verifies HMAC-SHA256, then `auth_date` freshness. Returns `{ accessToken }` and sets two cookies: `slangua_refresh` (HttpOnly, `Path=/api/v1/auth`, SameSite=Lax, Secure in production) and `slangua_csrf` (readable). Errors: 400 `INVALID_INIT_DATA`; 401 `INVALID_HMAC` / `AUTH_DATE_EXPIRED` / `AUTH_DATE_INVALID` / `AUTH_DATE_FUTURE`; 429.
+- **`POST /auth/telegram`** — no auth. Body `{ initData }` (raw Telegram `WebAppData`). Verifies HMAC-SHA256, then `auth_date` freshness. Returns `{ accessToken }` and sets two cookies: `slangua_refresh` (HttpOnly, `Path=/api/v1/auth`) and `slangua_csrf` (readable, `Path=/`). Both are `SameSite=None; Secure; Partitioned` in production and `SameSite=Lax` elsewhere, because Telegram Web embeds the Mini App in a cross-site iframe; the combination lives in `src/lib/session-cookie.ts`. Errors: 400 `INVALID_INIT_DATA`; 401 `INVALID_HMAC` / `AUTH_DATE_EXPIRED` / `AUTH_DATE_INVALID` / `AUTH_DATE_FUTURE`; 429.
 - **`POST /auth/refresh`** — no JWT. Requires the refresh cookie plus an `X-CSRF-Token` header matching `slangua_csrf` (double-submit CSRF, compared with `timingSafeEqual`). Body is a strict empty object. Rotates the token inside a transaction and returns a new `{ accessToken }`. Errors: 400 `MISSING_REFRESH_TOKEN`; 401 `INVALID_REFRESH_TOKEN` / `REFRESH_TOKEN_EXPIRED`; 403 `CSRF_VALIDATION_FAILED`; 429.
 - **`POST /auth/logout`** — JWT. Deletes the `RefreshToken` row identified by the access token's `jti` and adds the `jti` to a Redis denylist for its remaining lifetime. Returns 204.
 
@@ -264,7 +264,7 @@ The signature never accepts file paths, and it is `Promise`-returning even thoug
 
 Refresh tokens are opaque 32-byte random values, stored **only** as HMAC-SHA256 hashes keyed by `REFRESH_TOKEN_HMAC_SECRET`, never in plaintext. Every refresh rotates: inside a transaction the old row is found, expiry-checked, then deleted (the delete doubles as a concurrency guard — a Prisma `P2025` is deliberately allowed to propagate), and a new row is created. The replacement is delivered only via cookie.
 
-**Browser storage.** The access token lives in frontend memory only. The refresh token never appears in a JSON body or in `localStorage` — only in the HttpOnly `slangua_refresh` cookie. Refresh additionally requires the readable `slangua_csrf` cookie echoed in an `X-CSRF-Token` header. Production must serve the frontend and API through the same trusted origin over HTTPS.
+**Browser storage.** The access token lives in frontend memory only. The refresh token never appears in a JSON body or in `localStorage` — only in the HttpOnly `slangua_refresh` cookie. Refresh additionally requires the readable `slangua_csrf` cookie echoed in an `X-CSRF-Token` header. Production must serve the frontend and API through the same trusted origin over HTTPS. That pair is also what carries the session across a cross-site iframe: with `SameSite=None` in production, the double-submit check — not SameSite — is what stops a third-party page from minting tokens.
 
 **Rate limiting fails closed.** The limiter is a Redis sorted-set sliding window executed in a `MULTI`. Any Redis error other than "limit exceeded" raises `RATE_LIMITER_UNAVAILABLE` → 503. Redis is a hard runtime dependency; the service never runs while pretending rate limiting is off.
 

@@ -116,6 +116,8 @@ The `auth_date` field in Telegram `WebAppData` is validated against a configurab
 
 - **Browser session storage**: Access tokens stay only in frontend memory. Refresh tokens are never returned in JSON or stored in localStorage; they use the `slangua_refresh` HttpOnly cookie. Refresh requests require the matching `slangua_csrf` cookie and `X-CSRF-Token` header. Production deployment must serve frontend and API through the same trusted site/reverse proxy, with HTTPS.
 
+- **Cross-site cookie context**: in production both session cookies are `SameSite=None; Secure; Partitioned`, because Telegram Web embeds the Mini App in a cross-site iframe where a `Lax` cookie is neither stored nor sent. That removes SameSite as a CSRF defence, and the double-submit pair above becomes the only one — which is why it predates this change and is compared with `timingSafeEqual`. Two things keep it sound: an attacker's page cannot read a cookie set on our host, and `CORS_ALLOWED_ORIGINS` is an explicit allowlist rather than a reflector, so no third-party origin can read a response that would leak the token. The `Secure`/`None` pair is inseparable by construction ([`src/lib/session-cookie.ts`](../../src/lib/session-cookie.ts)): a browser drops `None` without `Secure` silently, which would look like an intermittently lost session rather than an error.
+
 - **API Keys**: AI‑provider API keys are injected via environment variables and never exposed in client‑side code.
 - **Monitoring**: Logging of authentication failures, rate‑limit hits, and unexpected errors for anomaly detection.
 - **Security Headers**: The frontend will enforce Content‑Security‑Policy, X‑Frame‑Options, and other modern browser‑security headers.

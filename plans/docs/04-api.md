@@ -39,7 +39,7 @@ This document defines the backend API contracts, routes, request/response DTOs, 
     "accessToken": "string (JWT)"
   }
   ```
-  The response also sets `slangua_refresh` (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and a readable `slangua_csrf` cookie.
+  The response also sets `slangua_refresh` (`HttpOnly`) and a readable `slangua_csrf` cookie. Both carry `SameSite=None; Secure; Partitioned` in production and `SameSite=Lax` elsewhere — the Mini App runs in a cross-site iframe on Telegram Web, where a `Lax` cookie is neither stored nor sent, and `None` is invalid without `Secure`. The two attributes are therefore decided by one flag in [`src/lib/session-cookie.ts`](../../src/lib/session-cookie.ts).
 - **Error codes**: `400` (missing/invalid `initData`), `401` (HMAC failure or expired `auth_date`), `429` (rate limit exceeded — own IP-keyed budget, `AUTH_RATE_LIMIT_*`, 20 req/min by default), `503` (rate limiter unavailable)
 
 ### `POST /auth/refresh`

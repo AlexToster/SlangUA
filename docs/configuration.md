@@ -39,7 +39,7 @@
 
 | Змінна | За замовчуванням | Опис |
 | ------ | ---------------- | ---- |
-| `NODE_ENV` | `development` | Режим роботи (`development` / `production` / `test`). |
+| `NODE_ENV` | `development` | Режим роботи (`development` / `production` / `test`). Керує не лише логуванням: при `production` cookie сесії отримують `SameSite=None; Secure; Partitioned` — без цього Mini App у Telegram Web (cross-site iframe) губить сесію. У [`docker-compose.production.yml`](../docker-compose.production.yml) значення задане в `environment:`, тому правка в `.env` на нього не впливає. |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | Адреса backend-сервера. |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `7d` | Час життя access/refresh токенів. |
 | `AUTH_DATE_TTL` | `86400` | TTL Telegram `auth_date` у секундах (захист від replay). |

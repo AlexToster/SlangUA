@@ -52,7 +52,7 @@ See [Architectural Decisions](05-decisions.md) for the rationale behind the simp
     - After successful HMAC verification, `auth_date` must be validated against a configurable TTL (configured via an environment variable) to mitigate replay attacks.
     - Requests with an expired `auth_date` must be rejected.
     - Returns the JWT access token in the response body and keeps it in frontend memory only. The refresh token never appears in JSON: it is set as the HttpOnly `slangua_refresh` cookie, stored HMAC-hashed in PostgreSQL with an expiry, and rotated on every refresh.
-    - Pairs that cookie with a readable `slangua_csrf` cookie; `POST /auth/refresh` requires the matching `X-CSRF-Token` header (double-submit), so a cross-site request cannot mint tokens.
+    - Pairs that cookie with a readable `slangua_csrf` cookie; `POST /auth/refresh` requires the matching `X-CSRF-Token` header (double-submit), so a cross-site request cannot mint tokens. This is the only CSRF defence in production, where both cookies are `SameSite=None` so that the session survives Telegram Web's cross-site iframe (`src/lib/session-cookie.ts`).
     - Access tokens carry a `jti` naming the `RefreshToken` record they came from, which makes per-device logout possible without touching other sessions.
     - Extensible `AuthStrategy` for future providers.
 - **`Translation Module`**:

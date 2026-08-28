@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { createRateLimiter } from '../plugins/rate-limit.js';
 import { authService } from '../services/auth.service.js';
 import { config } from '../config/index.js';
+import { serializeSessionCookie } from '../lib/session-cookie.js';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const REFRESH_COOKIE = 'slangua_refresh';
@@ -18,10 +19,10 @@ function refreshTtlSeconds(): number {
 }
 
 function serializeCookie(name: string, value: string, httpOnly: boolean, maxAge = refreshTtlSeconds(), path = '/api/v1/auth'): string {
-  const attributes = [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, `Max-Age=${maxAge}`, 'SameSite=Lax'];
-  if (config.NODE_ENV === 'production') attributes.push('Secure');
-  if (httpOnly) attributes.push('HttpOnly');
-  return attributes.join('; ');
+  // `crossSite` decides SameSite, Secure and Partitioned together; production is
+  // the only environment served over HTTPS, and None without Secure is dropped
+  // by the browser in silence. See src/lib/session-cookie.ts.
+  return serializeSessionCookie({ name, value, maxAge, path, httpOnly, crossSite: config.NODE_ENV === 'production' });
 }
 
 function readCookie(header: string | undefined, name: string): string | undefined {
