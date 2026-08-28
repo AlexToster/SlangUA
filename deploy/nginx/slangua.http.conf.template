@@ -28,6 +28,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Present here too, so that the monitor can be configured and confirmed
+    # before the certificate exists. The full reasoning - why an exact-match
+    # block is required at all, and why readiness rather than liveness - is in
+    # slangua.https.conf.template. No `limit_req`: this file defines no zone,
+    # exactly as it defines none for /api/ above.
+    location = /health/ready {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;

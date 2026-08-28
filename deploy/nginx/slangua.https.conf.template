@@ -58,6 +58,36 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # The external uptime monitor's only window into this stack, and the reason
+    # it needs an exact-match block of its own: `/health/ready` is registered at
+    # the root of the Fastify instance rather than under the /api/v1 prefix, so
+    # without this it falls through to `location /` and the frontend container,
+    # whose `try_files $uri $uri/ /index.html` answers 200 with the SPA document.
+    # A monitor pointed at that would report success forever, including with the
+    # API dead - and a plain TCP check on 443 is no better, since nginx keeps
+    # listening and returns its own 502 once the API container is gone.
+    #
+    # Readiness and not liveness on purpose: `/health` answers `ok` while Redis
+    # is down, at which point the rate limiter fails closed and every translate
+    # returns 503. `/health` therefore stays private - `=` exposes this path and
+    # nothing else. The body carries `database` and `redis` as up/down and no
+    # more: no version, no counts, no identifiers.
+    #
+    # Rate limited through the same zone as the API, with a small burst. A
+    # monitor polling every few minutes never approaches 10r/s, while an
+    # unauthenticated endpoint that costs one indexed row plus a Redis PING
+    # should not be free to hammer.
+    location = /health/ready {
+        limit_req zone=api burst=5 nodelay;
+
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;

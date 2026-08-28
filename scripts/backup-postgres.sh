@@ -35,6 +35,19 @@ BACKUP_KEEP_DAILY="${BACKUP_KEEP_DAILY:-7}"
 BACKUP_KEEP_WEEKLY="${BACKUP_KEEP_WEEKLY:-4}"
 # ISO weekday, 1 = Monday .. 7 = Sunday.
 BACKUP_WEEKLY_DAY="${BACKUP_WEEKLY_DAY:-7}"
+# Optional dead-man's switch. A backup that quietly stops is the one failure in
+# this stack that nothing else reports: `restart: unless-stopped` covers the
+# container dying, but a pg_dump that fails every night only writes to stderr,
+# and the log ceiling in docker-compose.production.yml eventually rotates even
+# that away - so it gets discovered on the day a restore is needed. Hence a
+# switch rather than a probe: the ping happens after a *successful* dump and
+# nowhere else, and it is the monitor's silence that raises the alarm.
+#
+# Empty by default, and empty means the script behaves exactly as it did before
+# this existed. Ten seconds is hardcoded on purpose: it is a value nobody tunes,
+# and one more line in .env costs more than it saves.
+BACKUP_HEARTBEAT_URL="${BACKUP_HEARTBEAT_URL:-}"
+HEARTBEAT_TIMEOUT=10
 
 DAILY_DIR="$BACKUP_DIR/daily"
 WEEKLY_DIR="$BACKUP_DIR/weekly"
@@ -64,6 +77,47 @@ for count in "$BACKUP_KEEP_DAILY" "$BACKUP_KEEP_WEEKLY"; do
     0) fail "BACKUP_KEEP_* must be at least 1, got '$count'"; exit 1 ;;
   esac
 done
+
+# Resolved once, at startup, rather than per dump. postgres:16-alpine is not
+# guaranteed to carry curl - busybox `wget` is the fallback and takes different
+# flags - so a URL set against an image that cannot reach it must be a loud line
+# in the log now, not a silent non-ping every night. A missing scheme is caught
+# here for the same reason: `hc-ping.com/<uuid>` pasted without `https://` fails
+# in a way that is far more obvious at boot than at 03:30.
+HEARTBEAT_CMD=''
+if [ -n "$BACKUP_HEARTBEAT_URL" ]; then
+  case "$BACKUP_HEARTBEAT_URL" in
+    http://*|https://*) ;;
+    *) fail "BACKUP_HEARTBEAT_URL must start with http:// or https:// (value not logged)"; exit 1 ;;
+  esac
+  if command -v curl >/dev/null 2>&1; then
+    HEARTBEAT_CMD=curl
+  elif command -v wget >/dev/null 2>&1; then
+    HEARTBEAT_CMD=wget
+  else
+    fail "BACKUP_HEARTBEAT_URL is set but this image has neither curl nor wget; no heartbeat will be sent"
+  fi
+fi
+
+# Never fails the backup: the dump is already on disk by the time this runs, and
+# a monitoring endpoint being unreachable is not a reason to report a good dump
+# as bad. The failure is logged, and an unanswered switch alerts by itself. The
+# URL never reaches a log line - it is the shared secret of the switch, and
+# anyone holding it can keep the monitor quiet while the backups stop, so curl's
+# own stderr (which echoes the URL) is dropped too.
+heartbeat() {
+  [ -n "$HEARTBEAT_CMD" ] || return 0
+  case "$HEARTBEAT_CMD" in
+    curl) curl -fsS -m "$HEARTBEAT_TIMEOUT" -o /dev/null "$BACKUP_HEARTBEAT_URL" 2>/dev/null ;;
+    wget) wget -q -T "$HEARTBEAT_TIMEOUT" -O /dev/null "$BACKUP_HEARTBEAT_URL" 2>/dev/null ;;
+  esac
+  if [ "$?" -eq 0 ]; then
+    log "heartbeat sent"
+  else
+    fail "heartbeat failed; the dump itself is fine"
+  fi
+  return 0
+}
 
 wait_for_db() {
   attempt=0
@@ -131,6 +185,10 @@ take_backup() {
 
   prune "$DAILY_DIR" "$BACKUP_KEEP_DAILY"
   prune "$WEEKLY_DIR" "$BACKUP_KEEP_WEEKLY"
+  # Last, so the ping means "a whole cycle completed" rather than "pg_dump
+  # returned 0". Sent for --once as well: the switch measures whether a good
+  # dump exists, and an ad-hoc dump before a migration is one.
+  heartbeat
   return 0
 }
 
@@ -155,6 +213,13 @@ if [ "${1:-}" = "--once" ]; then
 fi
 
 log "schedule ${BACKUP_AT} UTC, keeping $BACKUP_KEEP_DAILY daily and $BACKUP_KEEP_WEEKLY weekly in $BACKUP_DIR"
+# The URL itself is never logged - it is the shared secret of the switch, and a
+# third party who knows it can keep the monitor quiet while the backups stop.
+if [ -n "$HEARTBEAT_CMD" ]; then
+  log "heartbeat enabled, via $HEARTBEAT_CMD"
+else
+  log "heartbeat disabled (BACKUP_HEARTBEAT_URL is empty)"
+fi
 
 # A restart must not skip a day, and must not dump on every crash-loop turn
 # either: one look at how old the newest dump is answers both.

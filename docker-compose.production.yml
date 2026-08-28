@@ -139,6 +139,10 @@ services:
       BACKUP_AT: ${BACKUP_AT:-03:30}
       BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
       BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      # Optional dead-man's switch, off when empty. Nothing else in the stack can
+      # report a backup that stopped running, because a job that did not run
+      # emits nothing - see docs/operations.md.
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
     volumes:
       - ./scripts/backup-postgres.sh:/usr/local/bin/backup-postgres.sh:ro
       - ${BACKUP_DIR:-./backups}:/backups
