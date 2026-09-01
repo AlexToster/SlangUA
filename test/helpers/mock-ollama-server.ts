@@ -37,12 +37,12 @@ let lastSttRequest: SttRequestInfo | null = null;
 let config: MockOllamaConfig = { shouldFail: false };
 
 const DEFAULT_RESPONSES: Record<string, string> = {
-  GEN_Z: 'no cap Test text fr fr 💀',
-  STREET: 'yo Test text fam',
-  IT_SLANG: 'Test text // TODO: fix this lol',
-  POFENI: 'Базар по поняттях: Test text.',
-  KANCLER: 'Уважаемый пользователь, Test text. С уважением, администрация.',
-  GALICIAN: 'Прошу пана, Test text, борше і файно.',
+  GEN_Z: 'Test text — чиста база, без рофлу.',
+  STREET: 'Test text, без понтів.',
+  IT_SLANG: 'Test text: треба дебажити.',
+  POFENI: 'Test text — за базар відповідаю.',
+  KANCLER: 'Беручи до уваги Test text, повідомляємо про його розгляд.',
+  GALICIAN: 'Прошу пана, Test text — фест файний.',
 };
 
 // The Style Engine never puts the style id into the prompt, and the "Avoid"
@@ -51,7 +51,7 @@ const DEFAULT_RESPONSES: Record<string, string> = {
 // Voice line instead (verified against src/style-engine/styles/*/prompt.md).
 const STYLE_MARKERS: ReadonlyArray<readonly [string, string]> = [
   ['GEN_Z', 'молодь, що живе в інтернеті'],
-  ['STREET', 'школу життя'],
+  ['STREET', 'міського розмовного стилю'],
   ['IT_SLANG', 'український розробник'],
   ['POFENI', 'тюремної говірки'],
   ['KANCLER', 'канцелярист, бюрократ'],

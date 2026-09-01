@@ -87,7 +87,7 @@ An invalid, expired, or foreign token returns no results. The handler must never
 
 Both a `t.me/share/url` intent and an inline message have a practical text limit. Before creating a share payload, the server counts the final rendered message as Unicode grapheme clusters and rejects content above a conservative 3,800-cluster limit with `422 SHARE_TEXT_TOO_LONG`. It never silently truncates a translation.
 
-This is especially relevant to KANCLER, whose result may be 2–4× longer than its input. The UI offers Copy on a rejected share and retains the completed result.
+This is especially relevant to KANCLER, whose result may be about 2–2.5× longer than its input. The UI offers Copy on a rejected share and retains the completed result.
 
 ## 7. Acceptance criteria for the implementation task
 

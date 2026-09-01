@@ -12,7 +12,7 @@
 
 SlangUA is an **AI style translator** for Ukrainian, delivered as a Telegram Mini App. It rewrites ordinary Ukrainian text into sharply contrasting registers of modern Ukrainian.
 
-The governing rule of the product: **maximally change the form, fully preserve the meaning.** Every style must be instantly recognizable, and styles must be contrastive with each other.
+The governing rule of the product: **maximally change the form while preserving the input's key facts and intent.** Every style must be instantly recognizable, and styles must be contrastive with each other. Hyperbole and a characteristic delivery are allowed; inventing a new event, role, violent act, technical incident, or legal fact is not.
 
 SlangUA is explicitly **not** a dictionary, not a chatbot, not a text generator, and not a machine translator. It does not translate between languages: input is Ukrainian, output is Ukrainian.
 
@@ -21,13 +21,13 @@ Six styles ship today. Registry keys are lowercase; the Prisma enum and the API 
 | Enum | Registry key | Title (uk) | Notes |
 | ---- | ------------ | ---------- | ----- |
 | `GEN_Z` | `gen_z` | Молодіжний тікток-сленг | TikTok/Instagram/Discord register; output length roughly preserved |
-| `STREET` | `street` | По-вуличному | Street-market speech |
+| `STREET` | `street` | По-вуличному | Direct, slightly brash urban speech; distinct from prison jargon |
 | `IT_SLANG` | `it_slang` | АйТІшний спіч | Ukrainian IT jargon |
-| `POFENI` | `pofeni` | Зеківський жаргон | **18+**, `ageRestricted: true`, not shareable in v1. Ukrainian prison speech — both inside a penal colony and the register people keep after release. Distinct from STREET: hierarchy and «поняття», not the yard. Registry version `1.1.0` after the prompt rewrite |
-| `KANCLER` | `kancler` | Бюрократична радянщина | Deliberately expands output 2–4× |
-| `GALICIAN` | `galician` | Галицька ґвара | Lviv dialect; added last, registry version `1.0.0` while GEN_Z/STREET/IT_SLANG/KANCLER are `1.0.1` |
+| `POFENI` | `pofeni` | Зеківський жаргон | **18+**, `ageRestricted: true`; shareable only by a confirmed adult. Ukrainian prison speech — both inside a penal colony and the register people keep after release. Distinct from STREET: hierarchy and «поняття», not the yard. Registry version `1.1.1` |
+| `KANCLER` | `kancler` | Бюрократична радянщина | Deliberately expands output about 2–2.5×; registry version `1.0.3` |
+| `GALICIAN` | `galician` | Галицька ґвара | Warm Lviv-Galician dialect; registry version `1.0.1` |
 
-Styles transform text unequally on purpose. KANCLER inflating length and POFENI sounding coarser are features, not bugs.
+Styles transform text unequally on purpose. KANCLER inflating length and POFENI sounding coarser are features, not bugs. The current registry versions are `GEN_Z` `1.0.3`, `STREET` `1.0.2`, `IT_SLANG` `1.0.3`, `POFENI` `1.1.1`, `KANCLER` `1.0.3`, and `GALICIAN` `1.0.1`.
 
 Development philosophy, stated in the README and honored in the code: **simple solution first, then stabilization, only then new abstractions.** This is a solo-developer MVP; several places that look under-engineered are deliberate and documented as such.
 
@@ -294,7 +294,7 @@ The token is a random UUID containing no text, user id or style. Payloads are bo
 
 The rendered message is the translated text alone. The `SlangUA · <style title>` header was removed: Telegram rendered the app name as a link to the bot inside what looked like the user's own message. The style label survives only as the title of the inline result card in the picker, which is never sent. The original input is never included. Sharing never creates a `Translation` row, and Copy is the universal fallback for every error path.
 
-Two policy limits: **an `ageRestricted` result is shareable only by a user with `ageConfirmedAdult: true`** — `POST /share/inline` reads the flag from the profile and returns 403 `AGE_RESTRICTED_SHARE` otherwise (a recipient still cannot be age-gated, so the sender carries it through the same self-attestation that unlocked the style; the UI only hides the button). And the server counts the **final rendered message** in grapheme clusters, rejecting anything above a conservative **3800** with 422 `SHARE_TEXT_TOO_LONG` — never truncating silently. That limit matters most for KANCLER's 2–4× expansion.
+Two policy limits: **an `ageRestricted` result is shareable only by a user with `ageConfirmedAdult: true`** — `POST /share/inline` reads the flag from the profile and returns 403 `AGE_RESTRICTED_SHARE` otherwise (a recipient still cannot be age-gated, so the sender carries it through the same self-attestation that unlocked the style; the UI only hides the button). And the server counts the **final rendered message** in grapheme clusters, rejecting anything above a conservative **3800** with 422 `SHARE_TEXT_TOO_LONG` — never truncating silently. That limit matters most for KANCLER's roughly 2–2.5× expansion.
 
 Deployment prerequisites: the primary path needs nothing configured on the bot side beyond the Mini App itself. The **fallback** needs all of inline mode enabled in BotFather, a configured bot token with an HTTPS webhook (or a deliberately operated long-polling worker) handling `inline_query`, and a bot username/domain consistent with the Mini App deployment. If neither path is available, Copy remains the fallback — never a public URL.
 
