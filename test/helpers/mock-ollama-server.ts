@@ -36,13 +36,20 @@ let sttCallCount = 0;
 let lastSttRequest: SttRequestInfo | null = null;
 let config: MockOllamaConfig = { shouldFail: false };
 
-const DEFAULT_RESPONSES: Record<string, string> = {
-  GEN_Z: 'no cap Test text fr fr 💀',
-  STREET: 'yo Test text fam',
-  IT_SLANG: 'Test text // TODO: fix this lol',
-  POFENI: 'Базар по поняттях: Test text.',
-  KANCLER: 'Уважаемый пользователь, Test text. С уважением, администрация.',
-  GALICIAN: 'Прошу пана, Test text, борше і файно.',
+/**
+ * What the chat mock answers, per style. Exported on purpose: a test that wants
+ * to prove the right prompt was resolved must compare against this map, never
+ * quote a word out of it. These strings are rewritten whenever the Style
+ * Engine's language assets are refreshed, and a literal copied into an
+ * assertion then fails with the application behaving correctly.
+ */
+export const DEFAULT_RESPONSES: Readonly<Record<string, string>> = {
+  GEN_Z: 'Test text — чиста база, без рофлу.',
+  STREET: 'Test text, без понтів.',
+  IT_SLANG: 'Test text: треба дебажити.',
+  POFENI: 'Test text — за базар відповідаю.',
+  KANCLER: 'Беручи до уваги Test text, повідомляємо про його розгляд.',
+  GALICIAN: 'Прошу пана, Test text — фест файний.',
 };
 
 // The Style Engine never puts the style id into the prompt, and the "Avoid"
@@ -51,7 +58,7 @@ const DEFAULT_RESPONSES: Record<string, string> = {
 // Voice line instead (verified against src/style-engine/styles/*/prompt.md).
 const STYLE_MARKERS: ReadonlyArray<readonly [string, string]> = [
   ['GEN_Z', 'молодь, що живе в інтернеті'],
-  ['STREET', 'школу життя'],
+  ['STREET', 'міського розмовного стилю'],
   ['IT_SLANG', 'український розробник'],
   ['POFENI', 'тюремної говірки'],
   ['KANCLER', 'канцелярист, бюрократ'],

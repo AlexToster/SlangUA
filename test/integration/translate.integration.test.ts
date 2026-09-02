@@ -12,6 +12,7 @@ let generateInitDataWithCustomUser: (options?: any) => string;
 let setMockConfig: (config: any) => void;
 let resetCallCount: () => void;
 let getCallCount: () => number;
+let defaultResponses: Readonly<Record<string, string>>;
 
 describe('Translate Integration Tests', () => {
   let app: FastifyInstance;
@@ -41,6 +42,7 @@ describe('Translate Integration Tests', () => {
     setMockConfig = mockOllama.setMockConfig;
     resetCallCount = mockOllama.resetCallCount;
     getCallCount = mockOllama.getCallCount;
+    defaultResponses = mockOllama.DEFAULT_RESPONSES;
     
     app = getAppInstance();
     prisma = getPrismaClient();
@@ -222,7 +224,10 @@ describe('Translate Integration Tests', () => {
       expect(body).toHaveProperty('previewId');
       expect(body).not.toHaveProperty('id');
       // Proves the mock resolved the GALICIAN prompt, not the GEN_Z fallback.
-      expect(body.translatedText).toContain('борше');
+      // Compared against the fixture rather than a word out of it: the mock's
+      // per-style strings are rewritten with every Style Engine language pass.
+      expect(body.translatedText).toBe(defaultResponses.GALICIAN);
+      expect(body.translatedText).not.toBe(defaultResponses.GEN_Z);
     });
 
     it('should NOT persist Translation record in database', async () => {

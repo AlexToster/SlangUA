@@ -9,6 +9,27 @@ const loaderPath = join(styleEngineDir, 'loader.js');
 const { loadStyle } = await import(pathToFileURL(loaderPath).href);
 
 const styles = ['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI', 'KANCLER', 'GALICIAN'];
+const expectedVersions = {
+  GEN_Z: '1.0.3',
+  STREET: '1.0.2',
+  IT_SLANG: '1.0.3',
+  POFENI: '1.1.1',
+  KANCLER: '1.0.3',
+  GALICIAN: '1.0.1',
+};
+const removedWords = {
+  GEN_Z: ['аймба', 'ломіти', 'кілка', 'смаф'],
+  STREET: ['бульбаш', 'жиза', 'жизненно', 'беда', 'откат', 'бобро'],
+  IT_SLANG: ['тхрупут', 'скейлабельність'],
+  POFENI: ['подельники', 'дятєл', 'пєро', 'делюга'],
+  KANCLER: ['даний', 'вищестоячий', 'надалі за текстом', 'здійснити заходи'],
+  GALICIAN: ['ся тішу'],
+};
+const crossStyleGuardrails = {
+  STREET: ['братва', 'базар', 'базарювати', 'авторитет'],
+  POFENI: ['хата', 'бабло'],
+};
+const registry = JSON.parse(await readFile(join(styleEngineDir, 'registry.json'), 'utf8'));
 
 for (const style of styles) {
   const loaded = await loadStyle(style);
@@ -22,10 +43,32 @@ for (const style of styles) {
    */
   const lexiconPath = join(styleEngineDir, 'styles', style.toLowerCase(), 'lexicon.json');
   const lexicon = JSON.parse(await readFile(lexiconPath, 'utf8'));
+  const examplesPath = join(styleEngineDir, 'styles', style.toLowerCase(), 'examples.json');
+  const examples = JSON.parse(await readFile(examplesPath, 'utf8'));
 
   for (const list of ['preferred', 'forbidden']) {
     assert.ok(Array.isArray(lexicon[list]) && lexicon[list].length > 0, `${style} lexicon.${list} must not be empty`);
     assert.ok(loaded.systemPrompt.includes(lexicon[list][0]), `${style} prompt must carry its ${list} lexicon`);
+  }
+
+  assert.ok(lexicon.preferred.length >= 20 && lexicon.preferred.length <= 40, `${style} preferred lexicon must contain 20–40 words`);
+  assert.equal(new Set(lexicon.preferred).size, lexicon.preferred.length, `${style} preferred lexicon must not contain duplicates`);
+  assert.equal(new Set(lexicon.forbidden).size, lexicon.forbidden.length, `${style} forbidden lexicon must not contain duplicates`);
+  for (const word of lexicon.preferred) {
+    assert.ok(!lexicon.forbidden.includes(word), `${style} word cannot be both preferred and forbidden: ${word}`);
+  }
+  for (const word of removedWords[style]) {
+    assert.ok(!lexicon.preferred.includes(word), `${style} must not restore removed preferred word: ${word}`);
+  }
+  for (const word of crossStyleGuardrails[style] ?? []) {
+    assert.ok(lexicon.forbidden.includes(word), `${style} must forbid cross-style word: ${word}`);
+  }
+  assert.equal(registry[style.toLowerCase()].version, expectedVersions[style], `${style} registry version must invalidate the prior preview cache`);
+  assert.ok(examples.length >= 3, `${style} must include at least three examples`);
+  for (const example of examples) {
+    for (const word of lexicon.forbidden) {
+      assert.ok(!example.after.toLowerCase().includes(word.toLowerCase()), `${style} example must not contain forbidden word: ${word}`);
+    }
   }
 
   assert.doesNotMatch(loaded.systemPrompt, /(Use these words where natural|Avoid these words):\s*$/m, `${style} prompt must not contain an empty lexicon block`);
