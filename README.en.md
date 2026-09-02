@@ -42,12 +42,12 @@ What one and the same text looks like in different styles. The output is Ukraini
 
 | Style | Result | What the style did to it |
 | ----- | ------ | ------------------------ |
-| **GEN_Z** — TikTok/Instagram slang | «Кіт - чиста база, розбудив о шостій і почав рофлити, вимагаючи їжу, повний крінж» | Borrowings from internet English are declined as Ukrainian verbs and nouns — *рофлити* from "to rofl", *крінж*, *база* as a marker of approval — and the cat's behaviour is re-framed as content. |
-| **STREET** — the way the street talks | «Короче, кіт підняв о шостій ранку і вимагав жратву, труба повна» | Opens on a filler (*короче*), swaps the neutral *їсти* for *жратву*, and closes on a verdict the original never passed. |
-| **IT_SLANG** — an engineer's speech | «Продакшн розбудив о шостій ранку і вимагав хотфікс їжі» | The situation itself is recast as an incident: the cat becomes *продакшн*, the food a *хотфікс*. Nothing but the frame of reference changes. |
-| **KANCLER** — Soviet-era bureaucratese | «Беручи до уваги вищезазначені обставини та відповідно до встановленого внутрішнього розпорядку, повідомляємо наступне: суб'єкт (кіт) здійснив несанкціоноване втручання в процес нічного відпочинку вищезазначеної особи о шостій годині нуль-нуль хвилин ранкової доби з метою висування вимог щодо забезпечення виконання робіт із першочергового харчового забезпечення, що підлягає негайному розгляду та вирішенню згідно з чинним регламентом.» | Inflation, not addition: the meaning is identical, but the cat becomes *суб'єкт (кіт)*, six o'clock becomes *о шостій годині нуль-нуль хвилин*, and waking up becomes *несанкціоноване втручання в процес нічного відпочинку*. |
-| **POFENI** — prison jargon, 18+ | «Кіт підняв о шостій ранку зі шконки і вимагав пайку» | The register comes from an institution rather than from the street: the bed is a *шконка*, the food a *пайка*. |
-| **GALICIAN** — the Galician dialect | «Ай, прошу пана, кіт мя розбудив о шостій рано й фест хотів їсти» | Dialect grammar, not just vocabulary: the enclitic *мя* in place of *мене*, *фест* as an intensifier, *прошу пана* as an opener. |
+| **GEN_Z** — TikTok/Instagram slang | «Кіт розбудив о шостій — крінж чистої води, ще й їжу фармить.» | Borrowings from internet English are declined as Ukrainian words — *крінж* passes the verdict and *фармить* ("farms") recasts begging for breakfast as grinding for loot — while the intensifier holding them together, *чистої води* ("of the purest kind"), is native. |
+| **STREET** — the way the street talks | «Кіт о шостій підняв — жорстко, ще й їжу вимагає без понтів.» | Nothing comes from English here; the plain words are swapped for blunter ones. Being woken becomes *підняв* ("got me up"), and the line closes on a verdict the original never passed — *жорстко* — plus *без понтів*, street shorthand for doing a thing without airs. |
+| **IT_SLANG** — an engineer's speech | «Кіт о шостій задеплоїв алерт: треба терміново закрити фічу з їжею.» | The situation is recast as an incident: the cat *deploys an alert*, and feeding it turns into a feature to be closed under time pressure. Only the frame of reference changes — the words are English engineering verbs inflected as Ukrainian ones. |
+| **KANCLER** — Soviet-era bureaucratese | «Беручи до уваги порушення нічного відпочинку, повідомляємо: суб'єкт (кіт) о шостій годині ініціював невідкладне звернення щодо забезпечення харчування.» | Inflation, not addition: the meaning is identical, but the cat becomes *суб'єкт (кіт)*, being woken becomes *порушення нічного відпочинку*, and wanting breakfast becomes *ініціював невідкладне звернення щодо забезпечення харчування*. |
+| **POFENI** — prison jargon, 18+ | «Кіт зняв мене зі шконки о шостій і вже качає пайку.» | The register comes from an institution rather than from the street: the bed is a *шконка*, the food a *пайка*, and *качає* is how a claim gets pressed inside one. |
+| **GALICIAN** — the Galician dialect | «Ай, прошу пана, кіт мене збудив о шостій та фест хотів їсти.» | The dialect shows in the framing words rather than in exotic nouns: the interjection *Ай*, the polite address *прошу пана*, and *фест* as an intensifier where standard Ukrainian would say *дуже*. |
 
 The remaining styles, with examples of their own, are in the [Styles](#styles) table.
 
@@ -71,10 +71,11 @@ a calque from English. So every style carries its own lexicon, prompt, examples 
 the result has to be recognisable from its first line, with no label saying which style
 produced it.
 
-The difference between them is not only lexical. **KANCLER** inflates phrasing two- to
-fourfold. **POFENI** speaks through prison hierarchy and its «поняття» ("the code") —
-a different layer from **STREET** (the yard, the street), while **GALICIAN** holds to
-the Lviv ґвара rather than to a generic "western accent".
+The difference between them is not only lexical. **KANCLER** deliberately inflates
+phrasing by roughly two to two and a half times. **POFENI** speaks through prison
+hierarchy and its «поняття» ("the code") — a different layer from **STREET** (urban,
+slightly cheeky colloquial speech), while **GALICIAN** holds to the Lviv ґвара rather
+than to a generic "western accent".
 
 Technically: [how the Style Engine is built](plans/docs/07-styles.md) (in Ukrainian).
 
