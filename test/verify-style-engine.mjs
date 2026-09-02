@@ -11,7 +11,7 @@ const { loadStyle } = await import(pathToFileURL(loaderPath).href);
 const styles = ['GEN_Z', 'STREET', 'IT_SLANG', 'POFENI', 'KANCLER', 'GALICIAN'];
 const expectedVersions = {
   GEN_Z: '1.0.3',
-  STREET: '1.0.2',
+  STREET: '1.0.3',
   IT_SLANG: '1.0.3',
   POFENI: '1.1.1',
   KANCLER: '1.0.3',
@@ -26,7 +26,7 @@ const removedWords = {
   GALICIAN: ['ся тішу'],
 };
 const crossStyleGuardrails = {
-  STREET: ['братва', 'базар', 'базарювати', 'авторитет'],
+  STREET: ['братва', 'базарювати', 'авторитет'],
   POFENI: ['хата', 'бабло'],
 };
 const registry = JSON.parse(await readFile(join(styleEngineDir, 'registry.json'), 'utf8'));

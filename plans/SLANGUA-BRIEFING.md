@@ -27,7 +27,7 @@ Six styles ship today. Registry keys are lowercase; the Prisma enum and the API 
 | `KANCLER` | `kancler` | Бюрократична радянщина | Deliberately expands output about 2–2.5×; registry version `1.0.3` |
 | `GALICIAN` | `galician` | Галицька ґвара | Warm Lviv-Galician dialect; registry version `1.0.1` |
 
-Styles transform text unequally on purpose. KANCLER inflating length and POFENI sounding coarser are features, not bugs. The current registry versions are `GEN_Z` `1.0.3`, `STREET` `1.0.2`, `IT_SLANG` `1.0.3`, `POFENI` `1.1.1`, `KANCLER` `1.0.3`, and `GALICIAN` `1.0.1`.
+Styles transform text unequally on purpose. KANCLER inflating length and POFENI sounding coarser are features, not bugs. The current registry versions are `GEN_Z` `1.0.3`, `STREET` `1.0.3`, `IT_SLANG` `1.0.3`, `POFENI` `1.1.1`, `KANCLER` `1.0.3`, and `GALICIAN` `1.0.1`.
 
 Development philosophy, stated in the README and honored in the code: **simple solution first, then stabilization, only then new abstractions.** This is a solo-developer MVP; several places that look under-engineered are deliberate and documented as such.
 
