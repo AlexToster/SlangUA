@@ -1,145 +1,146 @@
-# Конфігурація
+# Configuration
 
-Повний довідник змінних середовища SlangUA.
+Full reference for every SlangUA environment variable.
 
-Джерело правди — Zod-схема у [`src/config/index.ts`](../src/config/index.ts):
-невалідна конфігурація навмисно зупиняє запуск процесу. Синхронізований зі
-схемою перелік усіх ключів із коментарями — у [`.env.example`](../.env.example);
-цей документ описує їх докладніше і згруповано за призначенням.
+The source of truth is the Zod schema in [`src/config/index.ts`](../src/config/index.ts):
+invalid configuration deliberately refuses to let the process start. A list of
+every key with inline comments, kept in sync with that schema, lives in
+[`.env.example`](../.env.example); this document covers the same keys in more
+depth, grouped by purpose.
 
-Мінімальний набір ключів і генерація секретів — у
-[CONTRIBUTING.md](../CONTRIBUTING.md#локальний-запуск).
+The minimal set of keys and how to generate the secrets are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#локальний-запуск) (in Ukrainian).
 
-> **Значення, що містить `$`, беріть в одинарні лапки.** У production цей файл
-> читає не `dotenv`, а власний парсер Docker Compose (`env_file` у
-> [`docker-compose.production.yml`](../docker-compose.production.yml)), і він
-> виконує інтерполяцію: у значенні без лапок або в подвійних лапках `$N`
-> вважається посиланням на змінну `N`, якої не існує, і замінюється порожнім
-> рядком. Одинарні лапки інтерполяцію вимикають, а самі лапки знімають обидва
-> парсери — тому один і той самий рядок працює і локально, і в контейнері.
-> Підказка в логах: Compose пише `The "N" variable is not set. Defaulting to a
-> blank string.` на самому початку `docker compose up`, задовго до помилки
-> застосунку. Класичне екранування `$$` тут не підходить: `dotenv` його не
-> розекранує, тому локальна розробка зламається на тому ж значенні.
+> **Wrap any value that contains `$` in single quotes.** In production this file
+> is read not by `dotenv` but by Docker Compose's own parser (`env_file` in
+> [`docker-compose.production.yml`](../docker-compose.production.yml)), and that
+> parser interpolates: inside an unquoted or double-quoted value, `$N` is treated
+> as a reference to a variable named `N`, which does not exist, and is replaced
+> with an empty string. Single quotes disable interpolation, and both parsers
+> strip the quotes themselves — so one and the same line works locally and in the
+> container. The hint is in the logs: Compose prints `The "N" variable is not set.
+> Defaulting to a blank string.` at the very start of `docker compose up`, long
+> before the application's own error. The classic `$$` escape does not help here:
+> `dotenv` does not unescape it, so local development breaks on the same value.
 
-## Обов'язкові
+## Required
 
-| Змінна | Опис |
-| ------ | ---- |
-| `DATABASE_URL` | URL підключення до PostgreSQL. |
-| `REDIS_URL` | URL підключення до Redis. |
-| `JWT_SECRET` | Секрет для підпису JWT (мінімум 32 символи). |
-| `REFRESH_TOKEN_HMAC_SECRET` | Секрет для HMAC-хешування refresh-токенів (мінімум 32 символи). |
-| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота для перевірки `initData`. |
-| `PREVIEW_ROOT_KEY` | Base64-кодований 32-байтовий ключ для шифрування preview-кешу. |
+| Variable | Description |
+| -------- | ----------- |
+| `DATABASE_URL` | PostgreSQL connection URL. |
+| `REDIS_URL` | Redis connection URL. |
+| `JWT_SECRET` | Secret used to sign JWTs (at least 32 characters). |
+| `REFRESH_TOKEN_HMAC_SECRET` | Secret for HMAC-hashing refresh tokens (at least 32 characters). |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token, used to verify `initData`. |
+| `PREVIEW_ROOT_KEY` | Base64-encoded 32-byte key that encrypts the preview cache. |
 
-> Значення-заглушки з [`.env.example`](../.env.example) (усі з позначкою `example-only`, а також демонстраційний `PREVIEW_ROOT_KEY`) відхиляються під час запуску при `NODE_ENV=production`. Копію прикладу неможливо задеплоїти як є.
+> Placeholder values from [`.env.example`](../.env.example) — everything marked `example-only`, plus the demo `PREVIEW_ROOT_KEY` — are rejected at startup when `NODE_ENV=production`. A copy of the example cannot be deployed as it is.
 
-## Ключові опційні (зі значеннями за замовчуванням)
+## Key optional settings (with defaults)
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `NODE_ENV` | `development` | Режим роботи (`development` / `production` / `test`). Керує не лише логуванням: при `production` cookie сесії отримують `SameSite=None; Secure; Partitioned` — без цього Mini App у Telegram Web (cross-site iframe) губить сесію. У [`docker-compose.production.yml`](../docker-compose.production.yml) значення задане в `environment:`, тому правка в `.env` на нього не впливає. |
-| `PORT` / `HOST` | `3000` / `0.0.0.0` | Адреса backend-сервера. |
-| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `7d` | Час життя access/refresh токенів. |
-| `AUTH_DATE_TTL` | `86400` | TTL Telegram `auth_date` у секундах (захист від replay). |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` | — | Ключі AI-провайдерів (опційні; потрібен хоча б один провайдер). Кожна змінна приймає **кілька ключів через кому** — вичерпаний ключ відкладається, запит обслуговує наступний. |
-| `AI_KEY_COOLDOWN_RATE_MS` | `60000` | На скільки відкладається ключ, який упав у ліміт запитів. |
-| `AI_KEY_COOLDOWN_QUOTA_MS` | `3600000` | Те саме для ключа з вичерпаною квотою. |
-| `AI_KEY_COOLDOWN_INVALID_MS` | `3600000` | Те саме для ключа, який провайдер відхилив як недійсний. |
-| `AI_MODEL_*` | див. конфіг | Назви моделей для кожного провайдера. |
-| `AI_BASE_URL_OPENAI` | `https://api.openai.com/v1` | Базовий URL OpenAI-сумісного інстансу разом із версією API. Можна спрямувати на будь-який сумісний ендпоінт (Groq, DeepSeek, vLLM, проксі) без зміни коду. |
-| `AI_BASE_URL_OPENROUTER` | `https://openrouter.ai/api/v1` | Те саме для OpenRouter. |
-| `AI_EXTRA_INSTANCES` | — | Додаткові OpenAI-сумісні інстанси через кому, напр. `groq,deepseek`. Ідентифікатор — `[a-z0-9_-]`, до 32 символів, не може збігатися з вбудованим (`openai`, `anthropic`, `gemini`, `ollama`, `openrouter`). Кожен `<ID>` налаштовується через `AI_BASE_URL_<ID>`, `AI_MODEL_<ID>`, `<ID>_API_KEY` і опційний `AI_TIMEOUT_<ID>`; інстанс без URL, моделі або ключа пропускається з логом помилки, а не валить запуск. |
-| `AI_PROVIDER_PRIORITY` | `openai,anthropic,gemini,ollama,openrouter` | Порядок fallback між провайдерами. Бере участь кожен налаштований інстанс: не згаданий у списку йде в кінець, а не вимикається. Невідомий ідентифікатор ігнорується з попередженням. |
-| `AI_MAX_FALLBACK_ATTEMPTS` | — | Максимум провайдерів на один запит; без значення — стільки, скільки доступно. |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Адреса локального Ollama. Власної змінної `AI_BASE_URL_OLLAMA` немає: до цього хоста додається OpenAI-сумісний шлях `/v1`. |
-| `OLLAMA_ENABLED` | — | `true`/`false`. Без значення: увімкнено поза production, вимкнено в production (в Ollama немає API-ключа, за яким можна визначити «налаштований»). |
-| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` / `CIRCUIT_BREAKER_RESET_MS` | `5` / `60000` | Скільки поспіль помилок відкриває breaker провайдера і на який час. |
-| `TELEGRAM_INLINE_ENABLED` | `false` | Увімкнення Telegram inline-share. |
-| `TELEGRAM_WEBHOOK_SECRET` | — | Обов'язковий, якщо `TELEGRAM_INLINE_ENABLED=true`: очікуваний `x-telegram-bot-api-secret-token`. |
-| `WEBHOOK_RATE_LIMIT_WINDOW_MS` / `WEBHOOK_RATE_LIMIT_MAX_REQUESTS` | `60000` / `30` | Ліміт запитів на `POST /telegram/webhook`. |
-| `AUTH_RATE_LIMIT_WINDOW_MS` / `AUTH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Ліміт на `POST /auth/telegram` за IP — окремий від загального `RATE_LIMIT_*`, бо ендпоінт видає токени. |
-| `REFRESH_RATE_LIMIT_WINDOW_MS` / `REFRESH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Те саме для `POST /auth/refresh`. |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Дозволені origin-и для CORS. |
-| `TRUST_PROXY` | `false` | Довіряти заголовкам проксі для визначення IP. |
-| `LOG_LEVEL` | `info` | Рівень логування. Він же регулятор обсягу: логи контейнерів обмежені стелею, тому `debug` у продакшні не збільшує архів, а вкорочує вікно — див. [operations.md](operations.md#логи-стеля-і-ротація). |
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `NODE_ENV` | `development` | Runtime mode (`development` / `production` / `test`). It controls more than logging: under `production` the session cookie gains `SameSite=None; Secure; Partitioned` — without that the Mini App inside Telegram Web (a cross-site iframe) loses its session. In [`docker-compose.production.yml`](../docker-compose.production.yml) the value is set in `environment:`, so editing `.env` has no effect on it. |
+| `PORT` / `HOST` | `3000` / `0.0.0.0` | Address the backend server binds to. |
+| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `7d` | Lifetime of the access and refresh tokens. |
+| `AUTH_DATE_TTL` | `86400` | TTL of Telegram's `auth_date` in seconds (replay protection). |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` | — | AI provider keys (all optional, but at least one provider is needed). Each variable accepts **several comma-separated keys** — an exhausted key is parked and the next one serves the request. |
+| `AI_KEY_COOLDOWN_RATE_MS` | `60000` | How long a key that hit a rate limit is parked for. |
+| `AI_KEY_COOLDOWN_QUOTA_MS` | `3600000` | The same, for a key whose quota is exhausted. |
+| `AI_KEY_COOLDOWN_INVALID_MS` | `3600000` | The same, for a key the provider rejected as invalid. |
+| `AI_MODEL_*` | see the config | Model names per provider. |
+| `AI_BASE_URL_OPENAI` | `https://api.openai.com/v1` | Base URL of an OpenAI-compatible instance, API version included. Can point at any compatible endpoint (Groq, DeepSeek, vLLM, a proxy) without touching the code. |
+| `AI_BASE_URL_OPENROUTER` | `https://openrouter.ai/api/v1` | The same for OpenRouter. |
+| `AI_EXTRA_INSTANCES` | — | Additional OpenAI-compatible instances, comma-separated, e.g. `groq,deepseek`. An id matches `[a-z0-9_-]`, up to 32 characters, and may not collide with a built-in one (`openai`, `anthropic`, `gemini`, `ollama`, `openrouter`). Each `<ID>` is configured through `AI_BASE_URL_<ID>`, `AI_MODEL_<ID>`, `<ID>_API_KEY` and an optional `AI_TIMEOUT_<ID>`; an instance missing its URL, model or key is skipped with an error log rather than breaking startup. |
+| `AI_PROVIDER_PRIORITY` | `openai,anthropic,gemini,ollama,openrouter` | Fallback order between providers. Every configured instance takes part: one that is not named in the list goes to the end, it is not disabled. An unknown id is ignored with a warning. |
+| `AI_MAX_FALLBACK_ATTEMPTS` | — | Maximum providers tried per request; with no value, as many as are available. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Address of a local Ollama. There is no `AI_BASE_URL_OLLAMA` of its own: the OpenAI-compatible `/v1` path is appended to this host. |
+| `OLLAMA_ENABLED` | — | `true`/`false`. With no value: enabled outside production, disabled in production (Ollama has no API key from which "configured" could be inferred). |
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` / `CIRCUIT_BREAKER_RESET_MS` | `5` / `60000` | How many consecutive failures open a provider's breaker, and for how long. |
+| `TELEGRAM_INLINE_ENABLED` | `false` | Enables Telegram inline sharing. |
+| `TELEGRAM_WEBHOOK_SECRET` | — | Required when `TELEGRAM_INLINE_ENABLED=true`: the expected `x-telegram-bot-api-secret-token`. |
+| `WEBHOOK_RATE_LIMIT_WINDOW_MS` / `WEBHOOK_RATE_LIMIT_MAX_REQUESTS` | `60000` / `30` | Request budget for `POST /telegram/webhook`. |
+| `AUTH_RATE_LIMIT_WINDOW_MS` / `AUTH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | Budget for `POST /auth/telegram` per IP — separate from the general `RATE_LIMIT_*`, because that endpoint hands out tokens. |
+| `REFRESH_RATE_LIMIT_WINDOW_MS` / `REFRESH_RATE_LIMIT_MAX_REQUESTS` | `60000` / `20` | The same for `POST /auth/refresh`. |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Origins allowed by CORS. |
+| `TRUST_PROXY` | `false` | Trust proxy headers when resolving the client IP. |
+| `LOG_LEVEL` | `info` | Log level, and with it the log volume: container logs are capped, so `debug` in production does not grow the archive — it shortens the window. See [operations.md](operations.md#логи-стеля-і-ротація) (in Ukrainian). |
 
-> Rate limiting, preview/save/share TTL та інші тонкі налаштування також конфігуруються через env — повний перелік дивіться у [`src/config/index.ts`](../src/config/index.ts).
+> Rate limiting, the preview/save/share TTLs and other fine-grained settings are configurable through env as well — for the complete list see [`src/config/index.ts`](../src/config/index.ts).
 
-## Голосовий ввід (STT)
+## Voice input (STT)
 
-Мікрофон у полі введення вимкнений за замовчуванням: поки `STT_API_KEY` порожній, `POST /api/v1/transcribe` віддає `503 STT_UNAVAILABLE`, а `GET /api/v1/user/me` повертає `voiceInputAvailable: false` — і клієнт просто не малює кнопку. Ендпоінт розмовляє OpenAI-сумісним `/v1/audio/transcriptions`, тому провайдера змінюють двома змінними (`STT_BASE_URL` + `STT_MODEL`) без зміни коду; за замовчуванням це Groq із `whisper-large-v3-turbo`.
+The microphone in the input field is off by default: while `STT_API_KEY` is empty, `POST /api/v1/transcribe` answers `503 STT_UNAVAILABLE` and `GET /api/v1/user/me` returns `voiceInputAvailable: false` — so the client simply does not draw the button. The endpoint speaks the OpenAI-compatible `/v1/audio/transcriptions`, so the provider is swapped with two variables (`STT_BASE_URL` + `STT_MODEL`) and no code change; the default is Groq with `whisper-large-v3-turbo`.
 
-Ключі тут **окремі від AI-провайдерів** і теж приймають список через кому з тією ж ротацією: вичерпана квота транскрипції не має відкладати ключ, потрібний перекладачу, навіть якщо обліковий запис у провайдера один.
+The keys here are **separate from the AI providers'** and also accept a comma-separated list with the same rotation: an exhausted transcription quota must not park a key the translator needs, even when both share one account at the provider.
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `STT_API_KEY` | — (порожньо) | Ключі провайдера транскрипції через кому. Порожнє значення = голосового вводу не існує. Окремий пул (`stt`), незалежний від `*_API_KEY` AI-шару. |
-| `STT_BASE_URL` | `https://api.groq.com/openai/v1` | Базовий URL OpenAI-сумісного інстансу разом із версією API. Будь-який сумісний ендпоінт (Groq, OpenAI, локальний Whisper-сервер, проксі). |
-| `STT_MODEL` | `whisper-large-v3-turbo` | Назва моделі, яку просять у провайдера. Повертається клієнту в полі `model`. |
-| `STT_LANGUAGE` | `uk` | Мова, зафіксована явно, а не автовизначенням: Whisper надто часто чує в короткому українському записі російську. |
-| `STT_TIMEOUT_MS` | `30000` | Таймаут одного запиту до провайдера. |
-| `STT_MAX_AUDIO_BYTES` | `1048576` | Стеля розміру вже декодованого аудіо (413 `STT_AUDIO_TOO_LARGE`). З цього ж значення виводиться `bodyLimit` самого маршруту, тому надто довгий запис відсікається до буферизації тіла. |
-| `STT_KEY_COOLDOWN_RATE_MS` | `60000` | На скільки відкладається ключ, який упав у ліміт запитів. |
-| `STT_KEY_COOLDOWN_QUOTA_MS` | `3600000` | Те саме для ключа з вичерпаною квотою. |
-| `STT_KEY_COOLDOWN_INVALID_MS` | `3600000` | Те саме для ключа, який провайдер відхилив як недійсний. |
-| `STT_RATE_LIMIT_WINDOW_MS` / `STT_RATE_LIMIT_MAX_REQUESTS` | `60000` / `6` | Власний бюджет `POST /api/v1/transcribe` за користувачем. Окремий від загального, бо кожен виклик витрачає квоту провайдера, спільну для всього деплою. |
-| `STT_RATE_LIMIT_KEY_PREFIX` | `ratelimit:stt` | Префікс ключів лімітера в Redis. |
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `STT_API_KEY` | — (empty) | Comma-separated keys for the transcription provider. An empty value means voice input does not exist. Its own pool (`stt`), independent of the AI layer's `*_API_KEY`. |
+| `STT_BASE_URL` | `https://api.groq.com/openai/v1` | Base URL of an OpenAI-compatible instance, API version included. Any compatible endpoint works (Groq, OpenAI, a local Whisper server, a proxy). |
+| `STT_MODEL` | `whisper-large-v3-turbo` | Model name requested from the provider. Returned to the client in the `model` field. |
+| `STT_LANGUAGE` | `uk` | Language pinned explicitly rather than auto-detected: on a short Ukrainian recording Whisper hears Russian far too often. |
+| `STT_TIMEOUT_MS` | `30000` | Timeout for a single request to the provider. |
+| `STT_MAX_AUDIO_BYTES` | `1048576` | Ceiling on the size of the already-decoded audio (413 `STT_AUDIO_TOO_LARGE`). The route's own `bodyLimit` is derived from the same value, so an over-long recording is cut off before the body is buffered. |
+| `STT_KEY_COOLDOWN_RATE_MS` | `60000` | How long a key that hit a rate limit is parked for. |
+| `STT_KEY_COOLDOWN_QUOTA_MS` | `3600000` | The same, for a key whose quota is exhausted. |
+| `STT_KEY_COOLDOWN_INVALID_MS` | `3600000` | The same, for a key the provider rejected as invalid. |
+| `STT_RATE_LIMIT_WINDOW_MS` / `STT_RATE_LIMIT_MAX_REQUESTS` | `60000` / `6` | A per-user budget of its own for `POST /api/v1/transcribe`. Separate from the general one, because every call spends provider quota that the whole deployment shares. |
+| `STT_RATE_LIMIT_KEY_PREFIX` | `ratelimit:stt` | Prefix of the limiter's keys in Redis. |
 
-> Аудіо не зберігається ніде: ні в Postgres, ні в Redis, ні у файлі, ні в лозі. Буфер живе всередині обробника рівно на один запит до провайдера, а розпізнаний текст повертається клієнту й теж не пишеться — рядком у базі він стане лише тоді, коли користувач надішле його на переклад як звичайний набраний текст. Деталі — у [`plans/docs/06-security.md`](../plans/docs/06-security.md).
+> Audio is stored nowhere: not in Postgres, not in Redis, not in a file, not in a log. The buffer lives inside the handler for exactly one request to the provider, and the recognised text is returned to the client and not written either — it becomes a row in the database only once the user sends it for translation as ordinary typed text. Details in [`plans/docs/06-security.md`](../plans/docs/06-security.md).
 
-## Адмін-панель
+## Admin panel
 
-Адмінка вимикається за замовчуванням: поки `ADMIN_TELEGRAM_IDS` порожній, усі маршрути `/api/v1/admin/*` віддають **404** — той самий, що й неіснуючий шлях. Доступ дають два незалежні фактори: Telegram-id зі списку і пароль, хеш якого лежить в `.env`. Ролі в базі немає — адміном робить конфігурація деплою, а не рядок у Postgres. Контракт маршрутів — у [`plans/docs/04-api.md`](../plans/docs/04-api.md).
+The admin panel is off by default: while `ADMIN_TELEGRAM_IDS` is empty, every `/api/v1/admin/*` route answers **404** — the same 404 a non-existent path gets. Access takes two independent factors: a Telegram id from the list, and a password whose hash lives in `.env`. There is no role in the database — deployment configuration makes an admin, not a row in Postgres. The route contract is in [`plans/docs/04-api.md`](../plans/docs/04-api.md).
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `ADMIN_TELEGRAM_IDS` | — (порожньо) | Числові Telegram-id через кому, яким дозволено вхід. Порожнє значення = адмінки не існує. Тільки id: username власник може змінити, і його не підписує Telegram в `initData`. |
-| `ADMIN_PASSWORD_HASH` | — (порожньо) | scrypt-хеш пароля у форматі `scrypt$N=…,r=…,p=…$<salt>$<key>`. Генерується локально: `node scripts/hash-admin-password.mjs` (пароль вводиться на stdin, мінімум 12 символів, у виводі його немає). У `.env` значення беріть в **одинарні лапки** — воно завжди містить три `$`, тож без лапок Compose вирізає з нього `$N` і `$p` (див. примітку про інтерполяцію на початку документа). Форма хеша перевіряється при старті — зіпсована вставка впаде на запуску, а не виглядатиме як вічно неправильний пароль. Обов'язковий, якщо заданий `ADMIN_TELEGRAM_IDS`: allowlist без пароля був би одним фактором. |
-| `ADMIN_SESSION_TTL_SECONDS` | `900` | Idle-вікно admin-сесії: продовжується на кожному запиті до адмінки. |
-| `ADMIN_SESSION_ABSOLUTE_TTL_SECONDS` | `28800` | Жорстке вікно: не продовжується ніколи, тому вкрадений admin-токен помирає протягом 8 годин навіть при активному використанні. Не може бути меншим за idle-вікно. |
-| `ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS` / `ADMIN_LOGIN_RATE_LIMIT_MAX` | `300000` / `5` | Ліміт спроб пароля (429). Окремий від загального бюджету, бо 100 запитів/хв — це не перешкода для перебору. |
-| `ADMIN_LOGIN_MAX_FAILURES` / `ADMIN_LOGIN_LOCKOUT_MS` | `5` / `900000` | Блокування входу після N хибних паролів. Рахується **на кожен Telegram-id окремо**, тому один адмін не може заблокувати іншого; лічильник згасає разом із блокуванням. |
-| `ADMIN_RATE_LIMIT_WINDOW_MS` / `ADMIN_RATE_LIMIT_MAX_REQUESTS` | `60000` / `120` | Бюджет уже автентифікованих admin-маршрутів. |
-| `METRICS_MINUTE_SERIES_LENGTH` | `60` | Скільки хвилин показує графік навантаження (максимум 1440). Це і глибина серії, і час життя хвилинних лічильників: термін життя кожного ключа обчислюється з його ж кошика, тому «остання година» означає те саме для всіх ключів. |
-| `METRICS_RETENTION_DAYS` | `7` | Скільки добових рядків (UTC) віддає `GET /admin/metrics` і скільки живуть добові лічильники. Прибирання немає — зберігання **і є** термін життя ключа. |
-| `METRICS_TOP_USERS_LIMIT` | `10` | Скільки найактивніших користувачів за сьогодні показувати. У рядку лише внутрішній числовий id — ніколи Telegram-id і ніколи username. |
-| `ADMIN_ERROR_FEED_MAX` | `100` | Довжина стрічки помилок: список у Redis обрізається до цього значення на кожному записі, тому рости він не може. `?limit=` більший за це число не помилка — його просто підріжуть. |
-| `ADMIN_ERROR_FEED_TTL_SECONDS` | `604800` | Час життя всього ключа стрічки, що поновлюється при кожному записі: тиждень без збоїв спорожнює її сам. |
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `ADMIN_TELEGRAM_IDS` | — (empty) | Comma-separated numeric Telegram ids allowed to sign in. An empty value means the admin panel does not exist. Ids only: a username can be changed by its owner, and Telegram does not sign it in `initData`. |
+| `ADMIN_PASSWORD_HASH` | — (empty) | scrypt hash of the password, in the form `scrypt$N=…,r=…,p=…$<salt>$<key>`. Generated locally with `node scripts/hash-admin-password.mjs` (the password is read from stdin, minimum 12 characters, and never appears in the output). In `.env` put the value in **single quotes** — it always contains three `$`, so without quotes Compose strips `$N` and `$p` out of it (see the interpolation note at the top of this document). The hash's shape is checked at startup, so a mangled paste fails the boot instead of looking like a forever-wrong password. Required whenever `ADMIN_TELEGRAM_IDS` is set: an allowlist without a password would be a single factor. |
+| `ADMIN_SESSION_TTL_SECONDS` | `900` | Idle window of an admin session: extended on every request to the panel. |
+| `ADMIN_SESSION_ABSOLUTE_TTL_SECONDS` | `28800` | Hard window: never extended, so a stolen admin token dies within 8 hours even under constant use. Cannot be smaller than the idle window. |
+| `ADMIN_LOGIN_RATE_LIMIT_WINDOW_MS` / `ADMIN_LOGIN_RATE_LIMIT_MAX` | `300000` / `5` | Password attempt budget (429). Separate from the general one, because 100 requests/min is no obstacle to brute force. |
+| `ADMIN_LOGIN_MAX_FAILURES` / `ADMIN_LOGIN_LOCKOUT_MS` | `5` / `900000` | Lockout after N wrong passwords. Counted **per Telegram id**, so one admin cannot lock out another; the counter expires together with the lockout. |
+| `ADMIN_RATE_LIMIT_WINDOW_MS` / `ADMIN_RATE_LIMIT_MAX_REQUESTS` | `60000` / `120` | Budget for admin routes that are already authenticated. |
+| `METRICS_MINUTE_SERIES_LENGTH` | `60` | How many minutes the load chart shows (1440 maximum). This is both the depth of the series and the lifetime of the per-minute counters: each key's expiry is computed from its own bucket, so "the last hour" means the same thing for every key. |
+| `METRICS_RETENTION_DAYS` | `7` | How many daily rows (UTC) `GET /admin/metrics` returns, and how long the daily counters live. There is no cleanup job — retention **is** the key's lifetime. |
+| `METRICS_TOP_USERS_LIMIT` | `10` | How many of today's most active users to show. The row carries the internal numeric id only — never a Telegram id, never a username. |
+| `ADMIN_ERROR_FEED_MAX` | `100` | Length of the error feed: the Redis list is trimmed to this on every write, so it cannot grow. A `?limit=` larger than this is not an error — it is simply clamped. |
+| `ADMIN_ERROR_FEED_TTL_SECONDS` | `604800` | Lifetime of the whole feed key, renewed on every write: a week without failures empties it by itself. |
 
-> `ADMIN_PASSWORD_HASH` свідомо **не** входить до переліку «заглушок», які відхиляються в production: у [`.env.example`](../.env.example) ця змінна порожня, бо будь-яке правильне за формою значення-приклад було б хешем пароля, опублікованого в цьому репозиторії. Замість цього при старті працює інше правило — allowlist без хеша не дає запуститися.
+> `ADMIN_PASSWORD_HASH` is deliberately **not** among the "placeholders" rejected in production: in [`.env.example`](../.env.example) the variable is empty, because any well-formed example value would be the hash of a password published in this repository. A different rule covers it at startup instead — an allowlist without a hash refuses to boot.
 
-> Кіл-світч провайдерів навмисно не має жодної змінної середовища: це рішення оператора, ухвалене під час роботи системи, а не налаштування деплою. Стан лежить у Redis (хеш `ai:provider:disabled`) **без TTL** і зберігається між рестартами; вимкнути й увімкнути провайдера можна лише через `PATCH /api/v1/admin/providers/:providerId` (або руками через `HDEL`). Уточнення: `FLUSHDB` увімкне назад усе, що було вимкнено, — це усвідомлений компроміс за те, що AI-шар не залежить від Postgres.
+> The provider kill switch has no environment variable at all, on purpose: it is an operator decision taken while the system is running, not a deployment setting. The state lives in Redis (the `ai:provider:disabled` hash) **without a TTL** and survives restarts; a provider can only be switched off and on again through `PATCH /api/v1/admin/providers/:providerId` (or by hand with `HDEL`). One caveat: `FLUSHDB` turns everything that was disabled back on — a conscious trade for keeping the AI layer independent of Postgres.
 
-> Ковзні 24 години в розділі навантаження змінної середовища теж не мають: довжина вікна зашита в коді (24 погодинні кошики), бо панель малює її фіксованим рядком стовпчиків, а не графіком змінної довжини. Погодинні ключі (`metrics:req:h:*`, `metrics:err:h:*`, `metrics:users:h:*`) живуть ≈26 годин — на дві години довше за вікно, щоб найстаріший кошик не зникав саме тоді, коли його читають. Рядок «Усього людей за весь час» — єдина цифра адмінки з Postgres (`COUNT` по `User`): з кошиків її взяти не можна, бо вони згасають, і за тихий тиждень «усього людей» зменшилося б.
+> The rolling 24 hours in the load section has no variable either: the window length is hard-coded (24 hourly buckets), because the panel draws it as a fixed row of bars, not as a chart of variable width. The hourly keys (`metrics:req:h:*`, `metrics:err:h:*`, `metrics:users:h:*`) live for about 26 hours — two hours longer than the window, so the oldest bucket does not vanish exactly when it is being read. The «Усього людей за весь час» ("people in total, all time") row is the admin panel's only figure that comes from Postgres (a `COUNT` over `User`): the buckets cannot supply it, because they expire, and after a quiet week the all-time total would go down.
 
-> Обидва оглядові розділи нічого не пишуть у Postgres — усе, що вони накопичують, лежить у Redis: лічильники (`metrics:req:*`, `metrics:err:*`, `metrics:users:h:*`, `metrics:users:d:*`) і стрічка помилок (`admin:errors`) самі згасають за термінами вище, тому окремого прибирання немає. Що саме туди потрапляє — обмежено списком дозволеного: статус-код, шаблон маршруту, наш код помилки, обрізане технічне повідомлення, внутрішній id користувача і `requestId`. Ні тексту запиту, ні заголовків, ні Telegram-id — див. [`plans/docs/06-security.md`](../plans/docs/06-security.md).
+> Neither overview section writes anything to Postgres — everything they accumulate sits in Redis: the counters (`metrics:req:*`, `metrics:err:*`, `metrics:users:h:*`, `metrics:users:d:*`) and the error feed (`admin:errors`) expire on their own by the terms above, so there is no separate cleanup. What ends up in there is limited to an allowlist: status code, route template, our error code, a truncated technical message, the internal user id and the `requestId`. No request text, no headers, no Telegram id — see [`plans/docs/06-security.md`](../plans/docs/06-security.md).
 
-## Frontend (Vite, build-time)
+## Frontend (Vite, build time)
 
-Ці змінні **не входять** до Zod-схеми backend: Vite вбудовує їх у бандл під час збірки (`VITE_*`), тому вони публічні за визначенням — секретів тут бути не може. Джерело правди для типів — [`frontend/src/vite-env.d.ts`](../frontend/src/vite-env.d.ts).
+These variables are **not part** of the backend's Zod schema: Vite inlines them into the bundle at build time (`VITE_*`), so they are public by definition — there can be no secrets here. The source of truth for their types is [`frontend/src/vite-env.d.ts`](../frontend/src/vite-env.d.ts).
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | База для запитів до backend. У production передається як build-arg у [`Dockerfile`](../Dockerfile). |
-| `VITE_FEEDBACK_URL` | `https://t.me/+1lYdnphwsLBlZWMy` | Посилання на канал обговорення в розділі «Зворотний зв'язок» Налаштувань. Telegram-посилання відкриваються через `openTelegramLink`. |
-| `VITE_SHARE_URL` | `https://t.me/SlangUA_bot` | Посилання на застосунок, що дописується **після** надісланого перекладу. Вкажіть свого бота, якщо розгортаєте власний. |
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `VITE_API_BASE_URL` | `http://localhost:3000/api/v1` | Base for requests to the backend. In production it is passed as a build arg in the [`Dockerfile`](../Dockerfile). |
+| `VITE_FEEDBACK_URL` | `https://t.me/+1lYdnphwsLBlZWMy` | Link to the discussion channel in the «Зворотний зв'язок» ("Feedback") section of Settings. Telegram links are opened through `openTelegramLink`. |
+| `VITE_SHARE_URL` | `https://t.me/SlangUA_bot` | Link to the app, appended **after** a shared translation. Point it at your own bot if you deploy your own instance. |
 
-## Тільки для деплою (читає Docker Compose, не застосунок)
+## Deployment only (read by Docker Compose, not by the app)
 
-Ці змінні також **не входять** до Zod-схеми: їх читає сам Compose під час розбору [`docker-compose.production.yml`](../docker-compose.production.yml), тому локально вони не змінюють нічого. Живуть вони в тому ж `.env`, бо в production Compose читає цей файл двічі — як `env_file` для контейнера `api` і як власне джерело підстановки `${…}` для решти сервісів.
+These are **not part** of the Zod schema either: Compose itself reads them while parsing [`docker-compose.production.yml`](../docker-compose.production.yml), so locally they change nothing. They live in the same `.env` because in production Compose reads that file twice — as the `env_file` for the `api` container, and as its own substitution source for `${…}` in the remaining services.
 
-| Змінна | За замовчуванням | Опис |
-| ------ | ---------------- | ---- |
-| `POSTGRES_PASSWORD` | — (обов'язкова в production) | Пароль користувача `slangua` для сервісу `db` і те саме значення всередині `DATABASE_URL`, який Compose збирає для `api`. Без неї `docker compose up` падає з названою помилкою, а не запускає базу з пустим паролем. Для локального запуску проти вже наявного Postgres не потрібна: `DATABASE_URL` містить дані доступу сам. |
-| `BACKUP_DIR` | `./backups` | Каталог на хості, який монтується в контейнер `db-backup` як `/backups`. Дампи з'являються в `daily/` і `weekly/` з власником `root`. На реальному сервері краще вказати шлях **поза** репозиторієм (наприклад `/var/backups/slangua`): дамп усередині робочої копії лежить на тому ж диску, що й база, яку він страхує, і один `docker compose down -v` може залишити його єдиною копією. |
-| `BACKUP_AT` | `03:30` | Час щоденного дампа, `HH:MM` за UTC. Будь-що інше зупиняє контейнер із читабельною помилкою на старті — щоб описка не означала «не робити бекапів ніколи». |
-| `BACKUP_KEEP_DAILY` | `7` | Скільки денних дампів тримати. |
-| `BACKUP_KEEP_WEEKLY` | `4` | Скільки тижневих. Недільний дамп додатково отримує **жорстке посилання** в `weekly/`, тому 7 + 4 покривають тиждень по днях і місяць по неділях, не зберігаючи неділю двічі. |
-| `BACKUP_HEARTBEAT_URL` | — (порожньо) | Необов'язковий «вимикач мертвої людини»: URL, який запитується **лише після успішного дампа**. Порожнє значення нічого не змінює. Сервіс на тому боці (Healthchecks.io, Better Stack, heartbeat-монітор UptimeRobot) сповіщає **за тишею** — це єдиний спосіб дізнатися, що бекапи перестали робитися, бо задача, яка не виконалася, не пише нічого. Значення — секрет: хто його має, той може тримати монітор спокійним, поки дампи не робляться, тому в лог воно не потрапляє ніколи. Таймаут 10 с зашитий у скрипті; невдалий запит пише `ERROR` у лог і **не** позначає дамп невдалим. Як налаштувати й перевірити — у [operations.md](operations.md#бекапи-сповіщення-за-тишею). |
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `POSTGRES_PASSWORD` | — (required in production) | Password of the `slangua` user for the `db` service, and the same value inside the `DATABASE_URL` that Compose assembles for `api`. Without it `docker compose up` fails with a named error instead of starting a database with an empty password. Not needed for a local run against an existing Postgres: `DATABASE_URL` carries the credentials itself. |
+| `BACKUP_DIR` | `./backups` | Host directory mounted into the `db-backup` container as `/backups`. Dumps appear in `daily/` and `weekly/`, owned by `root`. On a real server prefer a path **outside** the repository (`/var/backups/slangua`, say): a dump inside the working copy sits on the same disk as the database it insures, and a single `docker compose down -v` can leave it the only copy. |
+| `BACKUP_AT` | `03:30` | Time of the daily dump, `HH:MM` in UTC. Anything else stops the container with a readable error at startup — so that a typo does not quietly mean "never take a backup". |
+| `BACKUP_KEEP_DAILY` | `7` | How many daily dumps to keep. |
+| `BACKUP_KEEP_WEEKLY` | `4` | How many weekly ones. The Sunday dump additionally gets a **hard link** in `weekly/`, so 7 + 4 cover a week by day and a month by Sundays without storing Sunday twice. |
+| `BACKUP_HEARTBEAT_URL` | — (empty) | An optional dead man's switch: a URL requested **only after a successful dump**. An empty value changes nothing. The service on the other end (Healthchecks.io, Better Stack, UptimeRobot's heartbeat monitor) alerts **on silence** — the only way to learn that backups stopped happening, because a job that did not run reports nothing. The value is a secret: whoever holds it can keep the monitor quiet while no dumps are being taken, so it never reaches a log. A 10 s timeout is hard-coded in the script; a failed request logs `ERROR` and does **not** mark the dump as failed. How to set it up and verify it — [operations.md](operations.md#бекапи-сповіщення-за-тишею) (in Ukrainian). |
 
-> День тижня для тижневої копії (`BACKUP_WEEKLY_DAY`, ISO: 1 = понеділок … 7 = неділя) свідомо не виведений у Compose: це значення, яке змінюють раз і назавжди, і зайвий рядок у `.env` дорожчий за правку одного рядка в [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh).
+> The weekday for the weekly copy (`BACKUP_WEEKLY_DAY`, ISO: 1 = Monday … 7 = Sunday) is deliberately not surfaced in Compose: it is a value that gets set once and for all, and an extra line in `.env` costs more than editing one line in [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh).
 
-> Механіка бекапів, перевірена процедура відновлення і те, чого ці змінні **не** роблять (Redis не дампиться, шифрування немає) — у [operations.md](operations.md). Там же покроковий рунбук [першого розгортання](operations.md#перше-розгортання), оновлення й відкату.
+> How backups actually work, the verified restore procedure, and what these variables **do not** do (Redis is not dumped, there is no encryption) — [operations.md](operations.md) (in Ukrainian). It also holds the step-by-step runbooks for the [first deployment](operations.md#перше-розгортання), for updates and for rollback.
 

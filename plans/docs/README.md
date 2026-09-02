@@ -1,30 +1,32 @@
 # SlangUA Documentation
 
-Архітектурна документація проєкту SlangUA: backend, frontend, база даних, API, архітектурні рішення, безпека та специфікація Style Engine.
+Architectural documentation for SlangUA: backend, frontend, database, API, architectural decisions, security and the Style Engine specification.
 
 ---
 
-Навігація — hub-and-spoke між трьома рівнями (README.md → цей індекс → architecture.md/01-08); посилання в обидва боки між сусідніми рівнями є навмисними, не дублюванням.
+Navigation is hub-and-spoke across three levels (README.md → this index → architecture.md / 01-10); the links that run both ways between neighbouring levels are deliberate, not duplication.
 
-## Документи
+## Documents
 
-| Файл | Опис |
+| File | Description |
 | ---- | ---- |
 | **01-backend.md** | Backend Architecture — Node.js/Fastify backend, modules, communication flow, AI Provider configuration. |
-| **02-frontend.md** | Frontend Architecture — структура клієнта, Telegram Mini App, UI. |
-| **03-database.md** | Database Design — концептуальна модель БД та Prisma Schema. |
-| **04-api.md** | API Design — маршрути, DTO, контракти API та валідація. |
-| **05-decisions.md** | Architectural Decisions — прийняті архітектурні рішення та їх обґрунтування. |
-| **06-security.md** | Security — автентифікація, авторизація, rate limiting, захист даних. |
-| **07-styles.md** | Style Engine Specification — архітектура системи стилів, структура Style Engine та специфікація стилів. |
-| **08-frontend-design.md** | Frontend Design Specification (Stage 6) — UX, стани, Telegram behavior, API gaps та acceptance criteria для Mini App. |
+| **02-frontend.md** | Frontend Architecture — client structure, Telegram Mini App, UI. |
+| **03-database.md** | Database Design — the conceptual data model and the Prisma schema. |
+| **04-api.md** | API Design — routes, DTOs, API contracts and validation. |
+| **05-decisions.md** | Architectural Decisions — the decisions taken and the reasoning behind them. |
+| **06-security.md** | Security — authentication, authorization, rate limiting, data protection. |
+| **07-styles.md** | Style Engine Specification — the style system's architecture, the Style Engine's structure and the specification of each style. **Written in Ukrainian.** |
+| **08-frontend-design.md** | Frontend Design Specification (Stage 6) — UX, states, Telegram behavior, API gaps and acceptance criteria for the Mini App. **Written in Ukrainian.** |
 | **09-telegram-sharing.md** | Telegram-native Sharing Architecture — explicit share flow, privacy model, inline bot contract and rollout criteria. |
 | **10-repository-hygiene.md** | Repository hygiene audit and separately reviewable cleanup plan for tracked secrets and dependencies. |
 
+> Two documents are in Ukrainian on purpose: their subject **is** Ukrainian text — the style lexicons, forbidden words and before/after examples in 07, and the interface copy in 08. Translating them would distort the very material they specify. The language policy for the whole repository is in [CONTRIBUTING.md](../../CONTRIBUTING.md) (in Ukrainian).
+
 ---
 
-## Посилання
+## Links
 
-- [ROADMAP.md](../ROADMAP.md) — поетапний план технічної реалізації для Roo Code.
-- [architecture.md](../architecture.md) — архітектурний дизайн проекту, веб-застосунку Telegram.
-- [prisma/schema.prisma](../../prisma/schema.prisma) — схема бази даних.
+- [ROADMAP.md](../ROADMAP.md) — the staged technical implementation plan.
+- [architecture.md](../architecture.md) — the architectural design of the project, a Telegram web application.
+- [prisma/schema.prisma](../../prisma/schema.prisma) — the database schema.

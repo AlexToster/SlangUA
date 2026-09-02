@@ -15,11 +15,9 @@ SlangUA - AI-перекладач української мови між сти�
 [![Telegram Mini App](https://img.shields.io/badge/Telegram-Mini%20App-26A5E4?logo=telegram&logoColor=white)](https://t.me/SlangUA_bot)
 [![Stage](https://img.shields.io/badge/%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-MVP%20%D0%B2%20%D1%80%D0%BE%D0%B7%D1%80%D0%BE%D0%B1%D1%86%D1%96-orange)](plans/ROADMAP.md)
 
-### [🚀 Спробувати в Telegram](https://t.me/SlangUA_bot) · [🎬 Демо](#демо) · [🎨 Стилі](#стилі) · [📚 Документація](plans/docs/README.md)
+**Українською** · [English](README.en.md)
 
-<sub><b>English:</b> SlangUA - AI-powered Ukrainian style translator.
-Rewrites plain Ukrainian into six contrasting registers — Gen Z, street, IT, bureaucratic, prison and Galician — keeping the meaning intact while changing the form as far as it will go. It is a Telegram
-Mini App built to show what an LLM can do with Ukrainian context: humour, dialect and social register.</sub>
+### [🚀 Спробувати в Telegram](https://t.me/SlangUA_bot) · [🎬 Демо](#демо) · [🎨 Стилі](#стилі) · [📚 Документація](plans/docs/README.md)
 
 </div>
 
@@ -125,7 +123,7 @@ Frontend окремо: `cd frontend && npm install && npm run dev` — Vite на
 
 Повна інструкція — передумови, генерація секретів, тести й типові граблі —
 у [CONTRIBUTING.md](CONTRIBUTING.md#локальний-запуск). Усі змінні середовища з
-описами — у [docs/configuration.md](docs/configuration.md).
+описами — у [docs/configuration.md](docs/configuration.md) (англійською).
 
 ## Технології
 
@@ -228,7 +226,7 @@ OpenAI-сумісним моком. Той самий набір проганя�
 - [Style Engine](plans/docs/07-styles.md) — стилі, словники, приклади
 - [API](plans/docs/04-api.md) — маршрути, DTO, контракти
 - [Безпека](plans/docs/06-security.md) — автентифікація, rate limiting, дані
-- [Конфігурація](docs/configuration.md) — усі змінні середовища
+- [Конфігурація](docs/configuration.md) — усі змінні середовища (англійською)
 - [Операції](docs/operations.md) — бекапи, відновлення, налаштування проксі
 - [ROADMAP](plans/ROADMAP.md) — етапи і статуси
 - [AGENTS.md](AGENTS.md) — робочі правила та інваріанти проєкту
@@ -236,9 +234,13 @@ OpenAI-сумісним моком. Той самий набір проганя�
 - [SLANGUA-BRIEFING.md](plans/SLANGUA-BRIEFING.md) — самодостатній технічний
   дамп, який можна віддати будь-якій моделі
 
-> **Мова документації:** README, [AGENTS.md](AGENTS.md) і
-> [CONTRIBUTING.md](CONTRIBUTING.md) — українською; технічна документація в
-> `plans/**` — англійською, крім двох файлів про сам текст
+> **Мова документації:** README існує двома мовами — українською тут і
+> англійською в [README.en.md](README.en.md); це дзеркало, і обидва файли
+> змінюються разом ([перевірка в CI](scripts/check-readme-parity.mjs)).
+> [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) і
+> [docs/operations.md](docs/operations.md) — українською; технічна документація в
+> `plans/**` і [docs/configuration.md](docs/configuration.md) — англійською, крім
+> двох файлів про сам текст
 > ([07-styles](plans/docs/07-styles.md), [08-frontend-design](plans/docs/08-frontend-design.md)),
 > де приклади й копірайт UI лишаються українськими. Дотримуйтеся цього для
 > нових документів.
