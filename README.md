@@ -125,7 +125,7 @@ Frontend окремо: `cd frontend && npm install && npm run dev` — Vite на
 
 Повна інструкція — передумови, генерація секретів, тести й типові граблі —
 у [CONTRIBUTING.md](CONTRIBUTING.md#локальний-запуск). Усі змінні середовища з
-описами — у [docs/configuration.md](docs/configuration.md).
+описами — у [docs/configuration.md](docs/configuration.md) (англійською).
 
 ## Технології
 
@@ -228,7 +228,7 @@ OpenAI-сумісним моком. Той самий набір проганя�
 - [Style Engine](plans/docs/07-styles.md) — стилі, словники, приклади
 - [API](plans/docs/04-api.md) — маршрути, DTO, контракти
 - [Безпека](plans/docs/06-security.md) — автентифікація, rate limiting, дані
-- [Конфігурація](docs/configuration.md) — усі змінні середовища
+- [Конфігурація](docs/configuration.md) — усі змінні середовища (англійською)
 - [Операції](docs/operations.md) — бекапи, відновлення, налаштування проксі
 - [ROADMAP](plans/ROADMAP.md) — етапи і статуси
 - [AGENTS.md](AGENTS.md) — робочі правила та інваріанти проєкту

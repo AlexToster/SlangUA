@@ -79,7 +79,7 @@ node -e "const c=require('crypto');const hex=()=>c.randomBytes(32).toString('hex
 
 ### Не запускається?
 
-- `Config validation failed` — не заповнений обов'язковий ключ у `.env`; повний перелік з описами: [docs/configuration.md](docs/configuration.md).
+- `Config validation failed` — не заповнений обов'язковий ключ у `.env`; повний перелік з описами: [docs/configuration.md](docs/configuration.md) (англійською).
 - Порт `3000` зайнятий — змінити `PORT`.
 - Переклад повертає помилку, хоча сервер піднявся — не задано жодного AI-ключа або провайдер відключений кіл-світчем (`ai:provider:disabled` у Redis).
 - 🖼 ⟨додати 1–2 реальні граблі, на які власник наступив під час деплою⟩
@@ -180,7 +180,7 @@ Frontend-набір лежить поруч із кодом (`frontend/src/**/*.
 ## Секрети та конфігурація
 
 - Ніколи не комітьте `.env` чи реальні секрети. Використовуйте `.env.example` як шаблон.
-- Нові змінні середовища додавайте у Zod-схему [`src/config/index.ts`](src/config/index.ts), у [`.env.example`](.env.example) і в довідник [`docs/configuration.md`](docs/configuration.md).
+- Нові змінні середовища додавайте у Zod-схему [`src/config/index.ts`](src/config/index.ts), у [`.env.example`](.env.example) і в довідник [`docs/configuration.md`](docs/configuration.md) (англійською).
 
 ## Кінці рядків
 
