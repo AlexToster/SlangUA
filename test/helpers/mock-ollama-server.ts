@@ -80,10 +80,18 @@ export function detectStyle(messages: Array<{ role?: string; content?: string }>
  * format through OpenAICompatibleAdapter (Ollama included, via its `/v1`
  * endpoint), so this mock only serves `/v1/chat/completions`; the native Ollama
  * routes went away with OllamaAdapter.
+ *
+ * The answer deliberately does not echo the requested text. Both adapters send
+ * `request.text` bare as the user message (`openai-compatible.adapter.ts`,
+ * `claude.adapter.ts`) - there is no `Translate this text: "..."` wrapper to
+ * parse it back out of, so this used to substitute a value that was never
+ * found. The fixtures carry a literal `Test text` instead. A test that needs to
+ * prove the user's text reached the provider has to capture the request, the
+ * way `getLastSttRequest()` does for transcriptions; the chat endpoint keeps no
+ * such record today.
  */
-function generateOpenAIResponse(style: string, sourceText: string = 'Test text'): string {
-  const template = DEFAULT_RESPONSES[style] || DEFAULT_RESPONSES.GEN_Z;
-  const content = template.replace('Test text', sourceText);
+function generateOpenAIResponse(style: string): string {
+  const content = DEFAULT_RESPONSES[style] || DEFAULT_RESPONSES.GEN_Z;
   return JSON.stringify({
     id: 'chatcmpl-mock',
     object: 'chat.completion',
@@ -105,13 +113,12 @@ function generateOpenAIResponse(style: string, sourceText: string = 'Test text')
 }
 
 /**
- * Body handling for the chat endpoint: failure injection, source-text
- * extraction and style detection.
+ * Body handling for the chat endpoint: failure injection and style detection.
  */
 function handleChatRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  render: (style: string, sourceText: string) => string
+  render: (style: string) => string
 ) {
   let body = '';
   req.on('data', (chunk) => {
@@ -130,20 +137,9 @@ function handleChatRequest(
     try {
       const parsed = JSON.parse(body);
       const messages = parsed.messages || [];
-      const lastMessage = messages[messages.length - 1]?.content || '';
-
-      // Extract style from the system prompt or user message
-      let sourceText = 'Test text';
-
-      // Try to extract source text from the message
-      const textMatch = lastMessage.match(/Translate this text: "([^"]+)"/);
-      if (textMatch) {
-        sourceText = textMatch[1];
-      }
-
       const style = detectStyle(messages);
 
-      const response = config.customResponse || render(style, sourceText);
+      const response = config.customResponse || render(style);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(response);
     } catch {
