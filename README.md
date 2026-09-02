@@ -15,11 +15,9 @@ SlangUA - AI-перекладач української мови між сти�
 [![Telegram Mini App](https://img.shields.io/badge/Telegram-Mini%20App-26A5E4?logo=telegram&logoColor=white)](https://t.me/SlangUA_bot)
 [![Stage](https://img.shields.io/badge/%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-MVP%20%D0%B2%20%D1%80%D0%BE%D0%B7%D1%80%D0%BE%D0%B1%D1%86%D1%96-orange)](plans/ROADMAP.md)
 
-### [🚀 Спробувати в Telegram](https://t.me/SlangUA_bot) · [🎬 Демо](#демо) · [🎨 Стилі](#стилі) · [📚 Документація](plans/docs/README.md)
+**Українською** · [English](README.en.md)
 
-<sub><b>English:</b> SlangUA - AI-powered Ukrainian style translator.
-Rewrites plain Ukrainian into six contrasting registers — Gen Z, street, IT, bureaucratic, prison and Galician — keeping the meaning intact while changing the form as far as it will go. It is a Telegram
-Mini App built to show what an LLM can do with Ukrainian context: humour, dialect and social register.</sub>
+### [🚀 Спробувати в Telegram](https://t.me/SlangUA_bot) · [🎬 Демо](#демо) · [🎨 Стилі](#стилі) · [📚 Документація](plans/docs/README.md)
 
 </div>
 
