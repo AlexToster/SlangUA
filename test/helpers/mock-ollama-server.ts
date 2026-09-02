@@ -36,7 +36,14 @@ let sttCallCount = 0;
 let lastSttRequest: SttRequestInfo | null = null;
 let config: MockOllamaConfig = { shouldFail: false };
 
-const DEFAULT_RESPONSES: Record<string, string> = {
+/**
+ * What the chat mock answers, per style. Exported on purpose: a test that wants
+ * to prove the right prompt was resolved must compare against this map, never
+ * quote a word out of it. These strings are rewritten whenever the Style
+ * Engine's language assets are refreshed, and a literal copied into an
+ * assertion then fails with the application behaving correctly.
+ */
+export const DEFAULT_RESPONSES: Readonly<Record<string, string>> = {
   GEN_Z: 'Test text — чиста база, без рофлу.',
   STREET: 'Test text, без понтів.',
   IT_SLANG: 'Test text: треба дебажити.',
