@@ -234,9 +234,13 @@ OpenAI-сумісним моком. Той самий набір проганя�
 - [SLANGUA-BRIEFING.md](plans/SLANGUA-BRIEFING.md) — самодостатній технічний
   дамп, який можна віддати будь-якій моделі
 
-> **Мова документації:** README, [AGENTS.md](AGENTS.md) і
-> [CONTRIBUTING.md](CONTRIBUTING.md) — українською; технічна документація в
-> `plans/**` — англійською, крім двох файлів про сам текст
+> **Мова документації:** README існує двома мовами — українською тут і
+> англійською в [README.en.md](README.en.md); це дзеркало, і обидва файли
+> змінюються разом ([перевірка в CI](scripts/check-readme-parity.mjs)).
+> [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) і
+> [docs/operations.md](docs/operations.md) — українською; технічна документація в
+> `plans/**` і [docs/configuration.md](docs/configuration.md) — англійською, крім
+> двох файлів про сам текст
 > ([07-styles](plans/docs/07-styles.md), [08-frontend-design](plans/docs/08-frontend-design.md)),
 > де приклади й копірайт UI лишаються українськими. Дотримуйтеся цього для
 > нових документів.

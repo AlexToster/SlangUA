@@ -92,3 +92,22 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # The READMEs are a mirror pair, and drift between them is silent: nothing
+  # breaks, the English page just quietly starts lying. This job needs no
+  # dependencies at all - the script is plain Node with built-ins only - so a
+  # docs-only PR gets its answer in seconds instead of waiting on containers.
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: README parity
+        run: node scripts/check-readme-parity.mjs

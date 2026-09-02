@@ -246,11 +246,13 @@ The full index is [plans/docs/README.md](plans/docs/README.md). The most useful 
 - [SLANGUA-BRIEFING.md](plans/SLANGUA-BRIEFING.md) — a self-contained technical dump you
   can hand to any model
 
-> **Documentation language:** this README exists in both languages, and
-> [README.md](README.md) is the Ukrainian original — the two are kept in step.
-> [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md) are Ukrainian; the
-> technical documentation in `plans/**` is English, apart from the two documents whose
-> subject is the text itself ([07-styles](plans/docs/07-styles.md),
+> **Documentation language:** this README exists in both languages —
+> [README.md](README.md) is the Ukrainian original, this is its mirror, and the two are
+> edited together ([checked in CI](scripts/check-readme-parity.mjs)).
+> [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) and
+> [docs/operations.md](docs/operations.md) are Ukrainian; the technical documentation in
+> `plans/**` and [docs/configuration.md](docs/configuration.md) are English, apart from the
+> two documents whose subject is the text itself ([07-styles](plans/docs/07-styles.md),
 > [08-frontend-design](plans/docs/08-frontend-design.md)), where the examples and the UI
 > copy stay Ukrainian. Please keep to this for new documents.
 
