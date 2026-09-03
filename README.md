@@ -13,7 +13,7 @@ SlangUA - AI-перекладач української мови між сти�
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-5FA04E?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Telegram Mini App](https://img.shields.io/badge/Telegram-Mini%20App-26A5E4?logo=telegram&logoColor=white)](https://t.me/SlangUA_bot)
-[![Stage](https://img.shields.io/badge/%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-MVP%20%D0%B2%20%D1%80%D0%BE%D0%B7%D1%80%D0%BE%D0%B1%D1%86%D1%96-orange)](plans/ROADMAP.md)
+[![Stage](https://img.shields.io/badge/%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-MVP%20%D0%B7%D0%B0%D0%B2%D0%B5%D1%80%D1%88%D0%B5%D0%BD%D0%BE%20%C2%B7%20%D1%80%D0%BE%D0%B7%D0%B3%D0%BE%D1%80%D1%82%D0%B0%D0%BD%D0%BD%D1%8F-brightgreen)](plans/ROADMAP.md)
 
 **Українською** · [English](README.en.md)
 
@@ -50,7 +50,7 @@ SlangUA - AI-перекладач української мови між сти�
 
 Решта стилів із прикладами — у таблиці [Стилі](#стилі).
 
-> **Чесно про стан:** MVP працює, експериментую з Style Engine. Якість виводу залежить від обраної LLM — локальна
+> **Чесно про стан:** MVP завершено — триває розгортання в робочій мережі. Якість виводу залежить від обраної LLM — локальна
 > 7B-модель дасть слабший результат, ніж модель класу GPT-4. Де проєкт зараз за етапами — у [Статусі](#статус).
 
 ## Що це таке
@@ -200,15 +200,16 @@ OpenAI-сумісним моком. Той самий набір проганя�
 
 ## Статус
 
-Стан по етапах — у [ROADMAP](plans/ROADMAP.md), тут коротко:
+**MVP завершено** — триває розгортання в робочій мережі. Стан по етапах — у
+[ROADMAP](plans/ROADMAP.md), тут коротко:
 
 | Що | Стан |
 | --- | --- |
-| Backend, API, база, Style Engine (6 стилів) | ✅ готово для MVP |
+| Backend, API, база, Style Engine (6 стилів) | ✅ готово |
 | Шар доступу до адмінки: allowlist + пароль, кіл-світч, метрики, стрічка помилок | ✅ готово |
 | Frontend + Telegram Mini App | ✅ Stage 7, готово |
 | Інтеграція і тестування | ✅ Stage 8, автотести зелені |
-| Публічний деплой | 🚧 Stage 9, у роботі (бекапи й проксі готові; лишилися логи, моніторинг, реальний сервер і перевірка на Android/iOS) |
+| Розгортання в робочій мережі | 🚧 Stage 9, триває (бекапи, проксі, логи, моніторинг і рунбук готові; лишилися реальний сервер, перевірка на Android/iOS і підпис) |
 
 **Далі:** нові стилі та ширші словники · керування стилями з адмінки без зміни
 коду (промпти, словники, приклади, версії) · fallback між моделями · PWA, web і

@@ -13,7 +13,7 @@ SlangUA is an AI translator between registers of the Ukrainian language. It turn
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-5FA04E?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Telegram Mini App](https://img.shields.io/badge/Telegram-Mini%20App-26A5E4?logo=telegram&logoColor=white)](https://t.me/SlangUA_bot)
-[![Stage](https://img.shields.io/badge/status-MVP%20in%20progress-orange)](plans/ROADMAP.md)
+[![Stage](https://img.shields.io/badge/status-MVP%20complete%20%C2%B7%20deploying-brightgreen)](plans/ROADMAP.md)
 
 [Українською](README.md) · **English**
 
@@ -51,10 +51,10 @@ What one and the same text looks like in different styles. The output is Ukraini
 
 The remaining styles, with examples of their own, are in the [Styles](#styles) table.
 
-> **An honest word on the state of it:** the MVP works, and I am still experimenting with
-> the Style Engine. Output quality depends on the LLM behind it — a local 7B model will
-> give a weaker result than something in GPT-4's class. Where the project stands by
-> stage is in [Status](#status).
+> **An honest word on the state of it:** the MVP is complete, and the rollout to the
+> production network is under way. Output quality depends on the LLM behind it — a local 7B
+> model will give a weaker result than something in GPT-4's class. Where the project stands
+> by stage is in [Status](#status).
 
 ## What this is
 
@@ -213,15 +213,16 @@ is in [CONTRIBUTING.md](CONTRIBUTING.md#тестування) (in Ukrainian).
 
 ## Status
 
-The state by stage is in the [ROADMAP](plans/ROADMAP.md); briefly, here:
+**The MVP is complete** — the rollout to the production network is under way. The state by
+stage is in the [ROADMAP](plans/ROADMAP.md); briefly, here:
 
 | What | State |
 | --- | --- |
-| Backend, API, database, Style Engine (6 styles) | ✅ ready for the MVP |
+| Backend, API, database, Style Engine (6 styles) | ✅ done |
 | The admin panel's access layer: allowlist + password, kill switch, metrics, error feed | ✅ done |
 | Frontend + Telegram Mini App | ✅ Stage 7, done |
 | Integration and testing | ✅ Stage 8, the automated tests are green |
-| Public deployment | 🚧 Stage 9, in progress (backups and the proxy are ready; what is left is logs, monitoring, a real server and a check on Android/iOS) |
+| Rollout to the production network | 🚧 Stage 9, under way (backups, the proxy, logs, monitoring and the runbook are ready; what is left is the real server, a check on Android/iOS and sign-off) |
 
 **Next:** new styles and wider lexicons · managing styles from the admin panel without
 touching the code (prompts, lexicons, examples, versions) · fallback between models · PWA,
